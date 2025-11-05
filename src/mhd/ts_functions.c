@@ -11,20 +11,12 @@
 // the public, perform publicly and display publicly, and to permit others to do so.
 //========================================================================================
 
-#include <mfd_config.h>
-
-#include <ts_functions.h>
-
-#include <monitor_functions.h>
-
-#include <geometry.h>
-
-#include <mass_matrix_coefficients.h>
-
-#include <mimetic_operators.h>
-
-#include "RunawayKineticSolverWrapper.h"
-
+#include "mfd_config.h"
+#include "ts_functions.h"
+#include "monitor_functions.h"
+#include "geometry.h"
+#include "mass_matrix_coefficients.h"
+#include "mimetic_operators.h"
 
 PetscErrorCode FormIJacobian_BImplicit(TS ts, PetscReal t, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
   return (0);

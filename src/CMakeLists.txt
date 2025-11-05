@@ -28,3 +28,23 @@ target_include_directories(mhd PRIVATE
 
 target_link_libraries(mhd PRIVATE PkgConfig::PETSC)
 target_link_libraries(mhd PRIVATE HDF5::HDF5 Parthenon::parthenon hflux::hflux)
+
+set(HYBRID_SRC_LIST
+  mhd/main.c
+  mhd/ts_functions.c
+  mhd/mass_matrix_coefficients.c
+  mhd/mimetic_operators.c
+  mhd/geometry.c
+  mhd/monitor_functions.c
+  mhd/mhd_run.c
+)
+
+
+add_executable(hybrid ${HYBRID_SRC_LIST})
+target_include_directories(hybrid PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/mhd
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/kinetic
+  )
+
+target_link_libraries(hybrid PRIVATE PkgConfig::PETSC)
+target_link_libraries(hybrid PRIVATE HDF5::HDF5 Parthenon::parthenon hflux::hflux)

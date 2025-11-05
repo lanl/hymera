@@ -907,19 +907,19 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
 
   //Update_J_RE(ts);
   if(0){
-  Vec F,C;
-  VecDuplicate(X, & F);
-  VecZeroEntries(F);
-  VecDuplicate(X, & C);
-  VecZeroEntries(C);
-  //NEED TO CREATE VEC C AND RECONSTRUCT FROM EDGES TO CELLS THE THREE COMPONENTS OF E BEFORE CALLING THE SCATTERING
-  //FormElectricField(ts, X, F, &user);
-  //DumpEdgeField(ts, 2, X, &user);
-  //DumpEdgeField(ts, 3, F, &user);
-  //EdgeToCellReconstruction_r(ts,F,C,&user);
-  DumpSolution_Cell(ts, 3, X, &user);
-  VecDestroy(&C);
-  VecDestroy(&F);
+    Vec F,C;
+    VecDuplicate(X, & F);
+    VecZeroEntries(F);
+    VecDuplicate(X, & C);
+    VecZeroEntries(C);
+    //NEED TO CREATE VEC C AND RECONSTRUCT FROM EDGES TO CELLS THE THREE COMPONENTS OF E BEFORE CALLING THE SCATTERING
+    //FormElectricField(ts, X, F, &user);
+    //DumpEdgeField(ts, 2, X, &user);
+    //DumpEdgeField(ts, 3, F, &user);
+    //EdgeToCellReconstruction_r(ts,F,C,&user);
+    DumpSolution_Cell(ts, 3, X, &user);
+    VecDestroy(&C);
+    VecDestroy(&F);
   }
 
   //PetscFinalize();
