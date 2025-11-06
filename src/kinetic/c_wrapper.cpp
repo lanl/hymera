@@ -56,6 +56,7 @@ void runaway_init(void ** man, int argc, char *argv[]) {
   pman->app_input->ProblemGenerator = GenerateParticleCurrentDensity;
 
   pman->ParthenonInitPackagesAndMesh();
+  ComputeParticleWeights(pman->pmesh.get());
 
   *man = (void*) pman;
 }
@@ -68,7 +69,6 @@ void runaway_finalize(void* man) {
 
 void runaway_push(void * man) {
   ParthenonManager* pman = (ParthenonManager*) man;
-  ComputeParticleWeights(pman->pmesh.get());
   RunawayDriver driver(pman->pinput.get(), pman->app_input.get(), pman->pmesh.get());
 	auto driver_status = driver.Execute();
 }
