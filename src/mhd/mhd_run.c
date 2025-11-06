@@ -28,7 +28,6 @@ const char help[] = "Time-dependent magnetic diffusion PDE in 3d cylindrical coo
   The density n_i (scalar) is defined on cell centers, the magnetic field B (vector) is defined on cell faces whereas the divergence-free component tau (vector) of the electric field E (vector) is defined on cell edges, the electrostatic potential EP (scalar) and the velocity Vi_perp (vector) are defined on vertices.
 */
 
-#include <RunawayKineticSolverWrapper.h>
 #include <geometry.h>
 #include <mass_matrix_coefficients.h>
 #include <mfd_config.h>
@@ -290,14 +289,11 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     RUNAWAY SOLVER INITIALIZATION
   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-#if 0
-  // PetscPrintf(PETSC_COMM_WORLD, "Initializing Runaway solver...");
+  PetscPrintf(PETSC_COMM_WORLD, "Initializing Runaway solver...");
   PetscMPIInt rank;
   PetscMPIInt size;
   MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
   MPI_Comm_size(PETSC_COMM_WORLD, &size);
-  user.kctx.mpiRank = rank;
-  user.kctx.mpiSize = size;
   // Creating runaway kinetic solver instance
   /* RuKS_init(&(user.kctx), &(user.runaway_solver) ); */
 #endif

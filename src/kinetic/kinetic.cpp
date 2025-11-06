@@ -16,8 +16,7 @@
 #include <typeinfo>  //for 'typeid' to work
 #include <parthenon/package.hpp>
 
-#include "numerical/rk4.hpp"
-#include "../old_hybrid/src/kinetic/GuidingCenterEquations.hpp"
+#include "src/kinetic/GuidingCenterEquations.hpp"
 #include "AnalyticField.hpp"
 
 #include "kinetic.hpp"
