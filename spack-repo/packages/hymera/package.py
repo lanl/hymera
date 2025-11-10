@@ -7,19 +7,17 @@ from spack.package import *
 
 
 class Hymera(CMakePackage):
-    """FIXME: Put a proper description of your package here."""
+    """Hymera is a hybrid MHD-kinetic code for relativistic particles"""
 
     # FIXME: Add a proper url for your package's homepage here.
     #url = "https://www.example.com/example-1.2.3.tar.gz"
+    git = "https://github.com/lanl/hymera.git"
 
     maintainers("tukss", "obeznosov-LANL")
 
-    # FIXME: Add the SPDX identifier of the project's license below.
-    # See https://spdx.org/licenses/ for a list. Upon manually verifying
-    # the license, set checked_by to your Github username.
-    #license("UNKNOWN", checked_by="github_user1")
-
-    version("main", branch="hybrid_main")
+    license("BSD-3-Clause", checked_by="tukss")
+    
+    version("main", branch="main")
 
     depends_on("parthenon@25.05:")
     depends_on("hdf5+cxx")
