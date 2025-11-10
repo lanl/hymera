@@ -64,7 +64,7 @@ jobs:
       run: spack repo add spack-repo
 
     - name: Install
-      run: spack -e . install
+      run: spack -e . install -v
 
     - name: Run
       shell: spack-bash {0}
