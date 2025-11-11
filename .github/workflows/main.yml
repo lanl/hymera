@@ -33,7 +33,7 @@ jobs:
       run: spack repo add spack-repo
 
     - name: Install
-      run: spack -e . install -v
+      run: spack -e . install --only dependencies
 
     - name: Configure
       shell: spack-bash {0}
