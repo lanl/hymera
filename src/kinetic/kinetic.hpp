@@ -19,7 +19,13 @@
 #include <parthenon/package.hpp>
 // #include <interface/swarm_default_names.hpp>
 
+constexpr bool PartialScreening = true;
+constexpr bool EnergyScattering = true;
+constexpr bool ModifiedCouLog = true;
+
 namespace Kinetic {
+
+
 using namespace parthenon::package::prelude;
 
 typedef Kokkos::Random_XorShift64_Pool<> RNGPool;
@@ -38,14 +44,34 @@ SWARM_VARIABLE(Real, particle, R);
 SWARM_VARIABLE(Real, particle, phi);
 SWARM_VARIABLE(Real, particle, Z);
 SWARM_VARIABLE(Real, particle, weight);
+// For collision book keeping
 SWARM_VARIABLE(int, particle, will_scatter);
 SWARM_VARIABLE(int, particle, secondary_index);
 
-std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin);
-void ComputeParticleCounts(Mesh *pm);
-void reinit(Mesh *pm);
+// For save/restore particle state (predictor corrector implementation)
+typedef enum STATUS_ENUM {
+    PROTECTED = 1,
+    ALIVE = 2
+} STATUS;
+SWARM_VARIABLE(int, particle, status);
+SWARM_VARIABLE(Real, particle, saved_p);
+SWARM_VARIABLE(Real, particle, saved_xi);
+SWARM_VARIABLE(Real, particle, saved_R);
+SWARM_VARIABLE(Real, particle, saved_phi);
+SWARM_VARIABLE(Real, particle, saved_Z);
+SWARM_VARIABLE(Real, particle, saved_w);
 
-TaskStatus March(Mesh *pm);
+// constexpr auto mkParticleDescriptror_r(const std::string swarm_name) = parthenon::MakeSwarmPackDescriptor<
+//       swarm_position::x, swarm_position::y, swarm_position::z,
+//       p, xi, R, phi, Z, weight,
+//       saved_p, saved_xi, saved_R, saved_phi, saved_Z, saved_w>(swarm_name);
+// constexpr auto mkParticleDescriptror_i(const std::string swarm_name) = parthenon::MakeSwarmPackDescriptor<
+//       will_scatter, secondary_index, status>(std::stringswarm_name);
+
+std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin);
+void ComputeParticleWeights(Mesh* pm);
+void SaveState(Mesh* pm);
+void RestoreState(Mesh* pm);
 
 } // namespace Kinetic
 

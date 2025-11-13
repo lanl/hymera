@@ -70,11 +70,11 @@ void dumpToHDF5(EM_Field f, const int i_file, const Real t) {
     dview(i,j,0,2) = Z;
     for (int dim = 0; dim < 3; ++dim) {
       dview(i,j,1,dim) = B[dim];
-      dview(i,j,2,dim) = curlB[dim];
+      dview(i,j,2,dim) = curlB[dim] * f.eta_mu0aVa * f.E_n;
       dview(i,j,3,dim) = dBdR[dim];
       dview(i,j,4,dim) = dBdZ[dim];
       dview(i,j,5,dim) = E[dim];
-      dview(i,j,6,dim) = Jre[dim];
+      dview(i,j,6,dim) = Jre[dim] * f.etaec_a3VaB0 * f.E_n;
       dview(i,j,7,dim) = V[dim];
     }
   });

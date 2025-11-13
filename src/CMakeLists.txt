@@ -38,11 +38,16 @@ set(HYBRID_SRC_LIST
   mhd/monitor_functions.c
   mhd/mhd_run.c
   kinetic/c_wrapper.cpp
+  kinetic/RunawayDriver.cpp
+  kinetic/kinetic.cpp
+  kinetic/EM_Field.cpp
+  pgen.cpp
 )
 
 
 add_executable(hybrid ${HYBRID_SRC_LIST})
 target_include_directories(hybrid PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/mhd
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/kinetic
   )

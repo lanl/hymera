@@ -290,13 +290,9 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
     RUNAWAY SOLVER INITIALIZATION
   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   PetscPrintf(PETSC_COMM_WORLD, "Initializing Runaway solver...");
-  PetscMPIInt rank;
-  PetscMPIInt size;
-  MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
-  MPI_Comm_size(PETSC_COMM_WORLD, &size);
   // Creating runaway kinetic solver instance
   /* RuKS_init(&(user.kctx), &(user.runaway_solver) ); */
-#endif
+
   // Allocate memory for runaway current density
   // First half for timestep average, second half for delta-tail average
   user.jre_data = (double*) malloc(sizeof(double) * (user.Nr) * (user.Nz) * 3 * 2);

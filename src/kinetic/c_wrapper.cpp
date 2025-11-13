@@ -10,29 +10,32 @@
 // license in this material to reproduce, prepare derivative works, distribute copies to
 // the public, perform publicly and display publicly, and to permit others to do so.
 //========================================================================================
+#include <iostream>
+
 #include <parthenon/driver.hpp>
 #include <parthenon/package.hpp>
 #include <parthenon_manager.hpp>
 
-#include "kinetic/AnalyticField.hpp"
-#include "kinetic/GuidingCenterEquations.hpp"
-#include "kinetic/LargeAngleCollision.hpp"
-#include "kinetic/SmallAngleCollision.hpp"
-#include "kinetic/kinetic.hpp"
-#include "kinetic/ConfigurationDomainGeometry.hpp"
-#include "kinetic/CurrentDensity.hpp"
-#include "kinetic/EM_Field.hpp"
-#include "pgen.hpp"
+#include <Kokkos_Core.hpp>
 
-constexpr bool PartialScreening = true;
-constexpr bool EnergyScattering = false;
-constexpr bool ModifiedCouLog = true;
+#include <hFlux/dopri.hpp>
 
 using namespace parthenon;
 using namespace parthenon::driver::prelude;
 
+#include "RunawayDriver.h"
+#include "AnalyticField.hpp"
+#include "GuidingCenterEquations.hpp"
+#include "LargeAngleCollision.hpp"
+#include "SmallAngleCollision.hpp"
+#include "kinetic.hpp"
+#include "ConfigurationDomainGeometry.hpp"
+#include "CurrentDensity.hpp"
+#include "EM_Field.hpp"
+#include "pgen.hpp"
 
-void runaway_init(void ** man, int argc, char *argv[]) {
+
+int runaway_init(void ** man, int argc, char *argv[]) {
 
   ParthenonManager* pman = new ParthenonManager();
 
@@ -50,15 +53,17 @@ void runaway_init(void ** man, int argc, char *argv[]) {
   // Redefine parthenon defaults
   pman->app_input->ProcessPackages = [](std::unique_ptr<ParameterInput> &pin) {
     Packages_t packages;
-    packages.Add(Initialize(pin.get()));
+    packages.Add(Kinetic::Initialize(pin.get()));
     return packages;
   };
   pman->app_input->ProblemGenerator = GenerateParticleCurrentDensity;
 
   pman->ParthenonInitPackagesAndMesh();
-  ComputeParticleWeights(pman->pmesh.get());
+  Kinetic::ComputeParticleWeights(pman->pmesh.get());
 
   *man = (void*) pman;
+
+  return 0;
 }
 
 void runaway_finalize(void* man) {
@@ -69,10 +74,18 @@ void runaway_finalize(void* man) {
 
 void runaway_push(void * man) {
   ParthenonManager* pman = (ParthenonManager*) man;
-  RunawayDriver driver(pman->pinput.get(), pman->app_input.get(), pman->pmesh.get());
+  Kinetic::RunawayDriver driver(pman->pinput.get(), pman->app_input.get(), pman->pmesh.get());
 	auto driver_status = driver.Execute();
 }
 
-void runaway_reset(void * man) {
+void runaway_saveState(void * man) {
+  ParthenonManager* pman = (ParthenonManager*) man;
+  Kinetic::SaveState(pman->pmesh.get());
 }
+
+void runaway_restoreState(void * man) {
+  ParthenonManager* pman = (ParthenonManager*) man;
+  Kinetic::RestoreState(pman->pmesh.get());
+}
+
 

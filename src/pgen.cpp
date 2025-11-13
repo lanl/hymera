@@ -273,8 +273,13 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
     Kinetic::phi,
     Kinetic::Z,
     Kinetic::weight>("particles");
+  static auto desc_markers =
+    parthenon::MakeSwarmPackDescriptor<
+    Kinetic::status
+      >("particles");
+
   auto pack_swarm = desc_swarm.GetPack(data.get());
-  auto swarm_d = swarm->GetDeviceContext();
+  auto pack_status = desc_markers.GetPack(data.get());
 
   auto indicator_h = create_mirror_view_and_copy(Kokkos::HostSpace(), cdg.indicator_view);
   FILE* fs = std::fopen("indicator.txt", "w");
@@ -293,6 +298,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
       newParticlesContext.GetNewParticlesMaxIndex(),
       // new_n ranges from 0 to N_new_particles
       KOKKOS_LAMBDA(const int new_n) {
+
       // this is the particle index inside the swarm
       const int n = newParticlesContext.GetNewParticleIndex(new_n);
 
@@ -308,8 +314,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
       int x_i = ind % nx_i;
       ind /= nx_i;
       int x_j = ind % nx_j;
-      ind /= nx_j;
-      int x_k = ind;
+      ind /= nx_j; int x_k = ind;
 
       pack_swarm(b, swarm_position::x(), n) = minx_i + (x_i+0.5) * dx_i;
       pack_swarm(b, swarm_position::y(), n) = minx_j + (x_j+0.5) * dx_j;
@@ -347,8 +352,6 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
         rng_pool.free_state(rng_gen);
 
-        // Implement wall through CDG
-
         int i, j;
         int level = cdg.indicator(X, i, j);
         if (level != 2)
@@ -367,6 +370,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
       // set weights to 1
       pack_swarm(b, Kinetic::weight(), n) = 1.0;
+      pack_status(b, Kinetic::status(), n) = Kinetic::ALIVE | Kinetic::PROTECTED;
 
       });
 

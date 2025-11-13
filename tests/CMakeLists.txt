@@ -40,6 +40,9 @@ add_parthenon_test(current_replacement
     ../src/kinetic/GuidingCenterEquations.hpp
     ../src/kinetic/SmallAngleCollision.hpp
     ../src/kinetic/LargeAngleCollision.hpp
+    ../src/kinetic/RunawayDriver.cpp
+    ../src/kinetic/kinetic.cpp
+    ../src/kinetic/EM_Field.cpp
     ../src/pgen.cpp
     ../src/pgen.hpp
     ../src/kinetic/EM_Field.hpp
