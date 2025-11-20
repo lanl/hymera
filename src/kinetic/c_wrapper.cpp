@@ -23,19 +23,12 @@
 using namespace parthenon;
 using namespace parthenon::driver::prelude;
 
-#include "RunawayDriver.h"
-#include "AnalyticField.hpp"
-#include "GuidingCenterEquations.hpp"
-#include "LargeAngleCollision.hpp"
-#include "SmallAngleCollision.hpp"
-#include "kinetic.hpp"
-#include "ConfigurationDomainGeometry.hpp"
-#include "CurrentDensity.hpp"
-#include "EM_Field.hpp"
+#include "kinetic/c_wrapper.h"
+#include "kinetic/kinetic.hpp"
 #include "pgen.hpp"
 
 
-int runaway_init(void ** man, int argc, char *argv[]) {
+int parthenon_init(void ** man, int argc, char *argv[]) {
 
   ParthenonManager* pman = new ParthenonManager();
 
@@ -50,6 +43,19 @@ int runaway_init(void ** man, int argc, char *argv[]) {
     return 1;
   }
 
+  *man = (void*) pman;
+
+  return 0;
+}
+
+void configure_mhd(void * man, User* user) {
+
+  // TODO: populate stuff
+  // Get or AddReal stuff
+}
+
+int runaway_init(void * man) {
+  ParthenonManager* pman = (ParthenonManager*) man;
   // Redefine parthenon defaults
   pman->app_input->ProcessPackages = [](std::unique_ptr<ParameterInput> &pin) {
     Packages_t packages;
@@ -60,8 +66,7 @@ int runaway_init(void ** man, int argc, char *argv[]) {
 
   pman->ParthenonInitPackagesAndMesh();
   Kinetic::ComputeParticleWeights(pman->pmesh.get());
-
-  *man = (void*) pman;
+  Kinetic::InitializeDriver(pman);
 
   return 0;
 }
@@ -74,8 +79,7 @@ void runaway_finalize(void* man) {
 
 void runaway_push(void * man) {
   ParthenonManager* pman = (ParthenonManager*) man;
-  Kinetic::RunawayDriver driver(pman->pinput.get(), pman->app_input.get(), pman->pmesh.get());
-	auto driver_status = driver.Execute();
+  Kinetic::Push(pman);
 }
 
 void runaway_saveState(void * man) {

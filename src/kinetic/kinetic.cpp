@@ -18,6 +18,7 @@
 
 using namespace parthenon;
 
+#include "kinetic/RunawayDriver.h"
 #include "kinetic/kinetic.hpp"
 #include "kinetic/GuidingCenterEquations.hpp"
 #include "kinetic/LargeAngleCollision.hpp"
@@ -34,6 +35,12 @@ using pc = PhysicalConstants<SI>;
 namespace Kinetic {
 
 std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
+  const Real dt_mhd = pin->GetOrAddReal("parthenon/time","dt_mhd",20.0);
+  const Real dt_cd = pin->GetOrAddReal("parthenon/time","dt_cd",2e-3);
+  const Real dt_LA = pin->GetOrAddReal("parthenon/time","dt_LA",1e-5);
+
+  pin->GetOrAddReal("parthenon/time","tlim",0.0);
+  pin->GetOrAddReal("parthenon/time","dt_force",dt_LA);
 
   const Real B0 = pin->GetOrAddReal("MHD", "B0", 5.3);     ///< On-axis magnetic field [m/s]
   const Real V_A = pin->GetOrAddReal("MHD", "V_A", 1.1e7); ///< Alfven speed [m/s]
@@ -67,8 +74,18 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
 
   auto pkg = std::make_shared<StateDescriptor>("Deck");
 
+  pkg->AddParam("dt_LA", dt_LA);
+  pkg->AddParam("dt_cd", dt_cd);
+  pkg->AddParam("dt_mhd", dt_mhd);
+
   const std::string filePath = pin->GetOrAddString("Simulation", "file_path", "avalanche.out");
   pkg->AddParam("filePath", filePath);
+  int rank = 0;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (rank == 0) {
+    FILE *fout = fopen(pkg->Param<std::string>("filePath").c_str(), "w");
+    fclose(fout);
+  }
 
   int * ts = new int;
   *ts = 0;
@@ -271,6 +288,25 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
   return pkg;
 }
 
+void InitializeDriver(ParthenonManager* man) {
+  auto pkg = man->pmesh.get()->packages.Get("Deck");
+
+  auto driver = std::make_shared<RunawayDriver>(man->pinput.get(), man->app_input.get(), man->pmesh.get());
+  driver->tm.tlim = 0.0;
+  pkg->AddParam("Driver", driver);
+}
+
+void Push(ParthenonManager * man) {
+  auto pkg = man->pmesh.get()->packages.Get("Deck");
+  auto driver = pkg->Param<std::shared_ptr<RunawayDriver>>("Driver");
+  const auto dt_mhd = pkg->Param<Real>("dt_mhd");
+  const auto dt_cd = pkg->Param<Real>("dt_cd");
+  while (driver.get()->tm.tlim < dt_mhd) {
+    driver.get()->tm.tlim += dt_cd;
+	  auto driver_status = driver.get()->Execute();
+  }
+}
+
 auto &GetCoords(std::shared_ptr<MeshBlock> &pmb) { return pmb->coords; }
 auto &GetCoords(MeshBlock *pmb) { return pmb->coords; }
 auto &GetCoords(Mesh *pm) { return pm->block_list[0]->coords; }
@@ -287,10 +323,14 @@ void ComputeParticleWeights(Mesh* pm) {
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
       Kinetic::p, Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight>(
       "particles");
+  auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<
+      Kinetic::status>(
+      "particles");
 
   Real I_re = 0.0;
 
   auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
+  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
 
   std::cout << "Calculating current";
 
@@ -301,7 +341,7 @@ void ComputeParticleWeights(Mesh* pm) {
         // block and particle indices
         auto [b, n] = pack_swarm_r.GetBlockParticleIndices(idx);
         const auto swarm_d = pack_swarm_r.GetContext(b);
-        if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n)) {
+        if (swarm_d.IsActive(n) && (pack_swarm_i(b, Kinetic::status(),n) & Kinetic::ALIVE)) {
           Dim5 X;
           Real t = 0.0;
           X[0] = pack_swarm_r(b, Kinetic::p(), n);
@@ -333,51 +373,27 @@ void ComputeParticleWeights(Mesh* pm) {
 
 void SaveState(Mesh* pm) {
   auto md = pm->mesh_data.Get();
-  auto pkg = pm->packages.Get("Deck");
-  const auto field_interpolation = pkg->Param<EM_Field>("Field");
-
-  const Real p_RE = pkg->Param<Real>("p_RE");
-  const Real seed_current = pkg->Param<Real>("seed_current");
-
-  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
-      Kinetic::p, Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight,
-      Kinetic::saved_p, Kinetic::saved_xi, Kinetic::saved_R, Kinetic::saved_phi, Kinetic::saved_Z, Kinetic::saved_w>(
-      "particles");
-  auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
-
-  auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
-  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
+  auto desc_swarm = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
+  auto pack_swarm = desc_swarm.GetPack(md.get());
 
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
-                     DevExecSpace(), 0, pack_swarm_r.GetMaxFlatIndex(),
+                     DevExecSpace(), 0, pack_swarm.GetMaxFlatIndex(),
                      // new_n ranges from 0 to N_new_particles
                      KOKKOS_LAMBDA(const int idx) {
-        auto [b_r, n_r] = pack_swarm_r.GetBlockParticleIndices(idx);
-        auto [b_i, n_i] = pack_swarm_i.GetBlockParticleIndices(idx);
+        auto [b, n] = pack_swarm.GetBlockParticleIndices(idx);
         // block and particle indices
 
-        if (pack_swarm_i(b_i, Kinetic::status(), n_i) & Kinetic::ALIVE) {
-          pack_swarm_i(b_i, Kinetic::status(), n_i) |= Kinetic::PROTECTED;
+        if (pack_swarm(b, Kinetic::status(), n) & Kinetic::ALIVE) {
+          pack_swarm(b, Kinetic::status(), n) |= Kinetic::PROTECTED;
         } else {
-          const auto swarm_r = pack_swarm_r.GetContext(b_r);
-          const auto swarm_i = pack_swarm_i.GetContext(b_i);
-
-          swarm_r.MarkParticleForRemoval(n_r);
-          swarm_i.MarkParticleForRemoval(n_i);
+          const auto swarm = pack_swarm.GetContext(b);
+          swarm.MarkParticleForRemoval(n);
         }
-
       });
-
 }
 
 void RestoreState(Mesh* pm) {
   auto md = pm->mesh_data.Get();
-  auto pkg = pm->packages.Get("Deck");
-  const auto field_interpolation = pkg->Param<EM_Field>("Field");
-
-  const Real p_RE = pkg->Param<Real>("p_RE");
-  const Real seed_current = pkg->Param<Real>("seed_current");
-
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
       Kinetic::p, Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight,
       Kinetic::saved_p, Kinetic::saved_xi, Kinetic::saved_R, Kinetic::saved_phi, Kinetic::saved_Z, Kinetic::saved_w>(
@@ -405,11 +421,8 @@ void RestoreState(Mesh* pm) {
 
           pack_swarm_i(b_i, Kinetic::status(), n_i) |= Kinetic::ALIVE;
         } else {
-          const auto swarm_r = pack_swarm_r.GetContext(b_r);
-          const auto swarm_i = pack_swarm_i.GetContext(b_i);
-
-          swarm_r.MarkParticleForRemoval(n_r);
-          swarm_i.MarkParticleForRemoval(n_i);
+          const auto swarm = pack_swarm_i.GetContext(b_i);
+          swarm.MarkParticleForRemoval(n_i);
         }
       });
 }

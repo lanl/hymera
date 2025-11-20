@@ -14,15 +14,19 @@
 #ifndef RUNAWAY_C_WRAPPER_H_
 #define RUNAWAY_C_WRAPPER_H_
 
+#include "mhd/mfd_config.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-  void runaway_init(void ** runaway);
-  void runaway_finalize(void* runaway);
+  int  parthenon_init(void ** man, int argc, char *argv[]);
+  int  runaway_init(void * man);
+  void runaway_finalize(void* man);
+  void configure_mhd(void * man, User* user);
 
-  void runaway_push(void * runaway);
-  void runaway_reset(void * runaway);
+  void runaway_push(void * man);
+  void runaway_saveState(void * man);
+  void runaway_restoreState(void * man);
 
 #ifdef __cplusplus
 }

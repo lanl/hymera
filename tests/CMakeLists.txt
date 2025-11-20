@@ -49,6 +49,7 @@ add_parthenon_test(current_replacement
     ../src/kinetic/CurrentDensity.hpp
     kinetic/current_replacement.cpp
     ../src/kinetic/EM_Field.cpp
+    ../src/kinetic/c_wrapper.cpp
   INPUT
     avalanche_test.input
 )

@@ -11,58 +11,19 @@
 // the public, perform publicly and display publicly, and to permit others to do so.
 //========================================================================================
 
-#include <iostream>
+#include "kinetic/c_wrapper.h"
 
-#include <parthenon/driver.hpp>
-#include <parthenon/package.hpp>
-#include <parthenon_manager.hpp>
-
-#include <Kokkos_Core.hpp>
-
-#include <hFlux/dopri.hpp>
-
-using namespace parthenon;
-
-#include "kinetic/kinetic.hpp"
-#include "kinetic/RunawayDriver.h"
-#include "pgen.hpp"
-using namespace Kinetic;
+using Manager = void*;
 
 int main(int argc, char *argv[]) {
+  Manager manager = NULL;
+  int ret = parthenon_init(&manager, argc, argv);
+  if (ret != 0) return ret;
 
-  parthenon::ParthenonManager pman;
+  runaway_init(manager);
 
-  // Set up kokkos and read pin
-  auto manager_status = pman.ParthenonInitEnv(argc, argv);
-  if (manager_status == ParthenonStatus::complete) {
-    pman.ParthenonFinalize();
-    return 0;
-  }
-  if (manager_status == ParthenonStatus::error) {
-    pman.ParthenonFinalize();
-    return 1;
-  }
+  runaway_push(manager);
+  runaway_finalize(manager);
 
-  // Redefine parthenon defaults
-  pman.app_input->ProcessPackages = [](std::unique_ptr<ParameterInput> &pin) {
-    Packages_t packages;
-    packages.Add(Initialize(pin.get()));
-    return packages;
-  };
-  pman.app_input->ProblemGenerator = GenerateParticleCurrentDensity;
-
-  // call ParthenonInit to set up the mesh
-  // scope so that the mesh object, kokkos views, etc, all get cleaned
-  // up before kokkos::finalize
-
-  pman.ParthenonInitPackagesAndMesh();
-  {
-    ComputeParticleWeights(pman.pmesh.get());
-    RunawayDriver driver(pman.pinput.get(), pman.app_input.get(), pman.pmesh.get());
-		auto driver_status = driver.Execute();
-
-    // Separate dumping, current deposit for mhd and actuall avalanching phase.
-  }
-  pman.ParthenonFinalize();
-  return (0);
+  return 0;
 }

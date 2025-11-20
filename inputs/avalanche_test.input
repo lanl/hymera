@@ -59,8 +59,9 @@ c_vTe = 357.4209530412819
 final_time = 100.0
 
 <parthenon/time>
-tlim = 20.0
-dt_force = 1e-5
+dt_mhd = 20.0 # Defines mhd timstep
+dt_cd = 200e-5 # Defines current deposit timestep
+dt_LA = 1e-5 # Define Large Angle collision tistep
 
 <parthenon/output8>
 file_type = rst
@@ -73,7 +74,7 @@ write_xdmf = false # Determines whether xdmf annotations are output
 swarms = particles  # Particle swarms
 particles_variables = x, y, z, particle.p, particle.xi, particle.R, particle.phi, particle.Z, particle.weight, particle.will_scatter, particle.secondary_index
 
-dt = 0.2
+dt = 0.02
 file_number_width = 6 # default: 5
 use_final_label = true # default: true
 

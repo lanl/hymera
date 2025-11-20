@@ -26,6 +26,7 @@ constexpr bool ModifiedCouLog = true;
 namespace Kinetic {
 
 
+using namespace parthenon;
 using namespace parthenon::package::prelude;
 
 typedef Kokkos::Random_XorShift64_Pool<> RNGPool;
@@ -72,6 +73,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin);
 void ComputeParticleWeights(Mesh* pm);
 void SaveState(Mesh* pm);
 void RestoreState(Mesh* pm);
+void InitializeDriver(ParthenonManager* man);
+void Push(ParthenonManager* man);
 
 } // namespace Kinetic
 
