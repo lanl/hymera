@@ -42,8 +42,8 @@ const char help[] = "Time-dependent magnetic diffusion PDE in 3d cylindrical coo
 #include <unistd.h>
 #include <petsc/private/dmstagimpl.h>
 #include <fenv.h>
-#include <hFlux/c_wrapper.h>
 
+#include "kinetic/c_wrapper.h"
 #include "mhd_run.h"
 
 int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
@@ -75,156 +75,11 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
 
   // Avoid command-line options.
   // Some of these probably need to be separated out to separate statements with a default argument.
-  PetscOptionsInsertString(NULL, "-ts_adapt_type none -B0 5.3 -dummyKSP_ksp_converged_reason -dummyKSP_ksp_monitor -dummySNES_snes_lag_jacobian 1 -dummySNES_snes_lag_preconditioner 1 -dummySNES_snes_monitor -dummySNES_snes_linesearch_type nleqerr -dummySNES_snes_mf_operator -dummySNES_snes_converged_reason -dummyKSP_ksp_type fgmres -dummyKSP_pc_type lu -dummyKSP_pc_factor_mat_solver_type mumps -dummyKSP_mat_mumps_icntl_6 2 -dummyKSP_mat_mumps_icntl_24 1 -dummyKSP_mat_mumps_cntl_1 1e-5 -dummyKSP_mat_mumps_cntl_3 1e-5 -dummyKSP_mat_mumps_icntl_14 5000 -dummyKSP_pc_fieldsplit_type multiplicative -dummyKSP_fieldsplit_ni_ksp_type fgmres -dummyKSP_fieldsplit_ni_pc_type hypre -dummyKSP_fieldsplit_ni_pc_hypre_type euclid -dummyKSP_fieldsplit_TEBV_ksp_type fgmres -dummyKSP_fieldsplit_TEBV_pc_type fieldsplit -dummyKSP_fieldsplit_TEBV_pc_fieldsplit_type schur -dummyKSP_fieldsplit_TEBV_pc_fieldsplit_schur_precondition selfp -dummyKSP_fieldsplit_TEBV_fieldsplit_tau_ksp_type gmres -dummyKSP_fieldsplit_TEBV_fieldsplit_tau_pc_type bjacobi -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_ksp_type preonly -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_pc_type fieldsplit -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_pc_fieldsplit_type multiplicative -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_ksp_type gmres -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_pc_type hypre -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_ksp_type preonly -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_pc_type lu -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_pc_factor_mat_solver_type mumps -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_6 2 -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_24 1 -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_cntl_1 1e-5 -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_cntl_3 1e-5 -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_14 5000 -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_superlu_dist_replacetinypivot -dummyKSP_ksp_rtol 1e-6 -dummyKSP_ksp_norm_type unpreconditioned -dummySNES_snes_max_funcs 100000000000 -dummySNES_snes_mf_operator -dummySNES_snes_stol 1e-20 -dummySNES_snes_rtol 1e-5 -dummySNES_snes_max_it 20 -dummySNES_snes_ksp_ew -dummySNES_snes_ksp_ew_version 3 -dummySNES_snes_ksp_ew_rtol0 0.2 -dummySNES_snes_ksp_ew_rtolmax 0.9 -dummySNES_snes_ksp_ew_gamma 0.9 -dummySNES_snes_ksp_ew_alpha 1.5 -dummySNES_snes_ksp_ew_alpha2 1.5 -dummySNES_snes_ksp_ew_threshold 0.1 -dummyKSP_fieldsplit_ni_ksp_converged_reason -dummyKSP_fieldsplit_TEBV_ksp_converged_reason -dummyKSP_fieldsplit_TEBV_fieldsplit_tau_ksp_converged_reason -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_ksp_converged_reason -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_ksp_converged_reason -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_fieldsplit_V_ksp_converged_reason -ksp_converged_reason -ksp_monitor -snes_monitor -snes_mf_operator -snes_converged_reason -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_type mumps -mat_mumps_icntl_6 2 -mat_mumps_icntl_24 1 -mat_mumps_cntl_1 1e-5 -mat_mumps_cntl_3 1e-5 -mat_mumps_icntl_14 5000 -pc_fieldsplit_type multiplicative -fieldsplit_ni_ksp_type fgmres -fieldsplit_ni_pc_type hypre -fieldsplit_ni_pc_hypre_type euclid -fieldsplit_TEBV_ksp_type fgmres -fieldsplit_TEBV_pc_type fieldsplit -fieldsplit_TEBV_pc_fieldsplit_type schur -fieldsplit_TEBV_pc_fieldsplit_schur_precondition selfp -fieldsplit_TEBV_fieldsplit_tau_ksp_type gmres -fieldsplit_TEBV_fieldsplit_tau_pc_type bjacobi -fieldsplit_TEBV_fieldsplit_EBV_ksp_type preonly -fieldsplit_TEBV_fieldsplit_EBV_pc_type fieldsplit -fieldsplit_TEBV_fieldsplit_EBV_pc_fieldsplit_type multiplicative -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_ksp_type gmres -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_pc_type hypre -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_ksp_type preonly -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_pc_type lu -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_pc_factor_mat_solver_type mumps -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_6 2 -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_24 1 -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_cntl_1 1e-5 -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_cntl_3 1e-5 -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_14 5000 -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_superlu_dist_replacetinypivot -ksp_rtol 1e-6 -ksp_norm_type unpreconditioned -snes_max_funcs 100000000000 -snes_stol 1e-20 -snes_rtol 1e-4 -jtype 2 -snes_max_it 20 -snes_ksp_ew -snes_ksp_ew_version 3 -snes_ksp_ew_rtol0 0.2 -snes_ksp_ew_rtolmax 0.9 -snes_ksp_ew_gamma 0.9 -snes_ksp_ew_alpha 1.5 -snes_ksp_ew_alpha2 1.5 -snes_ksp_ew_threshold 0.1 -fieldsplit_ni_ksp_converged_reason -fieldsplit_TEBV_ksp_converged_reason -fieldsplit_TEBV_fieldsplit_tau_ksp_converged_reason -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_ksp_converged_reason -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_ksp_converged_reason -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_fieldsplit_V_ksp_converged_reason -mat_coloring_type lf -snes_lag_jacobian 1 -snes_lag_preconditioner 1 -snes_linesearch_type nleqerr -dampV 1.0 -Re 200.0 -mat_mffd_err 1e-4 -etaout 1.30288e-3 -etawall 4.4e-2 -etaplasma 0.0006101792698927684 -etasepwal 0.0006101792698927684 -etaVV 1.30288e-6 -dump 0 -L0 2.0 -ts_fd_color -ts_fd_color_use_mat -removezero -prestep 1 -dtLA 0.05 -dtCD 50.0 -gamma_BC_fraq 0.5 -RECurrentSeedFraction 0.02 -nParticleSeed 1 -nParticleMax 32000 -DoParticleOrbitConservationTest 0 -delay_kinetic 0 -tempdump 1 -dumpfreq 1");
+  PetscOptionsInsertString(NULL, "-ts_adapt_type none -dummyKSP_ksp_converged_reason -dummyKSP_ksp_monitor -dummySNES_snes_lag_jacobian 1 -dummySNES_snes_lag_preconditioner 1 -dummySNES_snes_monitor -dummySNES_snes_linesearch_type nleqerr -dummySNES_snes_mf_operator -dummySNES_snes_converged_reason -dummyKSP_ksp_type fgmres -dummyKSP_pc_type lu -dummyKSP_pc_factor_mat_solver_type mumps -dummyKSP_mat_mumps_icntl_6 2 -dummyKSP_mat_mumps_icntl_24 1 -dummyKSP_mat_mumps_cntl_1 1e-5 -dummyKSP_mat_mumps_cntl_3 1e-5 -dummyKSP_mat_mumps_icntl_14 5000 -dummyKSP_pc_fieldsplit_type multiplicative -dummyKSP_fieldsplit_ni_ksp_type fgmres -dummyKSP_fieldsplit_ni_pc_type hypre -dummyKSP_fieldsplit_ni_pc_hypre_type euclid -dummyKSP_fieldsplit_TEBV_ksp_type fgmres -dummyKSP_fieldsplit_TEBV_pc_type fieldsplit -dummyKSP_fieldsplit_TEBV_pc_fieldsplit_type schur -dummyKSP_fieldsplit_TEBV_pc_fieldsplit_schur_precondition selfp -dummyKSP_fieldsplit_TEBV_fieldsplit_tau_ksp_type gmres -dummyKSP_fieldsplit_TEBV_fieldsplit_tau_pc_type bjacobi -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_ksp_type preonly -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_pc_type fieldsplit -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_pc_fieldsplit_type multiplicative -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_ksp_type gmres -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_pc_type hypre -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_ksp_type preonly -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_pc_type lu -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_pc_factor_mat_solver_type mumps -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_6 2 -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_24 1 -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_cntl_1 1e-5 -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_cntl_3 1e-5 -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_14 5000 -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_superlu_dist_replacetinypivot -dummyKSP_ksp_rtol 1e-6 -dummyKSP_ksp_norm_type unpreconditioned -dummySNES_snes_max_funcs 100000000000 -dummySNES_snes_mf_operator -dummySNES_snes_stol 1e-20 -dummySNES_snes_rtol 1e-5 -dummySNES_snes_max_it 20 -dummySNES_snes_ksp_ew -dummySNES_snes_ksp_ew_version 3 -dummySNES_snes_ksp_ew_rtol0 0.2 -dummySNES_snes_ksp_ew_rtolmax 0.9 -dummySNES_snes_ksp_ew_gamma 0.9 -dummySNES_snes_ksp_ew_alpha 1.5 -dummySNES_snes_ksp_ew_alpha2 1.5 -dummySNES_snes_ksp_ew_threshold 0.1 -dummyKSP_fieldsplit_ni_ksp_converged_reason -dummyKSP_fieldsplit_TEBV_ksp_converged_reason -dummyKSP_fieldsplit_TEBV_fieldsplit_tau_ksp_converged_reason -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_ksp_converged_reason -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_ksp_converged_reason -dummyKSP_fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_fieldsplit_V_ksp_converged_reason -ksp_converged_reason -ksp_monitor -snes_monitor -snes_mf_operator -snes_converged_reason -ksp_type fgmres -pc_type lu -pc_factor_mat_solver_type mumps -mat_mumps_icntl_6 2 -mat_mumps_icntl_24 1 -mat_mumps_cntl_1 1e-5 -mat_mumps_cntl_3 1e-5 -mat_mumps_icntl_14 5000 -pc_fieldsplit_type multiplicative -fieldsplit_ni_ksp_type fgmres -fieldsplit_ni_pc_type hypre -fieldsplit_ni_pc_hypre_type euclid -fieldsplit_TEBV_ksp_type fgmres -fieldsplit_TEBV_pc_type fieldsplit -fieldsplit_TEBV_pc_fieldsplit_type schur -fieldsplit_TEBV_pc_fieldsplit_schur_precondition selfp -fieldsplit_TEBV_fieldsplit_tau_ksp_type gmres -fieldsplit_TEBV_fieldsplit_tau_pc_type bjacobi -fieldsplit_TEBV_fieldsplit_EBV_ksp_type preonly -fieldsplit_TEBV_fieldsplit_EBV_pc_type fieldsplit -fieldsplit_TEBV_fieldsplit_EBV_pc_fieldsplit_type multiplicative -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_ksp_type gmres -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_pc_type hypre -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_ksp_type preonly -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_pc_type lu -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_pc_factor_mat_solver_type mumps -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_6 2 -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_24 1 -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_cntl_1 1e-5 -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_cntl_3 1e-5 -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_mumps_icntl_14 5000 -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_mat_superlu_dist_replacetinypivot -ksp_rtol 1e-6 -ksp_norm_type unpreconditioned -snes_max_funcs 100000000000 -snes_stol 1e-20 -snes_rtol 1e-4 -jtype 2 -snes_max_it 20 -snes_ksp_ew -snes_ksp_ew_version 3 -snes_ksp_ew_rtol0 0.2 -snes_ksp_ew_rtolmax 0.9 -snes_ksp_ew_gamma 0.9 -snes_ksp_ew_alpha 1.5 -snes_ksp_ew_alpha2 1.5 -snes_ksp_ew_threshold 0.1 -fieldsplit_ni_ksp_converged_reason -fieldsplit_TEBV_ksp_converged_reason -fieldsplit_TEBV_fieldsplit_tau_ksp_converged_reason -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_EP_ksp_converged_reason -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_ksp_converged_reason -fieldsplit_TEBV_fieldsplit_EBV_fieldsplit_BV_fieldsplit_V_ksp_converged_reason -mat_coloring_type lf -snes_lag_jacobian 1 -snes_lag_preconditioner 1 -snes_linesearch_type nleqerr -mat_mffd_err 1e-4 -ts_fd_color -ts_fd_color_use_mat -removezero ");
 
-  /* Initialize user application context */
-  PetscOptionsBegin(PETSC_COMM_WORLD, NULL, "Magnetic diffusion options", ""); {
-	     // Set all bytes in 'example' to 0
-    memset(&user.kctx, 0, sizeof(user.kctx));
-    user.mi = 1.67e-27;
-    PetscOptionsReal("-mi", "Ion mass", "", user.mi, & user.mi, NULL);
-    user.density = 1e+20;
-    PetscOptionsReal("-density", "Initial Density", "", user.density, & user.density, NULL);
-    user.B0 = 5.0;
-    PetscOptionsReal("-B0", "Initial magnetic field magnitude", "", user.B0, & user.B0, NULL);
-    user.V_A = 1.1e+7;
-    PetscOptionsReal("-V_A", "Alfven speed", "", user.V_A, & user.V_A, NULL);
-    user.L0 = 2.0;
-    PetscOptionsReal("-L0", "Characteristic length", "", user.L0, & user.L0, NULL);
-    user.mu0 = 0.00000125663;
-    PetscOptionsReal("-mu0", "Permeability", "", user.mu0, & user.mu0, NULL);
-    user.eta0 = (user.L0 * user.V_A * user.mu0);
-    user.eta = 1.0 ;
-    PetscOptionsReal("-eta", "Resistivity", "", user.eta, & user.eta, NULL);
-    user.etawall = 0.044;
-    PetscOptionsReal("-etawall", "Resistivity inside the wall", "", user.etawall, & user.etawall, NULL);
-    user.etaplasma = 1.71e-5;
-    PetscOptionsReal("-etaplasma", "Resistivity inside the plasma chamber", "", user.etaplasma, & user.etaplasma, NULL);
-    user.etawallperp = user.etawall;
-    PetscOptionsReal("-etawallperp", "Poloidal resistivity in between inner Vacuum Vessel wall and plasma wall", "", user.etawallperp, & user.etawallperp, NULL);
-    user.etawallphi = user.etawall;
-    PetscOptionsReal("-etawallphi", "Toroidal resistivity between inner Vacuum Vessel wall and plasma wall", "", user.etawallphi, & user.etawallphi, NULL);
-    user.etawallphi_isol_cell = user.etawall;
-    PetscOptionsReal("-etawallphi_isol_cell", "Lower toroidal resistivity in isolated cells between inner Vacuum Vessel wall and plasma wall", "", user.etawallphi_isol_cell, & user.etawallphi_isol_cell, NULL);
-    user.etasepwal = user.etaplasma;
-    PetscOptionsReal("-etasepwal", "Resistivity between the separatrix and the wall", "", user.etasepwal, & user.etasepwal, NULL);
-    user.etaVV = 1.30288 * 1e-6;
-    PetscOptionsReal("-etaVV", "Resistivity inside the Vacuum Vessel", "", user.etaVV, & user.etaVV, NULL);
-    user.etaout = 1e-20;
-    PetscOptionsReal("-etaout", "Resistivity outside the wall", "", user.etaout, & user.etaout, NULL);
-    user.dampV = 0.01;
-    PetscOptionsReal("-dampV", "Stabilization coefficient in the velocity constraint", "", user.dampV, & user.dampV, NULL);
-    user.Re = 1.0;
-    PetscOptionsReal("-Re", "Reynolds parameter in the constraint : - (\nabla x B) x B + (V.\nabla) V - 1/(Re) (\nabla^2 V) = 0", "", user.Re, & user.Re, NULL);
-    user.rmin = 3.05;
-    PetscOptionsReal("-rmin", "Minimum radius", "", user.rmin, & user.rmin, NULL);
-    user.rmax = 9.95;
-    PetscOptionsReal("-rmax", "Maximum radius", "", user.rmax, & user.rmax, NULL);
-    user.phimin = 0.0;
-    PetscOptionsReal("-phimin", "Minimum azimuth", "", user.phimin, & user.phimin, NULL);
-    user.phimax = 2.0 * PETSC_PI;
-    PetscOptionsReal("-phimax", "Maximum azimuth", "", user.phimax, & user.phimax, NULL);
-    user.zmin = -5.95;
-    PetscOptionsReal("-zmin", "Minimum height", "", user.zmin, & user.zmin, NULL);
-    user.zmax = 5.95;
-    PetscOptionsReal("-zmax", "Maximum height", "", user.zmax, & user.zmax, NULL);
-    user.dt = 500.0;
-    PetscOptionsReal("-dt", "Length of timestep", "", user.dt, & user.dt, NULL);
-    user.ictype = 9;
-    PetscOptionsInt("-ictype", "Type of initial conditions", "", user.ictype, & user.ictype, NULL);
-    user.Nr = 100;
-    PetscOptionsInt("-Nr", "Global number of grid points in r direction", "", user.Nr, & user.Nr, NULL);
-    user.Nphi = 2;
-    PetscOptionsInt("-Nphi", "Global number of grid points in phi direction", "", user.Nphi, & user.Nphi, NULL);
-    user.Nz = 200;
-    PetscOptionsInt("-Nz", "Global number of grid points in z direction", "", user.Nz, & user.Nz, NULL);
-    user.itime = 0.0;
-    PetscOptionsReal("-itime", "Initial time", "", user.itime, & user.itime, NULL);
-    user.ftime = user.itime + 1.0 * user.dt;
-    PetscOptionsReal("-ftime", "Final time", "", user.ftime, & user.ftime, NULL);
-    user.phibtype = 1;
-    PetscOptionsInt("-phibtype", "Boundary type in phi direction", "", user.phibtype, & user.phibtype, NULL);
-    user.dr = (user.rmax - user.rmin) / (user.Nr*user.L0);
-    user.dphi = (user.phimax - user.phimin) / user.Nphi;
-    user.dz = (user.zmax - user.zmin) / (user.Nz*user.L0);
-    user.pred_loop = 0;
-    PetscOptionsInt("-pred_loop", "Number of times the predictor step is being executed", "", user.pred_loop, & user.pred_loop, NULL);
-    user.tstype = 2;
-    PetscOptionsInt("-tstype", "Timestepping method: 1 for Forward Euler, 2 for Backward Euler, 3 for Crank-Nicholson, 4 for Additive Runge-Kutta IMEX", "", user.tstype, & user.tstype, NULL);
-    user.jtype = 2;
-    PetscOptionsInt("-jtype", "Jacobian type (0: user provide Jacobian, 1: slow finite difference, 2: fd with coloring)", "", user.jtype, & user.jtype, NULL);
-    user.adaptdt = 0;
-    PetscOptionsInt("-adaptdt", "Adaptive setting of step size (0: deactivated, 1: activated)", "", user.adaptdt, & user.adaptdt, NULL);
-    user.debug = 0;
-    PetscOptionsInt("-debug", "Debug mode (0: deactivated, 1: activated)", "", user.debug, & user.debug, NULL);
-    user.dump = 0;
-    PetscOptionsInt("-dump", "Dump mode (0: deactivated, 1: activated)", "", user.dump, & user.dump, NULL);
-    user.EnableRelaxation = 0;
-    PetscOptionsInt("-EnableRelaxation", "Relaxation mode (0: deactivated, 1: activated)", "", user.EnableRelaxation, & user.EnableRelaxation, NULL);
-    user.EnableReadICFromBinary = 1;
-    PetscOptionsInt("-EnableReadICFromBinary", "Read from binary mode (0: deactivated, 1: activated)", "", user.EnableReadICFromBinary, & user.EnableReadICFromBinary, NULL);
-    user.prestep = 0;
-    PetscOptionsInt("-prestep", "Flag for activating the prestep computations to approximate the runaway current contribution ", "", user.prestep, & user.prestep, NULL);
-    user.savecoords = 0;
-    PetscOptionsInt("-savecoords", "Flag for saving coordinates of cell centers, face centers and edge centers in .m files: if 0 the save option is disabled, otherwise the save option is enabled", "", user.savecoords, & user.savecoords, NULL);
-    user.savesol = 0;
-    PetscOptionsInt("-savesol", "Flag for saving values of magnetic fields at face centers in .m files: if 0 the save option is disabled, otherwise the save option is enabled. The generated files are: vecC.m (contains cell center coordinates), vecEphi.m (contains edge center coordinates for edges in phi direction,i.e., parallel to e_phi), vecEr.m (contains edge center coordinates for edges in r direction, i.e., parallel to e_r), vecEz.m (contains edge center coordinates for edges in z direction, i.e., parallel to e_z), vecFr.m (contains face center coordinates for faces whose normals are parallel to e_r), vecFz.m (contains face center coordinates for faces whose normals are parallel to e_z), vecFphi.m (contains face center coordinates for faces whose normals are parallel to e_phi)", "", user.savesol, & user.savesol, NULL);
-    user.isB = NULL;
-    user.isEP = NULL;
-    user.istau = NULL;
-    user.isV = NULL;
-    user.isni = NULL;
-    user.isB_boundary = NULL;
-    user.isE_boundary = NULL;
-    user.isni_boundary = NULL;
-
-    user.delay_kinetic = 3;
-    PetscOptionsInt("-delay_kinetic", "Delay kinetic solver by this many timesteps", "", user.delay_kinetic, & user.delay_kinetic, NULL);
-
-    PetscOptionsReal("-dtLA", "Large Angle Collision timestep", "", user.kctx.dt_LA, &user.kctx.dt_LA, NULL);
-    PetscOptionsReal("-dtCD", "Current Deposit timestep", "", user.kctx.dt_CD, &user.kctx.dt_CD, NULL);
-    PetscOptionsReal("-RECurrentSeedFraction", "Runaway Electron current seed wrt total current", "", user.kctx.RECurrentSeedFraction, &user.kctx.RECurrentSeedFraction, NULL);
-    PetscOptionsReal("-gamma_BC_fraq", "fraction between secondary mean", "", user.kctx.g_BC_fraq, &user.kctx.g_BC_fraq, NULL);
-    PetscOptionsInt("-nParticleSeed", "Initial number of particles", "", user.kctx.nParticleSeed, &user.kctx.nParticleSeed, NULL);
-    PetscOptionsInt("-nParticleMax", "Max number of particles", "", user.kctx.nParticleMax, &user.kctx.nParticleMax, NULL);
-
-    char output_folder[PETSC_MAX_PATH_LEN] = ".";
-    PetscOptionsString("-output", "Output folder", "", output_folder, output_folder, PETSC_MAX_PATH_LEN, NULL);
-
-    /* RuKS_chdir(output_folder); */
-    chdir(output_folder);
-
-    // Set default location for input data.
-    snprintf(user.input_folder, PETSC_MAX_PATH_LEN, "../../inputs");
-    PetscOptionsString("-input", "Input folder", "", user.input_folder, user.input_folder, PETSC_MAX_PATH_LEN, NULL);
-    strcpy(user.kctx.input_folder, user.input_folder);
-
-    user.kctx.DoParticleOrbitConservationTest = 0;
-    PetscOptionsInt("-DoParticleOrbitConservationTest", "Switch it do particle orbit conservation test", "",user.kctx.DoParticleOrbitConservationTest, &user.kctx.DoParticleOrbitConservationTest, NULL);
-
-    user.kctx.DoAdvance = 1;
-    PetscOptionsInt("-DoAdvance", "Switch it do advance", "",user.kctx.DoAdvance, &user.kctx.DoAdvance, NULL);
-
-    user.kctx.DoPoincare = 0;
-    PetscOptionsInt("-DoPoincare", "Switch it do Poincare", "",user.kctx.DoPoincare, &user.kctx.DoPoincare, NULL);
-
-    user.kctx.DumpFields = 0;
-    PetscOptionsInt("-DumpFields", "Switch it output fields", "",user.kctx.DumpFields, &user.kctx.DumpFields, NULL);
-
-
-
-    user.kctx.R0 = user.rmin / user.L0;
-    user.kctx.Z0 = user.zmin / user.L0;
-    user.kctx.dR = user.dr;
-    user.kctx.dZ = user.dz;
-    user.kctx.NR = user.Nr;
-    user.kctx.NZ = user.Nz;
-    user.kctx.timeSeed = user.itime;
-
-    user.axis[0] = (user.rmin + user.rmax) / user.L0 / 2.0;
-    user.axis[1] = (user.zmin + user.zmax) / user.L0 / 2.0;
-
-
+    void* manager;
+    parthenon_init(&manager, argc, argv, &user);
+    user.manager = manager;
 
     PetscInt numC = 0;
     char filename[PETSC_MAX_PATH_LEN];
@@ -266,76 +121,10 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
         PetscPrintf(PETSC_COMM_WORLD, "numz = %d\n", user.numz);
       }
     }
-    user.Ebc = 0;
-    PetscOptionsInt("-Ebc", "Type of boundary conditions for E field (0: E_tangential(t)=0, 1: E_tangential(t)=E_tangential(t=0))", "", user.Ebc, & user.Ebc, NULL);
-    user.tempdump = 0;
-    PetscOptionsInt("-tempdump", "Flag for saving intermediate output in .dat files", "", user.tempdump, & user.tempdump, NULL);
-    user.dumpfreq = (int) PetscCeilReal((user.ftime) / (10.0 * user.dt));
-    PetscOptionsInt("-dumpfreq", "Frequency for saving intermediate output in .dat files", "", user.dumpfreq, & user.dumpfreq, NULL);
-    user.testSpGD = 0;
-    PetscOptionsInt("-testSpGD", "Flag for testing S the Schur complement matrix vs S + GD the Schur complement matrix augmented by the gradient of derived divergence operator", "", user.testSpGD, & user.testSpGD, NULL);
-    user.testSpGDsamerhs = 0;
-    PetscOptionsInt("-testSpGDsamerhs", "Flag for setting the right hand side vector while testing S the Schur complement matrix vs S - dt*GD the Schur complement matrix augmented by the gradient of derived divergence operator: 0 for a different right-hand side (S - dt*GD)*E, 1 for the same right-hand side S*E", "", user.testSpGDsamerhs, & user.testSpGDsamerhs, NULL);
 
-    user.oldstep = 0;
-
-    PetscOptionsInt("-oldstep", "Last step in previous simulation when a restart is used", "", user.oldstep, & user.oldstep, NULL);
-    user.n_record =0;
-    user.n_record_Steady_jRE =0;
-    user.CorrectorIdentifier = 1;
-  }
-  PetscOptionsEnd();
-
-  /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    RUNAWAY SOLVER INITIALIZATION
-  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   PetscPrintf(PETSC_COMM_WORLD, "Initializing Runaway solver...");
-  // Creating runaway kinetic solver instance
-  /* RuKS_init(&(user.kctx), &(user.runaway_solver) ); */
-
-  // Allocate memory for runaway current density
-  // First half for timestep average, second half for delta-tail average
-  user.jre_data = (double*) malloc(sizeof(double) * (user.Nr) * (user.Nz) * 3 * 2);
-  for (int i = 0; i < user.Nr * user.Nz * 3 * 2; ++i) {
-    user.jre_data[i] = 0.0;
-  }
-  user.jre = user.jre_data;
-  user.jreR   = user.jre;
-  user.jrephi = user.jre +   (user.Nr) * (user.Nz);
-  user.jreZ   = user.jre + 2*(user.Nr) * (user.Nz);
 
 
-#if 0
-
-  //RuKS_setRECurrentPtr(user.runaway_solver, user.jre_data); */
-
-  if(user.itime > 0 && user.oldstep > 0){
-    char filename[PETSC_MAX_PATH_LEN];
-    PetscSNPrintf(filename, sizeof(filename), "%s/input.h5", user.input_folder);
-    /* RuKS_H5Read(user.runaway_solver, filename); */
-  }
-  else{
-    for (int ii = 0; ii <  (user.Nr) * (user.Nz) * 3 * 2; ++ii){
-      user.jre_data[ii] = 0.0;
-   }
-  }
-#endif
-  PetscMPIInt rank;
-  PetscMPIInt size;
-  MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
-  MPI_Comm_size(PETSC_COMM_WORLD, &size);
-  int nphi = 1, nt = 2, ndims = 3, nfields = 4;
-  double* raw_fields = (double*) malloc(user.Nr * user.Nz * nphi * nt * ndims * nfields * sizeof(double));
-  user.field_data = raw_fields;
-  user.poincare_counter = 0;
-  user.field_counter = 0;
-
-  hflux_kokkos_init();
-  hflux_init(user.Nr, user.Nz, nfields, nphi, nt, user.rmin / user.L0, user.zmin / user.L0, user.dr, user.dz, &user.field_interpolation);
-
-  /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    RUNAWAY SOLVER INITIALIZATION END
-  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Create 3D DMStag for the solution, and set up.
@@ -393,6 +182,10 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
     PetscPrintf(PETSC_COMM_WORLD, "Resistivity inside the blanket module (in Ohm.meter): %g\n", user.etawall );
     //PetscPrintf(PETSC_COMM_WORLD, "CFL value: %g\n", user.dt / PetscMin(user.dr,user.dz));
   }
+
+  runaway_finalize(user.manager);
+  PetscFinalize();
+  exit(0);
   /*  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   Extract global vectors from DM;
   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
@@ -986,9 +779,12 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
   TSDestroy( & user.ts);
 
   DMDestroy( & da);
+
+  runaway_finalize(user.manager);
+
   PetscFinalize();
 
-  hflux_destroy(user.field_interpolation);
-  hflux_kokkos_finalize();
+  // hflux_destroy(user.field_interpolation);
+  // hflux_kokkos_finalize();
   return ierr;
 }

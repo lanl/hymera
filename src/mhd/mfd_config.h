@@ -27,7 +27,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <petsc/private/dmstagimpl.h>
-#include "KineticContext.h"
 
 
 /* Shorter, more convenient names for DMStagStencilLocation entries */
@@ -160,7 +159,6 @@ typedef struct{
   double * jreR;
   double * jrephi;
   double * jreZ;
-  void* runaway_solver;
   double prev_current;        /* Stores the runaway current of the previous time step */
   double present_current;
   int CorrectorIdentifier;
@@ -172,9 +170,10 @@ typedef struct{
   int poincare_counter;
   int field_counter;
 
-  KineticContext kctx;
   void* field_interpolation;
   double axis[2];
+
+  void* manager;
 } User;
 
 typedef struct LocalCoordinate

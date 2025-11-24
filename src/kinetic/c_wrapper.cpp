@@ -27,8 +27,12 @@ using namespace parthenon::driver::prelude;
 #include "kinetic/kinetic.hpp"
 #include "pgen.hpp"
 
+using parthenon::constants::SI;
+using parthenon::constants::PhysicalConstants;
+using pc = PhysicalConstants<SI>;
 
-int parthenon_init(void ** man, int argc, char *argv[]) {
+
+int parthenon_init(void ** man, int argc, char *argv[], User* mhd_config) {
 
   ParthenonManager* pman = new ParthenonManager();
 
@@ -43,15 +47,11 @@ int parthenon_init(void ** man, int argc, char *argv[]) {
     return 1;
   }
 
+  Kinetic::InitializeMHDConfig(pman->pinput.get(), mhd_config);
+
   *man = (void*) pman;
 
   return 0;
-}
-
-void configure_mhd(void * man, User* user) {
-
-  // TODO: populate stuff
-  // Get or AddReal stuff
 }
 
 int runaway_init(void * man) {

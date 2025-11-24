@@ -2,8 +2,7 @@
 // (C) (or copyright) 2025. Triad National Security, LLC. All rights reserved.
 //
 // This program was produced under U.S. Government contract 89233218CNA000001 for Los
-// Alamos National Laboratory (LANL), which is operated by Triad National Security, LLC
-// for the U.S. Department of Energy/National Nuclear Security Administration. All rights
+// Alamos National Laboratory (LANL), which is operated by Triad National Security, LLC // for the U.S. Department of Energy/National Nuclear Security Administration. All rights
 // in the program are reserved by Triad National Security, LLC, and the U.S. Department
 // of Energy/National Nuclear Security Administration. The Government is granted for
 // itself and others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
@@ -33,52 +32,292 @@ using parthenon::constants::PhysicalConstants;
 using pc = PhysicalConstants<SI>;
 
 namespace Kinetic {
+void InitializeMHDConfig(ParameterInput *pin, User* mhd_context) {
+  /// Physical constants
+  static constexpr Real eps0 = pc::eps0; ///< Vacuum permittivity [F / M]
+  static constexpr Real c = pc::c;       ///< Speed of light [m/s]
+  static constexpr Real mi = pc::amu;    ///< Ion mass = atomic mass unit [kg]
+  static constexpr Real mu0 = pc::mu0;   ///< Vacuum permeabulity [N / A^2]
+  static constexpr Real me = pc::me;     ///< electron mass [kg]
+  static constexpr Real e = pc::qe;      ///< electron charge [C]
 
-std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
-  const Real dt_mhd = pin->GetOrAddReal("parthenon/time","dt_mhd",20.0);
-  const Real dt_cd = pin->GetOrAddReal("parthenon/time","dt_cd",2e-3);
-  const Real dt_LA = pin->GetOrAddReal("parthenon/time","dt_LA",1e-5);
+  /// Time discretization parameters
+  const Real dt_mhd = pin->GetOrAddReal("Time","dt_mhd", 86.19e-6);       ///< mhd timestep [s]
+  const Real dt_cd =  pin->GetOrAddReal("Time","dt_cd",  dt_mhd * 1e-1);  ///< current deposit timestep for electric field readjustment [s]
+  const Real dt_LA =  pin->GetOrAddReal("Time","dt_LA",  dt_cd  * 1e-3 ); ///< large-angle collision step [s]
+  const Real final_time = pin->GetOrAddReal("Time", "final_time", 1.0);   /// Final time [s]
+  const Real timeStep = pin->GetOrAddReal("Simulation", "hRK", 1.e-6);    /// Runge kutta time in tau_c [-]
+  const Real atol = pin->GetOrAddReal("Simulation", "atol", 1.e-10);      /// Absoulte tolerance for RK [-]
+  const Real rtol = pin->GetOrAddReal("Simulation", "rtol", 1.e-7);       /// Realative toleratnce for RK[ [-]
+  /// Derived parameters
+  pin->GetOrAddReal("parthenon/time","tlim",0.0);         ///<WARNING: Setting this different in the input file would cause UB!
+  pin->GetOrAddReal("parthenon/time","dt_force",dt_LA);   ///<WARNINS: Setting this different in the input file would cause UB!
 
-  pin->GetOrAddReal("parthenon/time","tlim",0.0);
-  pin->GetOrAddReal("parthenon/time","dt_force",dt_LA);
+  /// Reference parameters
+  const Real B0 = pin->GetOrAddReal("Reference", "B0", 5.3);  ///< On-axis magnetic field [T]
+  const Real a  = pin->GetOrAddReal("Reference", "a", 2.0);    ///< Minor radius [m] and reference length
+  const Real R0 = pin->GetOrAddReal("Reference", "R0", 6.0);    ///< Major radius [m]
+  const Real nD0 = pin->GetOrAddReal("Reference", "nD0", 1e20);    ///< Deutirium density [m^-3]
+  const Real Te0 = pin->GetOrAddReal("Reference", "Te0", 1e3);  ///< Electron temperature [eV], and plasma temperature single-temperature model
 
-  const Real B0 = pin->GetOrAddReal("MHD", "B0", 5.3);     ///< On-axis magnetic field [m/s]
-  const Real V_A = pin->GetOrAddReal("MHD", "V_A", 1.1e7); ///< Alfven speed [m/s]
+  /// Derived parameters
+  const Real VA   = pin->GetOrAddReal("Derived", "VA",  B0 / sqrt(mi * nD0 * mu0)); ///< Alfven velocity [m/s]
+  const Real tauA = pin->GetOrAddReal("Derived", "tauA", a / VA);                  ///< Alfven time     [s]
+  const Real E0   = pin->GetOrAddReal("Derived", "E0", B0 * VA);                   ///< Reference electric field in MHD [V/m]
+  const Real J0   = pin->GetOrAddReal("Derived", "J0", B0 / (mu0 * a));            ///< Reference current density [A/m^2]
+  const Real eta0 = pin->GetOrAddReal("Derived", "eta0", a * VA * mu0);            ///< Reference resitivity [Ohm*m]
+  const Real eta  = pin->GetOrAddReal("Derived", "eta",  1.0);                     ///< Resitivity scale     [-]
+  const Real Re   = pin->GetOrAddReal("Derived", "Re",  200.0);                    ///< Reinolds Number
 
-  ///< Impurity Parameters
-  const Real a = pin->GetOrAddReal("Geometry", "a", 2.0);  ///< Minor radius [m]
-  const Real Z0 = pin->GetOrAddReal("ImpurityParameters", "Z0", 10.0); ///< Atomic number of impurity (Z)
-  const Real ZI = pin->GetOrAddReal("ImpurityParameters", "ZI", 1.0); ///< Charge of impurity
-  const Real NeI = Z0 - ZI; ///< Number of bound electrons
-  const Real T_e0 = pin->GetOrAddReal("Distrubution", "T_e0", 10.48); ///< Initial deuterium density [m^-3]
-  const Real nD0  = pin->GetOrAddReal("Distrubution", "nD0", 6.8004357342523336e18); ///< Initial deuterium density [m^-3]
-  const Real fI = pin->GetOrAddReal("ImpurityParameters", "fI", 133.33);  ///<Fraction of impurity density, normalized to deuterium denstiy (nD0)
+  ///< Plasma composition parameters
+  const Real vTe = sqrt(2.0*Te0*e / me); ///< Thermal velocity
+  const Real Z0 = pin->GetOrAddReal("Plasma", "Z0", 10.0); ///< Atomic number of impurity (Z)
+  const Real ZI = pin->GetOrAddReal("Plasma", "ZI", 1.0);  ///< Charge of impurity
+  const Real fI = pin->GetOrAddReal("Plasma", "fI", 100.0);  ///<Fraction of impurity density, normalized to deuterium denstiy (nD0)
   const Real nI = fI*nD0; ///< Impurity density [m^-3]
   const Real n_e0 = nD0 + ZI*nI; ///< Free electron density [m^-3]
-  const Real Zeff = pin->GetOrAddReal("Collisions", "Zeff", (ZI*ZI*nI + nD0)/n_e0);
-  const Real Coulog0 = pin->GetOrAddInteger("Collisions", "Coulog0", 14.9 - 0.5*log(n_e0/1.0e20) + log(T_e0/1.0e3));
-  const Real Rc = pin->GetOrAddReal("ParticleSeed", "Rcenter", 3.1158966549999998e+00);
-  const Real Zc = pin->GetOrAddReal("ParticleSeed", "Zcenter", 3.7114360000000002e-01);
+  const Real Zeff = pin->GetOrAddReal("Plasma", "Zeff", (ZI*ZI*nI + nD0)/n_e0);
+  const Real NeI = Z0 - ZI; ///< Number of bound electrons
+  const Real Coulog0 = pin->GetOrAddInteger("Plasma", "Coulog0", 14.9 - 0.5*log(n_e0/1.0e20) + log(Te0/1.0e3));
+  const Real Rc = pin->GetOrAddReal("Plasma", "Rc", 3.1158966549999998e+00); ///< Initial guess for magnetic axis, R [-], length normalized
+  const Real Zc = pin->GetOrAddReal("Plasma", "Zc", 3.7114360000000002e-01); ///< Initial guess for magnetic axis, Z [-], length normalized
 
-  const Real tau_a = 6*M_PI*pc::eps0*pc::me*pc::me * pc::qe*pc::c*pc::c*pc::c /
-    (pc::qe*pc::qe*pc::qe*pc::qe*pc::qe*B0*B0); ///<
-  const Real tau_c = 4*M_PI*pc::eps0*pc::eps0*pc::me*pc::me*pc::c*pc::c*pc::c/(pc::qe*pc::qe*pc::qe*pc::qe*n_e0*Coulog0); ///< relativistic collision time
+  printf("Zeff = %le", Zeff);
 
-  const Real eta = pin->GetOrAddReal("Plasma parameters", "eta", 0.0006101792698927684);
-  const Real E_c = pc::me * pc::c / pc::qe / tau_c;
-  const Real E_n = B0 * V_A / E_c;
-  const Real eta_mu0aVa = eta / pc::mu0 / a / V_A; // converts eta * \curl B to V_A B_0
-  const Real etaec_a3VaB0 = eta * pc::qe * pc::c / a / a / a / V_A / B0; // converts eta J to V_A B_0
+  const Real etaplasma = pin->GetOrAddReal("Plasma", "etaplasma",
+   sqrt(2) / (12.0 * pow(M_PI,3.0/2.0)) / (32.0 * 3.0 * M_PI * 0.58) * Zeff * pow(e / eps0, 2) * sqrt(me) * Coulog0 / pow(Te0*e,3.0/2.0));  ///< Spitzer resistivity [Ohm*m]
 
-  printf("cBn = %le, Jn = %le, En = %le, Ec = %le\n", eta_mu0aVa, etaec_a3VaB0, E_n, E_c);
+  ///< Geometry parameters
+  const Real etawall               = pin->GetOrAddReal("Geometry", "etawall", 4.4e-2);                     ///< Wall resistivity [Ohm*m]
+  const Real etawallperp            = pin->GetOrAddReal("Geometry", "etawallperp", etawall);
+  const Real etawallphi             = pin->GetOrAddReal("Geometry", "etawallphi", etawall);
+  const Real etawallphi_isol_cell   = pin->GetOrAddReal("Geometry", "etawallphi_isol_cell", etawall);
+  const Real etasepwal              = pin->GetOrAddReal("Geometry", "etasepwal",  etaplasma);
+  const Real etaVV                  = pin->GetOrAddReal("Geometry", "etaVV",  1.30288e-6);
+  const Real etaout                 = pin->GetOrAddReal("Geometry", "etaout",  1.30288e-3);
+
+  const Real Rmin                   = pin->GetOrAddReal("Geometry", "rmin",  1.525); ///< Minimum R [-]
+  const Real Rmax                   = pin->GetOrAddReal("Geometry", "rmax",  4.975); ///< Maximum R [-]
+  const Real Zmin                   = pin->GetOrAddReal("Geometry", "zmin",  -2.975);///<  Minimum Z [-]
+  const Real Zmax                   = pin->GetOrAddReal("Geometry", "zmax",   2.975); ///< Maximum Z [-]
+
+
+  ///< Numerical paremters
+  const Real dampV                  = pin->GetOrAddReal("Numerical", "dampV", 0.01); ///< Stabilization coefficeint for velocity gradient
+  const Real itime                  = pin->GetOrAddReal("Numerical", "itime", 0.01); ///< Initial time for mhd counters
+  const int NR                      = pin->GetOrAddInteger("Numerical", "NR", 100);
+  const int Nphi                    = pin->GetOrAddInteger("Numerical", "Nphi", 2);
+  const int NZ                      = pin->GetOrAddInteger("Numerical", "NZ", 200);
+
+  const Real dR = (Rmax - Rmin) / (Real) NR;
+  const Real dZ = (Zmax - Zmin) / (Real) NZ;
+
+  const Real RminCellCenter = Rmin + .5 * dR;
+  const Real RmaxCellCenter = Rmax - .5 * dR;
+  const Real ZminCellCenter = Zmin + .5 * dZ;
+  const Real ZmaxCellCenter = Zmax - .5 * dZ;
+
+  const Real tau_a = 6*M_PI*eps0*pow(me * c, 3) / pow(e,4) / pow(B0,2);     ///< Syncrotron radiation damping time
+  const Real tau_c = 4*M_PI*pow(eps0,2)*me*me*c*c*c/(e*e*e*e*n_e0*Coulog0); ///< Relativistic collision time
+  const Real Ec = me * c / e / tau_c;                                       ///< Connor-Hastie Electric field
+  const Real En = E0 / Ec;
+  const Real eta_mu0aVa = etaplasma / eta0; // converts eta * \curl B to V_A B_0
+  const Real etaec_a3VaB0 = etaplasma * e * c / pow(a,3) / E0; // converts eta J to V_A B_0
+
+  if (mhd_context == NULL) return;
+  /// Initialize MHD context
+  mhd_context->mi                     = mi;
+  mhd_context->mu0                    = mu0;
+
+  mhd_context->density                = nD0;
+  mhd_context->B0                     = B0;
+  mhd_context->L0                     = a;
+  mhd_context->V_A                    = VA;
+  mhd_context->eta0                   = eta0;
+  mhd_context->eta                    = eta;
+  mhd_context->etawall                = etawall;
+  mhd_context->etaplasma              = etaplasma;
+  mhd_context->etawallperp            = etawallperp;
+  mhd_context->etawallphi             = etawallphi;
+  mhd_context->etawallphi_isol_cell   = etawallphi_isol_cell;
+  mhd_context->etasepwal              = etasepwal;
+  mhd_context->etaVV                  = etaVV;
+  mhd_context->etaout                 = etaout;
+  mhd_context->dampV                  = dampV;
+  mhd_context->rmin                   = Rmin * a;
+  mhd_context->rmax                   = Rmax * a;
+  mhd_context->phimin                 = 0.0;
+  mhd_context->phimax                 = 2.0 * M_PI;
+  mhd_context->zmin                   = Zmin * a;
+  mhd_context->zmax                   = Zmax * a;;
+  mhd_context->dt                     = dt_mhd / tauA;
+  mhd_context->ictype                 = 9;
+  mhd_context->Nr                     = NR;
+  mhd_context->Nphi                   = Nphi;
+  mhd_context->Nz                     = NZ;
+  mhd_context->Re                     = Re;
+  mhd_context->itime                  = itime * tau_c / tauA;
+  mhd_context->ftime                  = final_time * tau_c / tauA;
+  mhd_context->phibtype               = pin->GetOrAddInteger("MHD_Config", "phibtype",  1);
+  mhd_context->dr                     = dR;
+  mhd_context->dphi                   = (mhd_context->phimax - mhd_context->phimin) / mhd_context->Nphi;
+  mhd_context->dz                     = dZ;
+  mhd_context->pred_loop              = pin->GetOrAddInteger("MHD_Config", "pred_loop",  0);
+  mhd_context->tstype                 = pin->GetOrAddInteger("MHD_Config", "tstype",  2);
+  mhd_context->jtype                  = pin->GetOrAddInteger("MHD_Config", "jtype",  2);
+  mhd_context->adaptdt                = pin->GetOrAddInteger("MHD_Config", "adaptdt",  0);
+  mhd_context->debug                  = pin->GetOrAddInteger("MHD_Config", "debug",  0);
+  mhd_context->dump                   = pin->GetOrAddInteger("MHD_Config", "dump",  0);
+  mhd_context->EnableRelaxation       = pin->GetOrAddInteger("MHD_Config", "EnableRelaxation",  0);
+  mhd_context->EnableReadICFromBinary = pin->GetOrAddInteger("MHD_Config", "EnableReadICFromBinary",  1);
+  mhd_context->prestep                = pin->GetOrAddInteger("MHD_Config", "prestep",  1);
+  mhd_context->savecoords             = pin->GetOrAddInteger("MHD_Config", "savecoords",  0);
+  mhd_context->savesol                = pin->GetOrAddInteger("MHD_Config", "savesol",  0);
+  mhd_context->delay_kinetic          = pin->GetOrAddReal("MHD_Config", "delay_kinetic",  3);
+  mhd_context->isB                    = NULL;
+  mhd_context->isEP                   = NULL;
+  mhd_context->istau                  = NULL;
+  mhd_context->isV                    = NULL;
+  mhd_context->isni                   = NULL;
+  mhd_context->isB_boundary           = NULL;
+  mhd_context->isE_boundary           = NULL;
+  mhd_context->isni_boundary          = NULL;
+
+  // Set default location for input data.
+  strcpy(mhd_context->input_folder, pin->GetOrAddString("MHD_Config", "input_folder", "../../inputs").c_str());
+
+
+  mhd_context->axis[0] = Rc;
+  mhd_context->axis[1] = Zc;
+
+  int nphi = 1, nt = 2, ndims = 3, nfields = 4;
+  mhd_context->jre_data = new double[NR * NZ * ndims * nt];
+  mhd_context->field_data = new double[NR * NZ * nphi * nt * ndims * nfields];
+
+  mhd_context->jre    = mhd_context->jre_data;
+  for (int i = 0; i < NR * NZ * 3 * 2; ++i)
+    mhd_context->jre_data[i] = 0.0;
+  mhd_context->jreR   = mhd_context->jre;
+  mhd_context->jrephi = mhd_context->jre +     NR * NZ;
+  mhd_context->jreZ   = mhd_context->jre + 2 * NR * NZ;
+
+  mhd_context->Ebc = 0;
+  mhd_context->tempdump = 0;
+  mhd_context->dumpfreq = std::ceil(mhd_context->ftime / (10.0 * mhd_context->dt));
+  mhd_context->testSpGD = 0;
+  mhd_context->testSpGDsamerhs = 0;
+  mhd_context->oldstep = 0;
+  mhd_context->n_record =0;
+  mhd_context->n_record_Steady_jRE = 0;
+  mhd_context->CorrectorIdentifier = 1;
+}
+
+std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
+  /// Physical constants
+  static constexpr Real eps0 = pc::eps0; ///< Vacuum permittivity [F / M]
+  static constexpr Real c = pc::c;       ///< Speed of light [m/s]
+  static constexpr Real mi = pc::amu;    ///< Ion mass = atomic mass unit [kg]
+  static constexpr Real mu0 = pc::mu0;   ///< Vacuum permeabulity [N / A^2]
+  static constexpr Real me = pc::me;     ///< electron mass [kg]
+  static constexpr Real e = pc::qe;      ///< electron charge [C]
+
+  /// Time discretization parameters
+  const Real dt_mhd = pin->GetOrAddReal("Time","dt_mhd", 86.19e-6);       ///< mhd timestep [s]
+  const Real dt_cd =  pin->GetOrAddReal("Time","dt_cd",  dt_mhd * 1e-1);  ///< current deposit timestep for electric field readjustment [s]
+  const Real dt_LA =  pin->GetOrAddReal("Time","dt_LA",  dt_cd  * 1e-3 ); ///< large-angle collision step [s]
+  const Real final_time = pin->GetOrAddReal("Time", "final_time", 1.0);   /// Final time [s]
+  const Real timeStep = pin->GetOrAddReal("Simulation", "hRK", 1.e-6);    /// Runge kutta time in tau_c [-]
+  const Real atol = pin->GetOrAddReal("Simulation", "atol", 1.e-10);      /// Absoulte tolerance for RK [-]
+  const Real rtol = pin->GetOrAddReal("Simulation", "rtol", 1.e-7);       /// Realative toleratnce for RK[ [-]
+  /// Derived parameters
+  pin->GetOrAddReal("parthenon/time","tlim",0.0);         ///<WARNING: Setting this different in the input file would cause UB!
+  pin->GetOrAddReal("parthenon/time","dt_force",dt_LA);   ///<WARNINS: Setting this different in the input file would cause UB!
+
+  /// Reference parameters
+  const Real B0 = pin->GetOrAddReal("Reference", "B0", 5.3);  ///< On-axis magnetic field [T]
+  const Real a  = pin->GetOrAddReal("Reference", "a", 2.0);    ///< Minor radius [m] and reference length
+  const Real R0 = pin->GetOrAddReal("Reference", "R0", 6.0);    ///< Major radius [m]
+  const Real nD0 = pin->GetOrAddReal("Reference", "nD0", 1e20);    ///< Deutirium density [m^-3]
+  const Real Te0 = pin->GetOrAddReal("Reference", "Te0", 1e3);  ///< Electron temperature [eV], and plasma temperature single-temperature model
+
+  /// Derived parameters
+  const Real VA   = pin->GetOrAddReal("Derived", "VA",  B0 / sqrt(mi * nD0 * mu0)); ///< Alfven velocity [m/s]
+  const Real tauA = pin->GetOrAddReal("Derived", "tauA", a / VA);                  ///< Alfven time     [s]
+  const Real E0   = pin->GetOrAddReal("Derived", "E0", B0 * VA);                   ///< Reference electric field in MHD [V/m]
+  const Real J0   = pin->GetOrAddReal("Derived", "J0", B0 / (mu0 * a));            ///< Reference current density [A/m^2]
+  const Real eta0 = pin->GetOrAddReal("Derived", "eta0", a * VA * mu0);            ///< Reference resitivity [Ohm*m]
+  const Real eta  = pin->GetOrAddReal("Derived", "eta",  1.0);                     ///< Resitivity scale     [-]
+  const Real Re   = pin->GetOrAddReal("Derived", "Re",  200.0);                    ///< Reinolds Number
+
+  ///< Plasma composition parameters
+  const Real vTe = sqrt(2.0*Te0 * e / me); ///< Thermal velocity
+  const Real Z0 = pin->GetOrAddReal("Plasma", "Z0", 10.0); ///< Atomic number of impurity (Z)
+  const Real ZI = pin->GetOrAddReal("Plasma", "ZI", 1.0);  ///< Charge of impurity
+  const Real fI = pin->GetOrAddReal("Plasma", "fI", 100.0);  ///<Fraction of impurity density, normalized to deuterium denstiy (nD0)
+  const Real nI = fI*nD0; ///< Impurity density [m^-3]
+  const Real n_e0 = nD0 + ZI*nI; ///< Free electron density [m^-3]
+  const Real Zeff = pin->GetOrAddReal("Plasma", "Zeff", (ZI*ZI*nI + nD0)/n_e0);
+  const Real NeI = Z0 - ZI; ///< Number of bound electrons
+  const Real Coulog0 = pin->GetOrAddInteger("Plasma", "Coulog0", 14.9 - 0.5*log(n_e0/1.0e20) + log(Te0/1.0e3));
+  const Real Rc = pin->GetOrAddReal("Plasma", "Rc", 3.1158966549999998e+00); ///< Initial guess for magnetic axis, R [-], length normalized
+  const Real Zc = pin->GetOrAddReal("Plasma", "Zc", 3.7114360000000002e-01); ///< Initial guess for magnetic axis, Z [-], length normalized
+
+
+  const Real etaplasma = pin->GetOrAddReal("Plasma", "etaplasma",
+    1.0 / (32.0 * sqrt(M_PI) * 0.58) * Zeff * pow(e / eps0, 2) / me * Coulog0 / pow(vTe,3));  ///< Spitzer resistivity [Ohm*m]
+
+  ///< Geometry parameters
+  const Real etawall                = pin->GetOrAddReal("Geometry", "etawall", 4.4e-2);                     ///< Wall resistivity [Ohm*m]
+  const Real etawallperp            = pin->GetOrAddReal("Geometry", "etawallperp", etawall);
+  const Real etawallphi             = pin->GetOrAddReal("Geometry", "etawallphi", etawall);
+  const Real etawallphi_isol_cell   = pin->GetOrAddReal("Geometry", "etawallphi_isol_cell", etawall);
+  const Real etasepwal              = pin->GetOrAddReal("Geometry", "etasepwal",  etaplasma);
+  const Real etaVV                  = pin->GetOrAddReal("Geometry", "etaVV",  1.30288e-6);
+  const Real etaout                 = pin->GetOrAddReal("Geometry", "etaout",  1.30288e-3);
+
+  const Real Rmin                   = pin->GetOrAddReal("Geometry", "rmin",  1.525); ///< Minimum R [-]
+  const Real Rmax                   = pin->GetOrAddReal("Geometry", "rmax",  4.975); ///< Maximum R [-]
+  const Real Zmin                   = pin->GetOrAddReal("Geometry", "zmin",  -2.975);///<  Minimum Z [-]
+  const Real Zmax                   = pin->GetOrAddReal("Geometry", "zmax",   2.975); ///< Maximum Z [-]
+
+  ///< Runaway parameters
+  const Real c_vTe = pin->GetOrAddReal("Collisions", "c_vTe", c / vTe); ///< Guiding center equations coefficient [-]
+  const int NSA = pin->GetOrAddInteger("Collisions", "NSA", 150);       ///< Number of small angle collisions     [-]
+  const Real k = pin->GetOrAddReal("Collisions", "k", 5.0);
+  const Real aI            = pin->GetOrAddReal("Collisions", "aI", 0.3285296762792767);  ///<
+  const Real FineStructure = 1. / 137.035999;  // Fine Structure constant
+  const Real II            = pin->GetOrAddReal("Collisions", "II", 219.5 / me / pow(c,2)); // Mean exitation energy
+  const Real PSCoefDnRA    = 1.0 + NeI * fI / (1.0 + ZI * fI);
+
+  ///< Numerical paremters
+  const int NR                      = pin->GetOrAddInteger("Numerical", "NR", 100);
+  const int Nphi                    = pin->GetOrAddInteger("Numerical", "Nphi", 2);
+  const int NZ                      = pin->GetOrAddInteger("Numerical", "NZ", 200);
+
+  const Real dR = (Rmax - Rmin) / (Real) NR;
+  const Real dZ = (Zmax - Zmin) / (Real) NZ;
+
+  const Real RminCellCenter = Rmin + .5 * dR;
+  const Real RmaxCellCenter = Rmax - .5 * dR;
+  const Real ZminCellCenter = Zmin + .5 * dZ;
+  const Real ZmaxCellCenter = Zmax - .5 * dZ;
+
+  const Real tau_a = 6*M_PI*eps0*pow(me * c, 3) / pow(e,4) / pow(B0,2);     ///< Syncrotron radiation damping time
+  const Real tau_c = 4*M_PI*pow(eps0,2)*me*me*c*c*c/(e*e*e*e*n_e0*Coulog0); ///< Relativistic collision time
+  const Real Ec = me * c / e / tau_c;                                       ///< Connor-Hastie Electric field
+  const Real En = E0 / Ec;
+  const Real eta_mu0aVa = etaplasma / eta0; // converts eta * \curl B to V_A B_0
+  const Real etaec_a3VaB0 = etaplasma * e * c / pow(a,3) / E0; // converts eta J to V_A B_0
+
+  printf("cBn = %le, Jn = %le, En = %le, Ec = %le\n", eta_mu0aVa, etaec_a3VaB0, En, Ec);
 
   auto pkg = std::make_shared<StateDescriptor>("Deck");
 
-  pkg->AddParam("dt_LA", dt_LA);
-  pkg->AddParam("dt_cd", dt_cd);
-  pkg->AddParam("dt_mhd", dt_mhd);
+  pkg->AddParam("dt_LA",  dt_LA / tau_c);
+  pkg->AddParam("dt_cd",  dt_cd / tau_c);
+  pkg->AddParam("dt_mhd", dt_mhd / tau_c);
 
-  const std::string filePath = pin->GetOrAddString("Simulation", "file_path", "avalanche.out");
+  const std::string filePath = pin->GetOrAddString("Simulation", "file_path", "current.out");
   pkg->AddParam("filePath", filePath);
   int rank = 0;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -87,60 +326,27 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
     fclose(fout);
   }
 
+  const Real gamma_min      = pin->GetOrAddReal("BoundaryConditions", "gamma_min",1.02);
+  const Real p_BC = momentum_(pin->GetOrAddReal("BoundaryConditions", "gamma_BC", 1.02));
+  const Real p_RE = momentum_(pin->GetOrAddReal("BoundaryConditions", "gamma_RE", 1.02));
+
+  pkg->AddParam("gamma_min", gamma_min);
+  pkg->AddParam("p_BC", p_BC);
+  pkg->AddParam("p_RE", p_RE);
+
   int * ts = new int;
   *ts = 0;
   pkg->AddParam("ts", ts);
 
-  const Real final_time = pin->GetOrAddReal("Simulation", "final_time", 5.0);
-  const Real timeStep = pin->GetOrAddReal("Simulation", "hRK", 1.e-6);
-  const Real atol = pin->GetOrAddReal("Simulation", "atol", 1.e-10);
-  const Real rtol = pin->GetOrAddReal("Simulation", "rtol", 1.e-7);
   pkg->AddParam("final_time", final_time);
   pkg->AddParam("hRK", timeStep);
   pkg->AddParam("atol", atol);
   pkg->AddParam("rtol", rtol);
 
-
-  const Real dR = 0.0345;
-  const Real dZ = 0.02975;
-  const int nR_data = 100;
-  const int nZ_data = 200;
-
-  const Real Rmin = 3.05/2.0 + 0.5 * dR;
-  const Real Rmax = Rmin + (nR_data-1) * dR;
-  const Real Zmin = -5.95/2.0 + 0.5 * dZ;
-  const Real Zmax = Zmin + (nZ_data-1) * dZ;
-
-  std::cout << nR_data << " " << nZ_data << std::endl;
-  std::cout << Rmin << " " << Rmax << std::endl;
-  std::cout << Zmin << " " << Zmax << std::endl;
-  std::cout << dR << " " << dZ << std::endl;
-
   pkg->AddParam("Rmin", Rmin);
   pkg->AddParam("Rmax", Rmax);
   pkg->AddParam("Zmin", Zmin);
   pkg->AddParam("Zmax", Zmax);
-
-
-  const Real gamma_min =
-      pin->GetOrAddReal("BoundaryConditions", "gamma_min", 1.02);
-  const Real p_BC =
-      momentum_(pin->GetOrAddReal("BoundaryConditions", "gamma_BC", 1.02));
-  const Real p_RE =
-      momentum_(pin->GetOrAddReal("BoundaryConditions", "gamma_RE", 1.02));
-  pkg->AddParam("gamma_min", gamma_min);
-  pkg->AddParam("p_BC", p_BC);
-  pkg->AddParam("p_RE", p_RE);
-
-  const Real vTe = sqrt(2*T_e0 * pc::qe/pc::me); // Thermal velocity
-  const Real c_vTe = pin->GetOrAddReal("Collisions", "c_vTe", pc::c / vTe);
-  const int NSA = pin->GetOrAddInteger("Collisions", "NSA", 150);
-  const Real k = pin->GetOrAddReal("Collisions", "k", 5.0);
-  const Real aI            = pin->GetOrAddReal("Collisions", "aI",              0.3285296762792767);
-  const Real FineStructure = 1. / 137.035999;  // Fine Structure constant
-  const Real II            = pin->GetOrAddReal("Collisions", "II", 219.5 / pc::me / pc::c / pc::c); // Mean exitation energy
-
-  const Real PSCoefDnRA    = 1.0 + NeI * fI / (1.0 + ZI * fI);
 
 	SmallAngleCollision<PartialScreening, EnergyScattering, ModifiedCouLog> sa(c_vTe, Zeff, NSA, Coulog0, k,
      aI,
@@ -151,7 +357,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
      II,
      fI
   );
-
   pkg->AddParam("SmallAngleCollision", sa);
   MollerSource ms(Coulog0, PSCoefDnRA);
   pkg->AddParam("MollerSource", ms);
@@ -159,62 +364,23 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
   int nphi_data = 1;
   int nt = 2;
 
-  const std::string configurationdomain_file = pin->GetOrAddString("Geometry", "file_path", "../../inputs/AxisSymmetricGeometry.dat");
+  const std::string configurationdomain_file = pin->GetOrAddString("Geometry", "input_file", "../../inputs/AxisSymmetricGeometry.dat");
 
-  ConfigurationDomainGeometry::IndicatorViewType indicator("indicator", nR_data, nZ_data);
+  ConfigurationDomainGeometry::IndicatorViewType indicator("indicator", NR, NZ);
   std::ifstream ifs(configurationdomain_file);
   auto indicator_h = Kokkos::create_mirror_view(indicator);
-  for (int i = 0; i < nR_data; ++i) {
-    for (int j = 0; j < nZ_data; ++j) {
+  for (int i = 0; i < NR; ++i) {
+    for (int j = 0; j < NZ; ++j) {
       ifs >> indicator_h(i,j);
     }
   }
 
+
   Kokkos::deep_copy(indicator, indicator_h);
-  int ic = std::floor((Rc - Rmin) / dR);
-  int jc = std::floor((Zc - Zmin) / dZ);
 
-  const ConfigurationDomainGeometry cdg(Rmin, Zmin, dR, dZ, -3, indicator);
-  std::cout << "Location of center " << Rc << " " << Zc << std::endl;
-  std::cout <<  ic << " " << jc << std::endl;
-  std::cout << indicator_h(ic, jc) <<  std::endl;
-
-
-  const std::string field_file = pin->GetOrAddString("MHD", "file_path", "../../inputs/fields_0.bin");
-
-  EM_Field field_interpolation(nR_data, nZ_data, nphi_data, nt, Rmin, Zmin, dR, dZ, E_n, eta_mu0aVa, etaec_a3VaB0, cdg);
-  auto field_data = field_interpolation.getDataRef();
-  auto field_data_h = create_mirror_view(Kokkos::HostSpace(), field_data);
-  std::ifstream in(field_file, std::ios::binary);
-  if (!in) throw std::runtime_error("Cannot open file: " + field_file);
-
-  in.read(reinterpret_cast<char*>(field_data_h.data()), nR_data * nZ_data * nphi_data * nt * 4 * 3 * sizeof(double));
-  if (!in) throw std::runtime_error("Failed to read file: " + field_file);
-
-  Kokkos::deep_copy(field_data, field_data_h);
-
-  Kokkos::parallel_for("setfields",
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {nR_data,nZ_data}),
-  KOKKOS_LAMBDA(int i, int j){
-    // linearize: row-major numbering
-    auto sbv = Kokkos::subview(field_data,
-             i, j, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
-
-    for (int di = 0; di < sbv.extent(1); ++di) {
-      for (int k = 0; k < sbv.extent(2); ++k) {
-        for (int ti = 0; ti < sbv.extent(3); ++ti) {
-          sbv(1,di,k,ti) = sbv(2,di,k,ti);
-          sbv(2,di,k,ti) = 0.0;
-          sbv(3,di,k,ti) = 0.0;
-        }
-      }
-    }
-  });
-
-
-  field_interpolation.interpolate();
-
+  ConfigurationDomainGeometry cdg(RminCellCenter, ZminCellCenter, dR, dZ, -3, indicator);
   pkg->AddParam("CDG", cdg);
+  EM_Field field_interpolation(NR, NZ, nphi_data, nt, RminCellCenter, ZminCellCenter, dR, dZ, En, eta_mu0aVa, etaec_a3VaB0, cdg);
   pkg->AddParam("Field", field_interpolation);
 
   const Real wce0 = pc::qe * B0 / pc::me; // Electron gyrofrequency
@@ -227,8 +393,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
   pkg->AddParam("GCE", gce);
 
 
-  const int npart =
-      pin->GetOrAddInteger("ParticleSeed", "num_particles_per_block", 16);
+  const int npart =  pin->GetOrAddInteger("ParticleSeed", "num_particles_per_block", 16);
   pkg->AddParam("num_particles_per_block", npart);
   // Initialize random number generator pool
   int rng_seed = pin->GetOrAddInteger("ParticleSeed", "rng_seed", 1234);
@@ -240,17 +405,14 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
 
   const Real seed_current = pin->GetOrAddReal("ParticleSeed", "current", 150e3); // 150 kAmps
   pkg->AddParam("seed_current", seed_current * a / pc::qe / pc::c); // Convert from amps
-
   const Real gammamin = pin->GetOrAddReal("ParticleSeed", "gammamin", 10.0);
   pkg->AddParam("pmin", momentum_(gammamin));
   const Real gammamax = pin->GetOrAddReal("ParticleSeed", "gammamax", 20.0);
   pkg->AddParam("pmax", momentum_(gammamax));
-
   const Real ximin = pin->GetOrAddReal("ParticleSeed", "ximin", 0.8);
   pkg->AddParam("ximin", ximin);
   const Real ximax = pin->GetOrAddReal("ParticleSeed", "ximax", 1.0);
   pkg->AddParam("ximax", ximax);
-
 
   Metadata swarm_metadata({Metadata::Provides, Metadata::None});
   pkg->AddSwarm("particles", swarm_metadata);
@@ -282,8 +444,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin) {
   pkg->AddSwarmValue(Kinetic::status::name(), "particles",
                      int_swarmvalue_metadata);
 
-  std::cout << "Coulog0 " << Coulog0 << std::endl;
-  std::cout << "c_vTe " << c_vTe << std::endl;
 
   return pkg;
 }
@@ -310,6 +470,64 @@ void Push(ParthenonManager * man) {
 auto &GetCoords(std::shared_ptr<MeshBlock> &pmb) { return pmb->coords; }
 auto &GetCoords(MeshBlock *pmb) { return pmb->coords; }
 auto &GetCoords(Mesh *pm) { return pm->block_list[0]->coords; }
+
+
+
+void SaveState(Mesh* pm) {
+  auto md = pm->mesh_data.Get();
+  auto desc_swarm = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
+  auto pack_swarm = desc_swarm.GetPack(md.get());
+
+  parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
+                     DevExecSpace(), 0, pack_swarm.GetMaxFlatIndex(),
+                     // new_n ranges from 0 to N_new_particles
+                     KOKKOS_LAMBDA(const int idx) {
+        auto [b, n] = pack_swarm.GetBlockParticleIndices(idx);
+        // block and particle indices
+
+        if (pack_swarm(b, Kinetic::status(), n) & Kinetic::ALIVE) {
+          pack_swarm(b, Kinetic::status(), n) |= Kinetic::PROTECTED;
+        } else {
+          const auto swarm = pack_swarm.GetContext(b);
+          swarm.MarkParticleForRemoval(n);
+        }
+      });
+}
+
+void RestoreState(Mesh* pm) {
+  auto md = pm->mesh_data.Get();
+  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
+      Kinetic::p, Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight,
+      Kinetic::saved_p, Kinetic::saved_xi, Kinetic::saved_R, Kinetic::saved_phi, Kinetic::saved_Z, Kinetic::saved_w>(
+      "particles");
+  auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
+
+  auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
+  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
+
+  parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
+                     DevExecSpace(), 0, pack_swarm_r.GetMaxFlatIndex(),
+                     // new_n ranges from 0 to N_new_particles
+                     KOKKOS_LAMBDA(const int idx) {
+        auto [b_r, n_r] = pack_swarm_r.GetBlockParticleIndices(idx);
+        auto [b_i, n_i] = pack_swarm_i.GetBlockParticleIndices(idx);
+        // block and particle indices
+
+        if (pack_swarm_i(b_i, Kinetic::status(), n_i) & Kinetic::PROTECTED) {
+          pack_swarm_r(b_r, Kinetic::p(), n_r)   = pack_swarm_r(b_r, Kinetic::saved_p(), n_r);
+          pack_swarm_r(b_r, Kinetic::xi(), n_r)  = pack_swarm_r(b_r, Kinetic::saved_xi(), n_r);
+          pack_swarm_r(b_r, Kinetic::R(), n_r)   = pack_swarm_r(b_r, Kinetic::saved_R(), n_r) ;
+          pack_swarm_r(b_r, Kinetic::phi(), n_r) = pack_swarm_r(b_r, Kinetic::saved_phi(), n_r);
+          pack_swarm_r(b_r, Kinetic::Z(), n_r)   = pack_swarm_r(b_r, Kinetic::saved_Z(), n_r)  ;
+          pack_swarm_r(b_r, Kinetic::weight(), n_r)   = pack_swarm_r(b_r, Kinetic::saved_w(), n_r)  ;
+
+          pack_swarm_i(b_i, Kinetic::status(), n_i) |= Kinetic::ALIVE;
+        } else {
+          const auto swarm = pack_swarm_i.GetContext(b_i);
+          swarm.MarkParticleForRemoval(n_i);
+        }
+      });
+}
 
 void ComputeParticleWeights(Mesh* pm) {
 
@@ -368,62 +586,6 @@ void ComputeParticleWeights(Mesh* pm) {
         auto [b, n] = pack_swarm_r.GetBlockParticleIndices(idx);
         // block and particle indices
         pack_swarm_r(b, Kinetic::weight(), n) = w;
-      });
-}
-
-void SaveState(Mesh* pm) {
-  auto md = pm->mesh_data.Get();
-  auto desc_swarm = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
-  auto pack_swarm = desc_swarm.GetPack(md.get());
-
-  parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
-                     DevExecSpace(), 0, pack_swarm.GetMaxFlatIndex(),
-                     // new_n ranges from 0 to N_new_particles
-                     KOKKOS_LAMBDA(const int idx) {
-        auto [b, n] = pack_swarm.GetBlockParticleIndices(idx);
-        // block and particle indices
-
-        if (pack_swarm(b, Kinetic::status(), n) & Kinetic::ALIVE) {
-          pack_swarm(b, Kinetic::status(), n) |= Kinetic::PROTECTED;
-        } else {
-          const auto swarm = pack_swarm.GetContext(b);
-          swarm.MarkParticleForRemoval(n);
-        }
-      });
-}
-
-void RestoreState(Mesh* pm) {
-  auto md = pm->mesh_data.Get();
-  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
-      Kinetic::p, Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight,
-      Kinetic::saved_p, Kinetic::saved_xi, Kinetic::saved_R, Kinetic::saved_phi, Kinetic::saved_Z, Kinetic::saved_w>(
-      "particles");
-  auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
-
-  auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
-  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
-
-  parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
-                     DevExecSpace(), 0, pack_swarm_r.GetMaxFlatIndex(),
-                     // new_n ranges from 0 to N_new_particles
-                     KOKKOS_LAMBDA(const int idx) {
-        auto [b_r, n_r] = pack_swarm_r.GetBlockParticleIndices(idx);
-        auto [b_i, n_i] = pack_swarm_i.GetBlockParticleIndices(idx);
-        // block and particle indices
-
-        if (pack_swarm_i(b_i, Kinetic::status(), n_i) & Kinetic::PROTECTED) {
-          pack_swarm_r(b_r, Kinetic::p(), n_r)   = pack_swarm_r(b_r, Kinetic::saved_p(), n_r);
-          pack_swarm_r(b_r, Kinetic::xi(), n_r)  = pack_swarm_r(b_r, Kinetic::saved_xi(), n_r);
-          pack_swarm_r(b_r, Kinetic::R(), n_r)   = pack_swarm_r(b_r, Kinetic::saved_R(), n_r) ;
-          pack_swarm_r(b_r, Kinetic::phi(), n_r) = pack_swarm_r(b_r, Kinetic::saved_phi(), n_r);
-          pack_swarm_r(b_r, Kinetic::Z(), n_r)   = pack_swarm_r(b_r, Kinetic::saved_Z(), n_r)  ;
-          pack_swarm_r(b_r, Kinetic::weight(), n_r)   = pack_swarm_r(b_r, Kinetic::saved_w(), n_r)  ;
-
-          pack_swarm_i(b_i, Kinetic::status(), n_i) |= Kinetic::ALIVE;
-        } else {
-          const auto swarm = pack_swarm_i.GetContext(b_i);
-          swarm.MarkParticleForRemoval(n_i);
-        }
       });
 }
 

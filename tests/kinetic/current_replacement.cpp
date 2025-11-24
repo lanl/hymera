@@ -21,7 +21,6 @@ int main(int argc, char *argv[]) {
   if (ret != 0) return ret;
 
   runaway_init(manager);
-
   runaway_push(manager);
   runaway_finalize(manager);
 

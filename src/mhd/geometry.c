@@ -10417,110 +10417,95 @@ PetscErrorCode PushParticles(TS ts, Vec Xp, Vec X, void *ptr)
   MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
   MPI_Comm_size(PETSC_COMM_WORLD, &size);
 
-  if (user->kctx.DoParticleOrbitConservationTest == 1)
-  {
-    // TEST CASE
-    // COMPUTE push particles and p_phi and mu conservation for the whole dt. Terminate after done.
-    /* RuKS_testConservation(user->runaway_solver,user->dt); */
-    // TERMINATE PROGRAM
-    free(gf_B_2Dp);
-    free(gf_Bd_2Dp);
-    free(gf_E_2D);
-    free(gf_V_2Dp);
-    PetscPrintf(PETSC_COMM_WORLD, "\nCONSERVATION TEST END\n");
-    PetscFinalize();
-    exit(0);
-  }
+//  if (user->kctx.DumpFields == 1 && rank == 0) {
+//    FILE *file;
+//    size_t arr_size = 2 * 3 * 4 * user->Nr * user->Nz;
+//
+//    char filename[50];
+//    // create filename like field_dump3
+//    snprintf(filename, sizeof(filename), "fields_%d.bin", user->field_counter);
+//
+//    // Open file for writing in binary mode
+//    file = fopen(filename, "wb");
+//    if (file == NULL) {
+//        PetscPrintf(PETSC_COMM_WORLD, "ERROR_OPENING_FILE");
+//        return 1;
+//    }
+//
+//    // Write the array into the file
+//    if (fwrite(user->field_data, sizeof(double), arr_size, file) != arr_size) {
+//        PetscPrintf(PETSC_COMM_WORLD, "ERROR_WRITING_FILE");
+//        fclose(file);
+//        return 1;
+//    }
+//
+//    PetscPrintf(PETSC_COMM_SELF, "Array successfully written to %s\n", filename);
+//
+//    fclose(file);
+//
+//  }
 
-  if (user->kctx.DumpFields == 1 && rank == 0) {
-    FILE *file;
-    size_t arr_size = 2 * 3 * 4 * user->Nr * user->Nz;
+//  if (user->kctx.DoPoincare == 1 && rank == 0)
+//  {
+//    hflux_interpolate(user->field_interpolation, user->field_data);
+//    PetscPrintf(PETSC_COMM_SELF, "Interpolation complete");
+//
+//    const int plus = 1;
+//    double psi0 = hflux_get_psi_extrema(user->field_interpolation, user->axis, plus);
+//    PetscPrintf(PETSC_COMM_SELF, "Magnetic axis center (R,Z) = (%f, %f), Psi_0 = %le\n", user->axis[0], user->axis[1], psi0);
+//
+//    int n_r = 100;
+//    int n_theta = 5;
+//    double dr = 0.01;
+//    double dtheta = 2 * M_PI / (double) n_theta;
+//    int n_turn  = 1000;
+//    int N = n_r * n_theta * (n_turn+1);
+//
+//    double * poincare_data = (double*) malloc(2*N * sizeof(double));
+//
+//    for (int itheta = 0; itheta < n_theta; ++itheta)
+//      for (int ir = 0; ir < n_r; ++ir) {
+//        poincare_data[ir + itheta * n_r] =                 user->axis[0] + ir * dr * cos(itheta * dtheta);
+//        poincare_data[ir + itheta * n_r + n_r * n_theta] = user->axis[1] + ir * dr * sin(itheta * dtheta);
+//      }
+//
+//    hflux_compute_poincare(user->field_interpolation, n_r * n_theta, n_turn, poincare_data);
+//
+//    FILE *file;
+//    size_t arr_size = 2*N;
+//
+//    char filename[50];
+//    // create filename like field_dump3
+//    snprintf(filename, sizeof(filename), "poincare_%d.bin", user->poincare_counter);
+//
+//    // Open file for writing in binary mode
+//    file = fopen(filename, "wb");
+//    if (file == NULL) {
+//        PetscPrintf(PETSC_COMM_WORLD, "ERROR_OPENING_FILE");
+//        return 1;
+//    }
+//
+//    // Write the array into the file
+//    if (fwrite(poincare_data, sizeof(double), arr_size, file) != arr_size) {
+//        PetscPrintf(PETSC_COMM_WORLD, "ERROR_WRITING_FILE");
+//        fclose(file);
+//        return 1;
+//    }
+//
+//    PetscPrintf(PETSC_COMM_SELF, "Array successfully written to %s\n", filename);
+//    PetscPrintf(PETSC_COMM_SELF, "Poincare for dt = %le %d", user->dt, user->poincare_counter);
+//
+//    fclose(file);
+//    user->poincare_counter += 1;
+//
+//    free(poincare_data);
+//  }
 
-    char filename[50];
-    // create filename like field_dump3
-    snprintf(filename, sizeof(filename), "fields_%d.bin", user->field_counter);
-
-    // Open file for writing in binary mode
-    file = fopen(filename, "wb");
-    if (file == NULL) {
-        PetscPrintf(PETSC_COMM_WORLD, "ERROR_OPENING_FILE");
-        return 1;
-    }
-
-    // Write the array into the file
-    if (fwrite(user->field_data, sizeof(double), arr_size, file) != arr_size) {
-        PetscPrintf(PETSC_COMM_WORLD, "ERROR_WRITING_FILE");
-        fclose(file);
-        return 1;
-    }
-
-    PetscPrintf(PETSC_COMM_SELF, "Array successfully written to %s\n", filename);
-
-    fclose(file);
-
-  }
-
-  if (user->kctx.DoPoincare == 1 && rank == 0)
-  {
-    hflux_interpolate(user->field_interpolation, user->field_data);
-    PetscPrintf(PETSC_COMM_SELF, "Interpolation complete");
-
-    const int plus = 1;
-    double psi0 = hflux_get_psi_extrema(user->field_interpolation, user->axis, plus);
-    PetscPrintf(PETSC_COMM_SELF, "Magnetic axis center (R,Z) = (%f, %f), Psi_0 = %le\n", user->axis[0], user->axis[1], psi0);
-
-    int n_r = 100;
-    int n_theta = 5;
-    double dr = 0.01;
-    double dtheta = 2 * M_PI / (double) n_theta;
-    int n_turn  = 1000;
-    int N = n_r * n_theta * (n_turn+1);
-
-    double * poincare_data = (double*) malloc(2*N * sizeof(double));
-
-    for (int itheta = 0; itheta < n_theta; ++itheta)
-      for (int ir = 0; ir < n_r; ++ir) {
-        poincare_data[ir + itheta * n_r] =                 user->axis[0] + ir * dr * cos(itheta * dtheta);
-        poincare_data[ir + itheta * n_r + n_r * n_theta] = user->axis[1] + ir * dr * sin(itheta * dtheta);
-      }
-
-    hflux_compute_poincare(user->field_interpolation, n_r * n_theta, n_turn, poincare_data);
-
-    FILE *file;
-    size_t arr_size = 2*N;
-
-    char filename[50];
-    // create filename like field_dump3
-    snprintf(filename, sizeof(filename), "poincare_%d.bin", user->poincare_counter);
-
-    // Open file for writing in binary mode
-    file = fopen(filename, "wb");
-    if (file == NULL) {
-        PetscPrintf(PETSC_COMM_WORLD, "ERROR_OPENING_FILE");
-        return 1;
-    }
-
-    // Write the array into the file
-    if (fwrite(poincare_data, sizeof(double), arr_size, file) != arr_size) {
-        PetscPrintf(PETSC_COMM_WORLD, "ERROR_WRITING_FILE");
-        fclose(file);
-        return 1;
-    }
-
-    PetscPrintf(PETSC_COMM_SELF, "Array successfully written to %s\n", filename);
-    PetscPrintf(PETSC_COMM_SELF, "Poincare for dt = %le %d", user->dt, user->poincare_counter);
-
-    fclose(file);
-    user->poincare_counter += 1;
-
-    free(poincare_data);
-  }
-
-  if (user->kctx.DoAdvance == 1)
-  {
-    PetscPrintf(PETSC_COMM_WORLD, "Advancing for dt = %le", user->dt);
-    /* RuKS_advance(user->runaway_solver, user->dt); */
-  }
+//  if (user->kctx.DoAdvance == 1)
+//  {
+//    PetscPrintf(PETSC_COMM_WORLD, "Advancing for dt = %le", user->dt);
+//    /* RuKS_advance(user->runaway_solver, user->dt); */
+//  }
 
   free(gf_B_2Dp);
   free(gf_E_2D);

@@ -433,7 +433,6 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   }
   *ts += 1;
   Kokkos::fence();
-  //TODO put interpolation
 }
 
 TaskCollection RunawayDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm) {

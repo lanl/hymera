@@ -23,6 +23,8 @@ constexpr bool PartialScreening = true;
 constexpr bool EnergyScattering = true;
 constexpr bool ModifiedCouLog = true;
 
+#include "mhd/mfd_config.h"
+
 namespace Kinetic {
 
 
@@ -69,6 +71,7 @@ SWARM_VARIABLE(Real, particle, saved_w);
 // constexpr auto mkParticleDescriptror_i(const std::string swarm_name) = parthenon::MakeSwarmPackDescriptor<
 //       will_scatter, secondary_index, status>(std::stringswarm_name);
 
+void InitializeMHDConfig(ParameterInput *pin, User* mhd_context);
 std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin);
 void ComputeParticleWeights(Mesh* pm);
 void SaveState(Mesh* pm);
