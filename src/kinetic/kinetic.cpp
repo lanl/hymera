@@ -104,7 +104,7 @@ void InitializeMHDConfig(ParameterInput *pin, User* mhd_context) {
 
   ///< Numerical paremters
   const Real dampV                  = pin->GetOrAddReal("Numerical", "dampV", 0.01); ///< Stabilization coefficeint for velocity gradient
-  const Real itime                  = pin->GetOrAddReal("Numerical", "itime", 0.01); ///< Initial time for mhd counters
+  const Real itime                  = pin->GetOrAddReal("Numerical", "itime", 0.0); ///< Initial time for mhd counters
   const int NR                      = pin->GetOrAddInteger("Numerical", "NR", 100);
   const int Nphi                    = pin->GetOrAddInteger("Numerical", "Nphi", 2);
   const int NZ                      = pin->GetOrAddInteger("Numerical", "NZ", 200);

@@ -81,6 +81,8 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
     parthenon_init(&manager, argc, argv, &user);
     user.manager = manager;
 
+    PetscCall(AppCtxView(PETSC_COMM_WORLD,&user));
+
     PetscInt numC = 0;
     char filename[PETSC_MAX_PATH_LEN];
 

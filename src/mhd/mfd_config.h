@@ -59,7 +59,7 @@
 #define FRONT_UP_RIGHT   DMSTAG_FRONT_UP_RIGHT
 
 /* Define a structure for user context */
-typedef struct{
+typedef struct {
   PetscReal   density;          /* Density */
   PetscReal   L0;               /* Characteristic length */
   PetscReal   B0;               /* Initial magnetic field magnitude */
@@ -201,4 +201,6 @@ typedef struct HermiteDivFreeFields
   PetscScalar *m_hp_ZR;
   PetscScalar *m_hp_ZZ;
 } tHermiteDivFreeFields;
+
+PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx);
 #endif /* defined(MFD_CONFIG_H) */

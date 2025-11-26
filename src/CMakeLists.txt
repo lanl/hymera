@@ -37,6 +37,7 @@ set(HYBRID_SRC_LIST
   mhd/geometry.c
   mhd/monitor_functions.c
   mhd/mhd_run.c
+  mhd/mfd_config.c
   kinetic/c_wrapper.cpp
   kinetic/RunawayDriver.cpp
   kinetic/kinetic.cpp
