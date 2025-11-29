@@ -19838,7 +19838,6 @@ PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) 
     // PetscPrintf(PETSC_COMM_WORLD,"dump flag checked");
 
     DumpSolution_Cell(ts, (int)(step + user -> oldstep), X, user);
-    Computepsi(ts, (int)(step + user -> oldstep), X, user);
     if (1 && user -> ictype == 9 && user -> oldstep == 0) {
       DumpLevelSet(ts, user);
     }

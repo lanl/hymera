@@ -1,8 +1,10 @@
 #include "RunawayDriver.h"
-
 #include <parthenon/driver.hpp>
 #include <parthenon/package.hpp>
 #include <parthenon_manager.hpp>
+#include <iostream>
+#include <iomanip>
+#include <limits>
 
 #include <Kokkos_Core.hpp>
 
@@ -463,11 +465,14 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   Kokkos::fence();
 
   if (rank == 0) {
-    FILE *fout = fopen(filePath.c_str(), "a");
-    fprintf(fout, "%20.14le %20.14le %20.14le %20.14le\n", dt_cd * (*ts+1), I_re * pc::qe * pc::c * .5,
-        I_re_integral * pc::qe * pc::c * .5, I_ohmic * 5.3  * 2.0 / pc::mu0);
-    // Charge * c / minor radius * 1e-6 (to MAmps)"
-    fclose(fout);
+    std::ofstream ofs(filePath, std::ios::app);
+    //ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e}\n", dt_cd * (*ts+1), I_re * pc::qe * pc::c * .5,
+    //    I_re_integral * pc::qe * pc::c * .5, I_ohmic * 5.3  * 2.0 / pc::mu0);
+    ofs << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10);
+    ofs << std::setw(20) << dt_cd * (*ts+1)
+        << std::setw(20) << I_re * pc::qe * pc::c * .5
+        << std::setw(20) << I_re_integral * pc::qe * pc::c * .5
+        << std::setw(20) << I_ohmic * 5.3  * 2.0 / pc::mu0;
   }
   *ts += 1;
   Kokkos::fence();

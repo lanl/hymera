@@ -46,8 +46,8 @@ nx3 = 1
 num_particles_per_block = 16
 rng_seed = 1234
 <MHD_Config>
-EnableRelaxation = 1
-EnableReadICFromBinary = 0
+EnableRelaxation = 0
+EnableReadICFromBinary = 1
 
 <parthenon/output8>
 file_type = rst

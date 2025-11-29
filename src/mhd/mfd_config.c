@@ -153,18 +153,6 @@ PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx) {
               ctx->axis[0], ctx->axis[1]);
   PetscPrintf(comm,"ParticlesCreated    = %d\n", ctx->ParticlesCreated);
 
-  PetscPrintf(comm,"\n-- NT interpolation array --\n");
-  {
-    int i,j;
-    for (i=0; i<6; i++) {
-      PetscPrintf(comm,"NT[%d][:] =", i);
-      for (j=0; j<6; j++) {
-        PetscPrintf(comm," %g",(double)PetscRealPart(ctx->NT[i][j]));
-      }
-      PetscPrintf(comm,"\n");
-    }
-  }
-
   PetscPrintf(comm,"\n-- Input folder --\n");
   PetscPrintf(comm,"input_folder = %s\n", ctx->input_folder);
 

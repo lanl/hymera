@@ -12,6 +12,8 @@
 
 #include <memory>
 #include <numeric>
+#include <iostream>
+#include <format>
 #include <typeinfo>  //for 'typeid' to work
 #include <parthenon/package.hpp>
 
@@ -157,7 +159,7 @@ void InitializeMHDConfig(ParameterInput *pin, User* mhd_context) {
   mhd_context->Nz                     = NZ;
   mhd_context->Re                     = Re;
   mhd_context->itime                  = itime * tau_c / tauA;
-  mhd_context->ftime                  = final_time * tau_c / tauA;
+  mhd_context->ftime                  = final_time / tauA;
   mhd_context->phibtype               = pin->GetOrAddInteger("MHD_Config", "phibtype",  1);
   mhd_context->dr                     = dR;
   mhd_context->dphi                   = (mhd_context->phimax - mhd_context->phimin) / mhd_context->Nphi;
@@ -198,6 +200,8 @@ void InitializeMHDConfig(ParameterInput *pin, User* mhd_context) {
   mhd_context->jreR   = mhd_context->jre;
   mhd_context->jrephi = mhd_context->jre +     NR * NZ;
   mhd_context->jreZ   = mhd_context->jre + 2 * NR * NZ;
+
+  mhd_context->field_data = new double[NR * NZ * 4 * ndims * nt];
 
   mhd_context->Ebc = 0;
   mhd_context->tempdump = 0;
@@ -270,12 +274,12 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real Zmax = pin->GetReal("Geometry", "zmax"); ///< Maximum Z [-]
 
   ///< Runaway parameters
-  const Real c_vTe = pin->GetReal("Collisions", "c_vTe"); ///< Guiding center equations coefficient [-]
-  const int NSA = pin->GetInteger("Collisions", "NSA");       ///< Number of small angle collisions     [-]
-  const Real k = pin->GetReal("Collisions", "k");
-  const Real aI            = pin->GetReal("Collisions", "aI");  ///<
+  const Real c_vTe = pin->GetOrAddReal("Collisions", "c_vTe", c / vTe); ///< Guiding center equations coefficient [-]
+  const int NSA = pin->GetOrAddInteger("Collisions", "NSA", 150);       ///< Number of small angle collisions     [-]
+  const Real k = pin->GetOrAddReal("Collisions", "k", 5.0);
+  const Real aI            = pin->GetOrAddReal("Collisions", "aI", 0.3285296762792767);  ///<
   const Real FineStructure = 1. / 137.035999;  // Fine Structure constant
-  const Real II            = pin->GetReal("Collisions", "II"); // Mean exitation energy
+  const Real II            = pin->GetOrAddReal("Collisions", "II", 219.5 / pc::me / pc::c / pc::c); // Mean exitation energy
   const Real PSCoefDnRA    = 1.0 + NeI * fI / (1.0 + ZI * fI);
 
   ///< Numerical paremters
@@ -298,7 +302,17 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real eta_mu0aVa = etaplasma / eta0; // converts eta * \curl B to V_A B_0
   const Real etaec_a3VaB0 = etaplasma * e * c / pow(a,3) / E0; // converts eta J to V_A B_0
 
-  printf("cBn = %le, Jn = %le, En = %le, Ec = %le\n", eta_mu0aVa, etaec_a3VaB0, En, Ec);
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (rank == 0) {
+
+    std::cout << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10);
+    std::cout << "cBn = " << std::setw(20) << eta_mu0aVa
+              << "Jn  = " << std::setw(20) << etaec_a3VaB0
+              << "En = "  << std::setw(20) << En
+              << "Ec = "  << std::setw(20) << Ec
+              << std::endl;
+  }
 
   auto pkg = std::make_shared<StateDescriptor>("Deck");
 
@@ -308,11 +322,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   const std::string filePath = pin->GetOrAddString("Simulation", "file_path", "current.out");
   pkg->AddParam("filePath", filePath);
-  int rank = 0;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   if (rank == 0) {
-    FILE *fout = fopen(pkg->Param<std::string>("filePath").c_str(), "w");
-    fclose(fout);
+    std::ofstream(pkg->Param<std::string>("filePath"));
   }
 
   const Real gamma_min      = pin->GetOrAddReal("BoundaryConditions", "gamma_min",1.02);
@@ -379,7 +390,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("Field", field_interpolation);
   pkg->AddParam("FieldData", field_data_h);
 
-  auto jre_backup = Kokkos::create_mirror_view(field_interpolation.getJreDataSubview());
+  auto jre = field_interpolation.getJreDataSubview();
+  Kokkos::View<double***> jre_backup("jre_backup", jre.extent(0), jre.extent(1), jre.extent(2));
   pkg->AddParam("JreBackup", jre_backup);
 
   Kokkos::View<Real***, Kokkos::LayoutRight, Host, Unmanaged> jre_h(mhd_context->jre_data, NR, NZ, 3);
@@ -497,8 +509,7 @@ void SaveState(Mesh* pm) {
 
   auto pkg = pm->packages.Get("Deck");
   auto jre = pkg->Param<EM_Field>("Field").getJreDataSubview();
-  using MirrorType = decltype (Kokkos::create_mirror_view(jre));
-  auto jre_backup = pkg->Param<MirrorType>("JreBackup");
+  auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
   Kokkos::deep_copy(jre_backup, jre);
 }
 
@@ -538,8 +549,7 @@ void RestoreState(Mesh* pm) {
 
   auto pkg = pm->packages.Get("Deck");
   auto jre = pkg->Param<EM_Field>("Field").getJreDataSubview();
-  using MirrorType = decltype (Kokkos::create_mirror_view(jre));
-  auto jre_backup = pkg->Param<MirrorType>("JreBackup");
+  auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
   Kokkos::deep_copy(jre, jre_backup);
 }
 
@@ -597,7 +607,8 @@ void ComputeParticleWeights(Mesh* pm) {
 
   Kokkos::fence();
   Real w = seed_current / I_re;
-  std::printf("%le %le\n", I_re, w);
+  std::cout << "I_re = " << std::setw(20) << I_re
+            << "   w = " << std::setw(20) << w;
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
                      DevExecSpace(), 0, pack_swarm_r.GetMaxFlatIndex(),
                      // new_n ranges from 0 to N_new_particles

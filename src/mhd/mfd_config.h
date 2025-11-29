@@ -148,7 +148,6 @@ typedef struct {
   IS          isALL_V;        /* Indexing PETSc object for {Electrostatic Potential,Tau field,Magnetic Field,Ion number density} */
   Mat         OffDiagBlock_U;    /* Upper Off-diagonal block of Jacobian matrix according to the {ETBN,V} partitioning */
   Mat         OffDiagBlock_L;    /* Lower Off-diagonal block of Jacobian matrix according to the {ETBN,V} partitioning */
-  PetscScalar NT[6][6];       /* Interpolation array */
 
   PetscInt EnableRelaxation;
   PetscInt EnableReadICFromBinary;
