@@ -51,9 +51,6 @@ void InitializeMHDConfig(ParameterInput *pin, User* mhd_context) {
   const Real timeStep = pin->GetOrAddReal("Simulation", "hRK", 1.e-6);    /// Runge kutta time in tau_c [-]
   const Real atol = pin->GetOrAddReal("Simulation", "atol", 1.e-10);      /// Absoulte tolerance for RK [-]
   const Real rtol = pin->GetOrAddReal("Simulation", "rtol", 1.e-7);       /// Realative toleratnce for RK[ [-]
-  /// Derived parameters
-  pin->GetOrAddReal("parthenon/time","tlim",0.0);         ///<WARNING: Setting this different in the input file would cause UB!
-  pin->GetOrAddReal("parthenon/time","dt_force",dt_LA);   ///<WARNINS: Setting this different in the input file would cause UB!
 
   /// Reference parameters
   const Real B0 = pin->GetOrAddReal("Reference", "B0", 5.3);  ///< On-axis magnetic field [T]
@@ -296,22 +293,29 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real ZmaxCellCenter = Zmax - .5 * dZ;
 
   const Real tau_a = 6*M_PI*eps0*pow(me * c, 3) / pow(e,4) / pow(B0,2);     ///< Syncrotron radiation damping time
-  const Real tau_c = 4*M_PI*pow(eps0,2)*me*me*c*c*c/(e*e*e*e*n_e0*Coulog0); ///< Relativistic collision time
+  const Real tau_c = 4*M_PI*pow(eps0 * me / e / e * c, 2)*c/(n_e0*Coulog0); ///< Relativistic collision time
   const Real Ec = me * c / e / tau_c;                                       ///< Connor-Hastie Electric field
   const Real En = E0 / Ec;
   const Real eta_mu0aVa = etaplasma / eta0; // converts eta * \curl B to V_A B_0
   const Real etaec_a3VaB0 = etaplasma * e * c / pow(a,3) / E0; // converts eta J to V_A B_0
+
+
 
   int rank;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   if (rank == 0) {
 
     std::cout << std::scientific << std::setprecision(std::numeric_limits<double>::max_digits10);
-    std::cout << "cBn = " << std::setw(20) << eta_mu0aVa
-              << "Jn  = " << std::setw(20) << etaec_a3VaB0
-              << "En = "  << std::setw(20) << En
-              << "Ec = "  << std::setw(20) << Ec
+    std::cout << "cBn = " << std::setw(20) << eta_mu0aVa   << std::endl
+              << "Jn  = " << std::setw(20) << etaec_a3VaB0 << std::endl
+              << "En = "  << std::setw(20) << En           << std::endl
+              << "Ec = "  << std::setw(20) << Ec           << std::endl
+              << "dt_LA"  << std::setw(20) << dt_LA  / tau_c << std::endl
+              << "dt_cd"  << std::setw(20) << dt_cd  / tau_c << std::endl
+              << "dt_mhd" << std::setw(20) << dt_mhd / tau_c << std::endl
+              << "tau_c"  << std::setw(20) << tau_c
               << std::endl;
+
   }
 
   auto pkg = std::make_shared<StateDescriptor>("Deck");
@@ -319,6 +323,10 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("dt_LA",  dt_LA / tau_c);
   pkg->AddParam("dt_cd",  dt_cd / tau_c);
   pkg->AddParam("dt_mhd", dt_mhd / tau_c);
+
+  pin->GetOrAddReal("parthenon/time","tlim",0.0);         ///<WARNING: Setting this different in the input file would cause UB!
+  pin->GetOrAddReal("parthenon/time","dt_force",dt_LA / tau_c);   ///<WARNING: Setting this different in the input file would cause UB!
+
 
   const std::string filePath = pin->GetOrAddString("Simulation", "file_path", "current.out");
   pkg->AddParam("filePath", filePath);
