@@ -350,7 +350,6 @@ void RunawayDriver::PreExecute() {
   auto jre_mhd = pkg->Param<Kokkos::View<Real***, Kokkos::LayoutRight, Host, Unmanaged>>("JreData");
   auto jre_mhd_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), jre_mhd);
 
-
   // Zero out locan jre data to start depositing current
   auto jre = field_interpolation.getJreDataSubview();
 
@@ -369,17 +368,22 @@ void RunawayDriver::PreExecute() {
 void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   auto pkg = pmesh->packages.Get("Deck");
   auto field_interpolation = pkg->Param<EM_Field>("Field");
-  auto jre = field_interpolation.getJreDataSubview();
+  auto jre_subview = field_interpolation.getJreDataSubview();
+  auto jre = field_interpolation.jre_data;
+  Kokkos::deep_copy(jre, jre_subview);
+
   auto ts = pkg->Param<int*>("ts");
   const auto filePath = pkg->Param<std::string>("filePath");
   const auto cdg = pkg->Param<ConfigurationDomainGeometry>("CDG");
   const auto dt_cd = pkg->Param<Real>("dt_cd");
   const auto dt_mhd = pkg->Param<Real>("dt_mhd");
   const auto p_RE = pkg->Param<Real>("p_RE");
-  dumpToHDF5(field_interpolation, *ts);
 
   int rank = 0;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (rank == 0)
+    dumpToHDF5(field_interpolation, *ts);
+
 
   using Host = Kokkos::HostSpace;
   using Unmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged>;
@@ -402,7 +406,14 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   MPI_Allreduce(MPI_IN_PLACE,jre_mhd.data(),jre_mhd.size(),MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
   auto jre_h = Kokkos::create_mirror_view_and_copy(Host(), jre);
   MPI_Allreduce(MPI_IN_PLACE,jre_h.data(),jre_h.size(),MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+
+  // Double copy because subviews cannot copy to views throgh host-device interface
   Kokkos::deep_copy(jre, jre_h);
+  Kokkos::deep_copy(jre_subview, jre);
+
+  if (rank == 0) {
+    std::cout << "Interpolating fields!" << std::endl;
+  }
 
   field_interpolation.interpolate(); // sets jre to electric field
 

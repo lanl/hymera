@@ -19,8 +19,12 @@ struct EM_Field: public FieldInterpolation<2,5> {
   const Real E_n, eta_mu0aVa, etaec_a3VaB0;
   const ConfigurationDomainGeometry cdg;
 
+  using DataViewType = decltype(data);
+  using JreViewType = Kokkos::View<Real***, DataViewType::array_layout, DataViewType::device_type>;
+  JreViewType jre_data;
+
   EM_Field(int nR_data, int nZ_data, int nphi_data, int nt,
-          Real R0, Real Z0, Real dR, Real dZ, Real E_n, Real eta_mu0aVa, Real etaec_a3VaB0, ConfigurationDomainGeometry cdg): FieldInterpolation<2,5>(nR_data, nZ_data, 4, nphi_data, nt, R0, Z0, dR, dZ), E_n(E_n), eta_mu0aVa(eta_mu0aVa), etaec_a3VaB0(etaec_a3VaB0), cdg(cdg) {};
+          Real R0, Real Z0, Real dR, Real dZ, Real E_n, Real eta_mu0aVa, Real etaec_a3VaB0, ConfigurationDomainGeometry cdg): FieldInterpolation<2,5>(nR_data, nZ_data, 4, nphi_data, nt, R0, Z0, dR, dZ), E_n(E_n), eta_mu0aVa(eta_mu0aVa), etaec_a3VaB0(etaec_a3VaB0), cdg(cdg), jre_data("jre_data", nR_data, nZ_data, 3) {};
 
   KOKKOS_INLINE_FUNCTION
   ERROR_CODE operator() (const Dim5& X, const Real t, Dim3& B, Dim3& curlB, Dim3& dBdR, Dim3& dBdZ, Dim3& E) const {

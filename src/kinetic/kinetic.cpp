@@ -228,10 +228,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real timeStep = pin->GetReal("Simulation", "hRK");    /// Runge kutta time in tau_c [-]
   const Real atol = pin->GetReal("Simulation", "atol");      /// Absoulte tolerance for RK [-]
   const Real rtol = pin->GetReal("Simulation", "rtol");       /// Realative toleratnce for RK[ [-]
-  /// Derived parameters
-  pin->GetReal("parthenon/time","tlim");         ///<WARNING: Setting this different in the input file would cause UB!
-  pin->GetReal("parthenon/time","dt_force");   ///<WARNINS: Setting this different in the input file would cause UB!
-
   /// Reference parameters
   const Real B0 = pin->GetReal("Reference", "B0");  ///< On-axis magnetic field [T]
   const Real a  = pin->GetReal("Reference", "a");    ///< Minor radius [m] and reference length
@@ -324,7 +320,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("dt_cd",  dt_cd / tau_c);
   pkg->AddParam("dt_mhd", dt_mhd / tau_c);
 
-  pin->GetOrAddReal("parthenon/time","tlim",0.0);         ///<WARNING: Setting this different in the input file would cause UB!
+  pin->GetOrAddReal("parthenon/time","tlim",0.0);                 ///<WARNING: Setting this different in the input file would cause UB!
   pin->GetOrAddReal("parthenon/time","dt_force",dt_LA / tau_c);   ///<WARNING: Setting this different in the input file would cause UB!
 
 
