@@ -373,6 +373,9 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   auto jre_subview = f->getJreDataSubview();
   auto jre = f->jre_data;
   Kokkos::deep_copy(jre, jre_subview);
+
+  using Host = Kokkos::HostSpace;
+  using Unmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged>;
   auto jre_h = Kokkos::create_mirror_view_and_copy(Host(), jre);
   MPI_Allreduce(MPI_IN_PLACE,jre_h.data(),jre_h.size(),MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
   Kokkos::deep_copy(jre, jre_h);
@@ -390,8 +393,6 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
     dumpToHDF5(*f, *ts, tm.time);
   }
 
-  using Host = Kokkos::HostSpace;
-  using Unmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged>;
   auto jre_mhd = pkg->Param<Kokkos::View<Real****, Kokkos::LayoutRight, Host, Unmanaged>>("JreData");
   auto jre_mhd_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), jre_mhd);
 
