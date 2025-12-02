@@ -1,7 +1,7 @@
 #include "RunawayDriver.h"
 #include <parthenon/driver.hpp>
 #include <parthenon/package.hpp>
-#include <parthenon/globals.hpp>
+#include <globals.hpp>
 #include <parthenon_manager.hpp>
 #include <iostream>
 #include <iomanip>
