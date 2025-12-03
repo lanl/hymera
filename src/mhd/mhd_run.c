@@ -160,6 +160,12 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
     DMStagSetUniformCoordinatesExplicit(da, user.rmin/user.L0, user.rmax/user.L0, user.phimin, user.phimax, user.zmin/user.L0, user.zmax/user.L0);
     DMStagSetUniformCoordinatesExplicit(user.coorda, user.rmin/user.L0, user.rmax/user.L0, user.phimin, user.phimax, user.zmin/user.L0, user.zmax/user.L0);
 
+    DM dmCoorda;
+    Vec coordaLocal;
+
+    DMGetCoordinateDM(user.coorda, & dmCoorda);
+    DMGetCoordinatesLocal(user.coorda, & coordaLocal);
+    DMStagVecGetArrayRead(dmCoorda, coordaLocal, &user.arrCoord);
 
     DMSetApplicationContext(da, &user);
     DMCreateGlobalVector(da, & user.oldX);
@@ -762,6 +768,14 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
   ISDestroy( & isALL_V);
   ISDestroy( & isBV);
 
+  {
+    DM dmCoorda;
+    Vec coordaLocal;
+
+    DMGetCoordinateDM(user.coorda, & dmCoorda);
+    DMGetCoordinatesLocal(user.coorda, & coordaLocal);
+    DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, &user.arrCoord);
+  }
 
   VecDestroy( & X);
   VecDestroy( & user.oldX);

@@ -43,15 +43,12 @@ PetscScalar surface(PetscInt er, PetscInt ephi, PetscInt ez, DMStagStencilLocati
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar surf;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -131,7 +128,6 @@ PetscScalar surface(PetscInt er, PetscInt ephi, PetscInt ez, DMStagStencilLocati
     PetscPrintf(PETSC_COMM_WORLD, "Location : %d\n", (int) loc);
     SETERRQ(PetscObjectComm((PetscObject) coordDA), PETSC_ERR_ARG_SIZ, "Incorrect DMStagStencilLocation input in surface function");
   }
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
   return surf;
 }
 
