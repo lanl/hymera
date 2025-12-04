@@ -499,21 +499,34 @@ auto &GetCoords(Mesh *pm) { return pm->block_list[0]->coords; }
 
 void SaveState(Mesh* pm) {
   auto md = pm->mesh_data.Get();
-  auto desc_swarm = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
-  auto pack_swarm = desc_swarm.GetPack(md.get());
+  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
+      Kinetic::p, Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight,
+      Kinetic::saved_p, Kinetic::saved_xi, Kinetic::saved_R, Kinetic::saved_phi, Kinetic::saved_Z, Kinetic::saved_w>(
+      "particles");
+  auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
+
+  auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
+  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
 
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
-                     DevExecSpace(), 0, pack_swarm.GetMaxFlatIndex(),
+                     DevExecSpace(), 0, pack_swarm_r.GetMaxFlatIndex(),
                      // new_n ranges from 0 to N_new_particles
                      KOKKOS_LAMBDA(const int idx) {
-        auto [b, n] = pack_swarm.GetBlockParticleIndices(idx);
+        auto [b_r, n_r] = pack_swarm_r.GetBlockParticleIndices(idx);
+        auto [b_i, n_i] = pack_swarm_i.GetBlockParticleIndices(idx);
         // block and particle indices
 
-        if (pack_swarm(b, Kinetic::status(), n) & Kinetic::ALIVE) {
-          pack_swarm(b, Kinetic::status(), n) |= Kinetic::PROTECTED;
+        if (pack_swarm_i(b_i, Kinetic::status(), n_i) & Kinetic::ALIVE) {
+          pack_swarm_r(b_r, Kinetic::saved_p(), n_r)   = pack_swarm_r(b_r, Kinetic::p(), n_r);
+          pack_swarm_r(b_r, Kinetic::saved_xi(), n_r)  = pack_swarm_r(b_r, Kinetic::xi(), n_r);
+          pack_swarm_r(b_r, Kinetic::saved_R(), n_r)   = pack_swarm_r(b_r, Kinetic::R(), n_r) ;
+          pack_swarm_r(b_r, Kinetic::saved_phi(), n_r) = pack_swarm_r(b_r, Kinetic::phi(), n_r);
+          pack_swarm_r(b_r, Kinetic::saved_Z(), n_r)   = pack_swarm_r(b_r, Kinetic::Z(), n_r)  ;
+          pack_swarm_r(b_r, Kinetic::saved_w(), n_r)   = pack_swarm_r(b_r, Kinetic::weight(), n_r)  ;
+          pack_swarm_i(b_i, Kinetic::status(), n_i) |= Kinetic::PROTECTED;
         } else {
-          const auto swarm = pack_swarm.GetContext(b);
-          swarm.MarkParticleForRemoval(n);
+          const auto swarm = pack_swarm_i.GetContext(b_i);
+          swarm.MarkParticleForRemoval(n_i);
         }
       });
 
