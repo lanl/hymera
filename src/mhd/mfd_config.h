@@ -89,6 +89,7 @@ typedef struct {
   PetscReal   itime;            /* Initial time */
   PetscReal   ftime;            /* Final time */
   DM          coorda;           /* DM used only to get cell/face/edge/vertex center coordinates */
+  PetscScalar ****arrCoord;
   PetscInt    ictype;           /* Type of initial conditions */
   PetscInt    phibtype;         /* Boundary Type for phi */
   PetscReal   dr;               /* Radius step size */

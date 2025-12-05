@@ -2380,15 +2380,12 @@ PetscScalar alphaec2(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -2483,7 +2480,6 @@ PetscScalar alphaec2(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   else {
     alpha = cellvolume * (user->eta0 / user -> eta) / 4.0; /* Corrected on 03/01/2021 */
   }
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
 
   return alpha;
 }
@@ -2499,15 +2495,12 @@ PetscScalar alphavc(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -2593,7 +2586,6 @@ PetscScalar alphavc(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   } else {
     alpha = cellvolume * (user -> mu0 / user -> eta) / 8.0; /* Corrected on 06/07/2021 */
   }
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
 
   return alpha;
 }
@@ -2609,15 +2601,12 @@ PetscScalar alphavcnomp(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -2663,8 +2652,6 @@ PetscScalar alphavcnomp(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
 
   alpha = cellvolume / 8.0;
 
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
-
   return alpha;
 }
 
@@ -2679,15 +2666,12 @@ PetscScalar alphaec(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -2782,7 +2766,6 @@ PetscScalar alphaec(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   else {
     alpha = cellvolume * (user -> mu0 / user -> eta) / 4.0; /* Corrected on 03/01/2021 */
   }
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
 
   return alpha;
 }
@@ -2798,14 +2781,11 @@ PetscScalar alphaecnores(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -2851,8 +2831,6 @@ PetscScalar alphaecnores(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
 
   alpha = cellvolume * (user -> mu0) / 4.0; /* Corrected on 10/25/2021 */
 
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
-
   return alpha;
 }
 
@@ -2867,14 +2845,11 @@ PetscScalar alphaecnomp(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -2920,8 +2895,6 @@ PetscScalar alphaecnomp(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
 
   alpha = cellvolume / 4.0; /* Corrected on 11/2/2021 */
 
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
-
   return alpha;
 }
 
@@ -2936,15 +2909,12 @@ PetscScalar alphaecperp(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -3039,7 +3009,6 @@ PetscScalar alphaecperp(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   else {
     alpha = cellvolume * (user -> mu0 / user -> eta) / 4.0; /* Corrected on 03/01/2021 */
   }
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
 
   return alpha;
 }
@@ -3055,15 +3024,12 @@ PetscScalar alphaecphi(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -3158,7 +3124,6 @@ PetscScalar alphaecphi(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   else {
     alpha = cellvolume * (user -> mu0 / user -> eta) / 4.0; /* Corrected on 03/01/2021 */
   }
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
 
   return alpha;
 }
@@ -3174,15 +3139,12 @@ PetscScalar alphaecperp2(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -3277,7 +3239,6 @@ PetscScalar alphaecperp2(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   else {
     alpha = cellvolume * (user -> eta0 / user -> eta) / 4.0; /* Corrected on 03/01/2021 */
   }
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
 
   return alpha;
 }
@@ -3293,15 +3254,12 @@ PetscScalar alphaecphi2(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -3396,7 +3354,6 @@ PetscScalar alphaecphi2(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   else {
     alpha = cellvolume * (user -> eta0 / user -> eta) / 4.0; /* Corrected on 03/01/2021 */
   }
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
 
   return alpha;
 }
@@ -3412,15 +3369,12 @@ PetscScalar alphaecphi_isolcell(PetscInt er, PetscInt ephi, PetscInt ez, void * 
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -3533,7 +3487,6 @@ PetscScalar alphaecphi_isolcell(PetscInt er, PetscInt ephi, PetscInt ez, void * 
   else {
     alpha = cellvolume * (user -> eta0 / user -> eta) / 4.0; /* Corrected on 03/01/2021 */
   }
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
 
   return alpha;
 }
@@ -3549,15 +3502,12 @@ PetscScalar alphafc(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -3603,7 +3553,6 @@ PetscScalar alphafc(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
 
   /* alpha = arrCoord[ez][ephi][er][icp[0]] * cellvolume / 4.0; */
   alpha = cellvolume / 2.0; /* Corrected on 03/01/2021 */
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
   return alpha;
 }
 
@@ -3618,15 +3567,12 @@ PetscScalar alphafc_wmp(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -3712,7 +3658,6 @@ PetscScalar alphafc_wmp(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
     alpha = cellvolume * (user -> mu0 / user -> eta) / 2.0;
   }
 
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
   return alpha;
 }
 
@@ -3727,15 +3672,12 @@ PetscScalar alphac(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
   PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
   DM dmCoorda, coordDA = user -> coorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoord;
+  PetscScalar ** ** arrCoord = user->arrCoord;
   PetscScalar alpha, cellvolume;
 
   DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
   /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
   DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
   for (d = 0; d < 3; ++d) {
     /* Element coordinates */
     DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]);
@@ -3780,7 +3722,6 @@ PetscScalar alphac(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   }
 
   alpha = cellvolume;
-  DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoord);
   return alpha;
 }
 
