@@ -325,9 +325,9 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real p_BC = momentum_(pin->GetOrAddReal("BoundaryConditions", "gamma_BC", 1.02));
   const Real p_RE = momentum_(pin->GetOrAddReal("BoundaryConditions", "gamma_RE", 1.02));
 
-  pkg->AddParam("gamma_min", gamma_min);
-  pkg->AddParam("p_BC", p_BC);
-  pkg->AddParam("p_RE", p_RE);
+  pkg->AddParam("gamma_min", std::make_shared<Real>(gamma_min));
+  pkg->AddParam("p_BC", std::make_shared<Real>(p_BC));
+  pkg->AddParam("p_RE", std::make_shared<Real>(p_RE));
 
   auto ts = std::make_shared<int>(0);
   pkg->AddParam("ts", ts);
