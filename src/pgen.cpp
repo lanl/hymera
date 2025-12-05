@@ -262,6 +262,9 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
 
   // Create an accessor to particles, allocate particles
+  // Dirty fix for darwin GH
+
+  //if (parthenon::Globals::my_rank == 0) N = 0;
   auto newParticlesContext = swarm->AddEmptyParticles(N);
 
   // Make a SwarmPack via types to get positions
@@ -373,11 +376,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
       // set weights to 1
       pack_swarm(b, Kinetic::weight(), n) = 1.0;
-      // Dirty fix for darwin GH
-   //   if (parthenon::Globals::my_rank == 0)
         pack_status(b, Kinetic::status(), n) = Kinetic::ALIVE | Kinetic::PROTECTED;
-  //    else
-  //      pack_status(b, Kinetic::status(), n) = Kinetic::DEAD;
-  //    });
+      });
 
 }

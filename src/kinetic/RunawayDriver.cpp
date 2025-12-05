@@ -356,9 +356,9 @@ void RunawayDriver::PreExecute() {
   f->interpolate(); // sets jre to electric field
   auto f_d = *f;
 
-  const auto gamma_min = pkg->Param<std::shared_ptr<Real>>("gamma_min");
-  const auto p_BC = pkg->Param<std::shared_ptr<Real>>("p_BC");
-  const auto p_RE = pkg->Param<std::shared_ptr<Real>>("p_RE");
+  std::shared_ptr<Real> gamma_min = pkg->Param<std::shared_ptr<Real>>("gamma_min");
+  std::shared_ptr<Real> p_BC = pkg->Param<std::shared_ptr<Real>>("p_BC");
+  std::shared_ptr<Real> p_RE = pkg->Param<std::shared_ptr<Real>>("p_RE");
 
   const auto time = tm.time;
 
@@ -432,9 +432,9 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   const auto cdg = pkg->Param<ConfigurationDomainGeometry>("CDG");
   const auto dt_cd = pkg->Param<Real>("dt_cd");
   const auto dt_mhd = pkg->Param<Real>("dt_mhd");
-  const auto gamma_min = pkg->Param<std::shared_ptr<Real>>("gamma_min");
-  const auto p_BC = pkg->Param<std::shared_ptr<Real>>("p_BC");
-  const auto p_RE = pkg->Param<std::shared_ptr<Real>>("p_RE");
+  std::shared_ptr<Real> gamma_min = pkg->Param<std::shared_ptr<Real>>("gamma_min");
+  std::shared_ptr<Real> p_BC = pkg->Param<std::shared_ptr<Real>>("p_BC");
+  std::shared_ptr<Real> p_RE = pkg->Param<std::shared_ptr<Real>>("p_RE");
 
   if (Globals::my_rank == 0) {
     std::cout << std::format("Dumping fields, t = {:.8e}", tm.time) << std::endl;
