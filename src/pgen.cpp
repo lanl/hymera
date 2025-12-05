@@ -221,7 +221,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   // pull out information/global params from package
   auto pkg = pmb->packages.Get("Deck");
   auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
-  const int N = pkg->Param<int>("num_particles_per_block");
+  int N = pkg->Param<int>("num_particles_per_block");
   const Real pmin  = pkg->Param<Real>("pmin");
   const Real pmax  = pkg->Param<Real>("pmax");
   const Real ximin = pkg->Param<Real>("ximin");
@@ -373,8 +373,11 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
       // set weights to 1
       pack_swarm(b, Kinetic::weight(), n) = 1.0;
-      pack_status(b, Kinetic::status(), n) = Kinetic::ALIVE | Kinetic::PROTECTED;
-
-      });
+      // Dirty fix for darwin GH
+   //   if (parthenon::Globals::my_rank == 0)
+        pack_status(b, Kinetic::status(), n) = Kinetic::ALIVE | Kinetic::PROTECTED;
+  //    else
+  //      pack_status(b, Kinetic::status(), n) = Kinetic::DEAD;
+  //    });
 
 }

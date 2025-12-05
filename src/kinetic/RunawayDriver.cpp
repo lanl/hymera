@@ -86,9 +86,9 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
   const auto rtol = pkg->Param<Real>("rtol");
   auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
 
-  const auto gamma_min = pkg->Param<Real>("gamma_min");
-  const auto p_BC = pkg->Param<Real>("p_BC");
-  const auto p_RE = pkg->Param<Real>("p_RE");
+  const auto gamma_min = *(pkg->Param<std::shared_ptr<Real>>("gamma_min"));
+  const auto p_BC = *(pkg->Param<std::shared_ptr<Real>>("p_BC"));
+  const auto p_RE = *(pkg->Param<std::shared_ptr<Real>>("p_RE"));
 
   const auto ms = pkg->Param<MollerSource>("MollerSource");
   const auto cdg = pkg->Param<ConfigurationDomainGeometry>("CDG");
@@ -245,8 +245,9 @@ TaskStatus CleanupParticles(MeshBlock* pmb) {
 	return TaskStatus::complete;
 }
 
-TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA,  const Real gamma_min) {
+TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA) {
   auto pkg = pmb->packages.Get("Deck");
+  auto gamma_min = *(pkg->Param<std::shared_ptr<Real>>("gamma_min"));
   auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
   auto data = pmb->meshblock_data.Get();
   auto swarm = data->GetSwarmData()->Get("particles");
@@ -353,6 +354,51 @@ void RunawayDriver::PreExecute() {
 
   // Interpolate the jre data thats there and fields if new
   f->interpolate(); // sets jre to electric field
+  auto f_d = *f;
+
+  const auto gamma_min = pkg->Param<std::shared_ptr<Real>>("gamma_min");
+  const auto p_BC = pkg->Param<std::shared_ptr<Real>>("p_BC");
+  const auto p_RE = pkg->Param<std::shared_ptr<Real>>("p_RE");
+
+  const auto time = tm.time;
+
+  Real maxE;
+  Kokkos::parallel_reduce("max E",
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {f_d.nR_data,f_d.nZ_data}),
+  KOKKOS_LAMBDA(int i, int j, Real& Epar) {
+    Dim5 X;
+    X[2] = f_d.cdg.R0 + f_d.dR * i;
+    X[4] = f_d.cdg.Z0 + f_d.dZ * j;
+
+    int ii,jj;
+    int level = f_d.cdg.indicator(X, ii,jj);
+    if (level == 2) {
+      Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, Jre = {}, V = {}, dbdt = {};
+
+      auto ret = f_d(X, time, B, curlB, dBdR, dBdZ, E, Jre, V, dbdt);
+      Epar = Kokkos::abs(dot_product(E,B)
+           / Kokkos::sqrt(dot_product(B,B)));
+    }
+    else
+      Epar = 0.0;
+    },
+    Kokkos::Max<double>(maxE)
+  );
+
+  Kokkos::fence();
+
+  Real gBalance = Kokkos::min(1.0 + 0.1/maxE, 1.002);;
+
+  *gamma_min = gBalance;
+
+  *p_BC = momentum_(gBalance);
+  *p_RE = *p_BC;
+
+  if (Globals::my_rank == 0) {
+    std::cout << std::format("Max E field {:.6e}\n", maxE) <<
+    std::format("gamma_min, p_BC, p_RE = {:20.14e}, {:20.14e}, {:20.14e}\n", *gamma_min, *p_BC, *p_RE);
+  }
+
 
   // Zero out locan jre data to start depositing current
   auto jre = f->getJreDataSubview();
@@ -386,7 +432,9 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   const auto cdg = pkg->Param<ConfigurationDomainGeometry>("CDG");
   const auto dt_cd = pkg->Param<Real>("dt_cd");
   const auto dt_mhd = pkg->Param<Real>("dt_mhd");
-  const auto p_RE = pkg->Param<Real>("p_RE");
+  const auto gamma_min = pkg->Param<std::shared_ptr<Real>>("gamma_min");
+  const auto p_BC = pkg->Param<std::shared_ptr<Real>>("p_BC");
+  const auto p_RE = pkg->Param<std::shared_ptr<Real>>("p_RE");
 
   if (Globals::my_rank == 0) {
     std::cout << std::format("Dumping fields, t = {:.8e}", tm.time) << std::endl;
@@ -417,6 +465,46 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   }
 
   f->interpolate(); // sets jre to electric field
+  auto f_d = *f;
+
+  const auto time = tm.time;
+
+  Real maxE;
+  Kokkos::parallel_reduce("max E",
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {f_d.nR_data,f_d.nZ_data}),
+  KOKKOS_LAMBDA(int i, int j, Real& Epar) {
+    Dim5 X;
+    X[2] = f_d.R0 + f_d.dR * i;
+    X[4] = f_d.Z0 + f_d.dZ * j;
+
+    int ii,jj;
+    int level = cdg.indicator(X, ii,jj);
+    if (level == 2) {
+      Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, Jre = {}, V = {}, dbdt = {};
+
+      auto ret = f_d(X, time, B, curlB, dBdR, dBdZ, E, Jre, V, dbdt);
+      Epar  = Kokkos::abs(dot_product(E,B)
+           / Kokkos::sqrt(dot_product(B,B)));
+    }
+    else
+      Epar = 0.0;
+    },
+    Kokkos::Max<double>(maxE)
+  );
+
+  Kokkos::fence();
+
+  Real gBalance = Kokkos::min(1.0 + 0.1/maxE, 1.002);;
+
+  *gamma_min = gBalance;
+
+  *p_BC = momentum_(gBalance);
+  *p_RE = *p_BC;
+
+  if (Globals::my_rank == 0) {
+    std::cout << std::format("Max E field {:.6e}\n", maxE) <<
+    std::format("gamma_min, p_BC, p_RE = {:20.14e}, {:20.14e}, {:20.14e}\n", *gamma_min, *p_BC, *p_RE);
+  }
 
   auto md = pmesh->mesh_data.Get();
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
@@ -430,6 +518,8 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
 
   auto field_interpolation = *f;
+
+  const Real p_RE_d = *p_RE;
 
   Real I_re = 0.0;
   Kokkos::parallel_reduce(
@@ -448,7 +538,7 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
           X[3] = pack_swarm_r(b, Kinetic::phi(), n);
           X[4] = pack_swarm_r(b, Kinetic::Z(), n);
           Real w = pack_swarm_r(b, Kinetic::weight(), n);
-          if (X[0] > p_RE) {
+          if (X[0] > p_RE_d) {
             weight += getParticleCurrent(X, t, w, field_interpolation);
           }
         }
@@ -516,7 +606,7 @@ TaskCollection RunawayDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm
 	  auto &pmb = blocks[i];
     auto &tl = async_region[i];
     auto check_scatter = tl.AddTask(none, CheckScatter, pmb.get());
-    auto add_secondaries = tl.AddTask(check_scatter, AddSecondaries, pmb.get(), tm.dt, gamma_min);
+    auto add_secondaries = tl.AddTask(check_scatter, AddSecondaries, pmb.get(), tm.dt);
     auto cleanup = tl.AddTask(add_secondaries, CleanupParticles, pmb.get());
   }
 

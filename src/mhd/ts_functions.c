@@ -17,7 +17,7 @@
 #include "geometry.h"
 #include "mass_matrix_coefficients.h"
 #include "mimetic_operators.h"
-#include "kinetic/c_wrapper.h"
+#include "../kinetic/c_wrapper.h"
 
 PetscErrorCode FormIJacobian_BImplicit(TS ts, PetscReal t, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
   return (0);
