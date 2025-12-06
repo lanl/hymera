@@ -596,7 +596,7 @@ void ComputeParticleWeights(Mesh* pm) {
   auto pkg = pm->packages.Get("Deck");
   const auto f = pkg->Param<std::shared_ptr<EM_Field>>("Field");
 
-  const Real p_RE = pkg->Param<Real>("p_RE");
+  const Real p_RE = *(pkg->Param<std::shared_ptr<Real>>("p_RE"));
   const Real seed_current = pkg->Param<Real>("seed_current");
 
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
