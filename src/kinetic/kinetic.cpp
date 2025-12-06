@@ -477,7 +477,7 @@ void Push(ParthenonManager * man) {
   // Zero out current
   using Host = Kokkos::HostSpace;
   using Unmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged>;
-  auto jre_mhd = pkg->Param<Kokkos::View<Real****, Kokkos::LayoutRight, Host, Unmanaged>>("JreData");
+  auto jre_mhd = pkg->Param<Kokkos::View<Real****, Kokkos::LayoutLeft, Host, Unmanaged>>("JreData");
   Kokkos::deep_copy(jre_mhd, 0.0);
 
   f->t_a = driver->tm.tlim;

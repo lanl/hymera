@@ -441,7 +441,7 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
     dumpToHDF5(*f, *ts, tm.time);
   }
 
-  auto jre_mhd = pkg->Param<Kokkos::View<Real****, Kokkos::LayoutRight, Host, Unmanaged>>("JreData");
+  auto jre_mhd = pkg->Param<Kokkos::View<Real****, Kokkos::LayoutLeft, Host, Unmanaged>>("JreData");
   auto jre_mhd_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), jre_mhd);
 
   const Real eta_mu0aVa = f->eta_mu0aVa;
