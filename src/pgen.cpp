@@ -239,9 +239,6 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   field_interpolation.t_b = 1.0;;
   const auto cdg = field_interpolation.cdg;
   const auto seed_current = pkg->Param<Real>("seed_current");
-  const auto p_RE = pkg->Param<Real>("p_RE");
-
-  KOKKOS_ASSERT(p_RE < pmax);
 
   // Pull out swarm object
   auto swarm = data->GetSwarmData()->Get("particles");
