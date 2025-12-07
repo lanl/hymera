@@ -444,14 +444,14 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   auto jre_mhd = pkg->Param<Kokkos::View<Real****, Kokkos::LayoutLeft, Host, Unmanaged>>("JreData");
   auto jre_mhd_d = Kokkos::create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(), jre_mhd);
 
-  const Real eta_mu0aVa = f->eta_mu0aVa;
+  const Real etaec_a3VaB0 = f->etaec_a3VaB0;
 
   Kokkos::parallel_for(
     PARTHENON_AUTO_LABEL,
     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {jre.extent(0), jre.extent(1), jre.extent(2)}),
     // loop over all particles
     KOKKOS_LAMBDA(int i, int j, int k) {
-      jre_mhd_d(i,j,k,0) += jre(i,j,k) / dt_mhd * eta_mu0aVa;
+      jre_mhd_d(i,j,k,0) += jre(i,j,k) / dt_mhd * etaec_a3VaB0;
       jre(i,j,k) /= dt_cd;
     });
   Kokkos::fence();
