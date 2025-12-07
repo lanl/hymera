@@ -487,7 +487,10 @@ void Push(ParthenonManager * man) {
     std::cout << std::format("Fields are interpolated in time from {:.8e} to {:.8e}", f->t_a, f->t_b) << std::endl;
   }
 
-  while (driver.get()->tm.tlim < dt_mhd) {
+  int n = std::floor(dt_mhd / dt_cd);
+  Real tstart = driver->tm.tlim;
+
+  for (int icd = 0; icd < n; ++icd) {
     if(Globals::my_rank == 0)
       std::cout << std::format("Executing driver from {:.8e} ", driver->tm.tlim);
     driver->tm.tlim += dt_cd;
