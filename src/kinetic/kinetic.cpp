@@ -355,6 +355,22 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   MollerSource ms(Coulog0, PSCoefDnRA);
   pkg->AddParam("MollerSource", ms);
 
+  if (Globals::my_rank == 0) {
+    std::ofstream ofs("collision_profiles.dat");
+    ofs << std::format("{:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s}",
+        "#     p", "gamma", "dtSA", "psi", "CB", "CF", "CouLogee ratio", "probability");
+    Real p = momentum_(1. + 2.e-3);
+    while (p < pkg->Param<Real>("pmax") + 20.0) {
+      auto cc = sa.getCollisionCoefficients(p);
+      ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
+          p, gamma_(p),
+          sa.getSmallAngleCollisionTimestep(p),
+          cc.psi, cc.CB, cc.CF, cc.CouLogee_ratio,
+          ms.computeProbability(p, 1.0, pkg->Param<Real>("dt_LA"), 1.002)
+      ) << std::endl;
+    }
+  }
+
   int nphi_data = 1;
   int nt = 2;
 

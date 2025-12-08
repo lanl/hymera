@@ -50,14 +50,14 @@ struct MollerSource {
   const Real PartialScreeningCoefficient;
 
   MollerSource(const Real Coulog0, const Real PartialScreeningCoefficient = 1.0):
-    Coulog0(Coulog0), PartialScreeningCoefficient(PartialScreeningCoefficient) {};
+   Coulog0(Coulog0), PartialScreeningCoefficient(PartialScreeningCoefficient) {};
 
-  template <typename RNGPoolType>
-  KOKKOS_INLINE_FUNCTION int operator()(const Real p, const Real w,
-                                      const Real dtLA,
-                                      const Real gSecondaryMin, RNGPoolType rng_pool) const {
-  __const__ Real neNorm = 1.0;
-  __const__ Real SecWeightFactor = 1.0;
+  KOKKOS_INLINE_FUNCTION
+  Real computeProbability(const Real p, const Real w,
+                          const Real dtLA,
+                          const Real gSecondaryMin) const {
+    __const__ Real neNorm = 1.0;
+    __const__ Real SecWeightFactor = 1.0;
 
     Real g = gamma_(p);
 
@@ -75,13 +75,21 @@ struct MollerSource {
     Real DnRA = neNorm / (4.0 * M_PI * Coulog0) * dtLA * w * p / g * sigmaM *
                 PartialScreeningCoefficient;
 
-    Real Prob = (1.0 / SecWeightFactor) * DnRA / w;
+    return (1.0 / SecWeightFactor) * DnRA / w;
+  };
+
+  template <typename RNGPoolType>
+  KOKKOS_INLINE_FUNCTION
+  int operator()(const Real p, const Real w,
+                 const Real dtLA,
+                 const Real gSecondaryMin, RNGPoolType rng_pool) const {
+    Real prob = computeProbability(p, w, dtLA, gSecondaryMin);
 
     auto rng_gen = rng_pool.get_state();
     Real RandomNumber = rng_gen.drand(0.0, 1.0);
     rng_pool.free_state(rng_gen);
 
-    if (RandomNumber < Prob)
+    if (RandomNumber < prob)
       return 1;
 
     return 0;
