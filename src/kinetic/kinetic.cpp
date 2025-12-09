@@ -435,6 +435,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
           cc.psi, cc.CB, cc.CF, cc.CouLogee_ratio,
           ms.computeProbability(p, 1.0, pkg->Param<Real>("dt_LA"), 1.002)
       ) << std::endl;
+
+      p += 1e-2;
     }
   }
 
