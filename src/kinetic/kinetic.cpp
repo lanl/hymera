@@ -355,21 +355,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   MollerSource ms(Coulog0, PSCoefDnRA);
   pkg->AddParam("MollerSource", ms);
 
-  if (Globals::my_rank == 0) {
-    std::ofstream ofs("collision_profiles.dat");
-    ofs << std::format("{:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s}",
-        "#     p", "gamma", "dtSA", "psi", "CB", "CF", "CouLogee ratio", "probability");
-    Real p = momentum_(1. + 2.e-3);
-    while (p < pkg->Param<Real>("pmax") + 20.0) {
-      auto cc = sa.getCollisionCoefficients(p);
-      ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
-          p, gamma_(p),
-          sa.getSmallAngleCollisionTimestep(p),
-          cc.psi, cc.CB, cc.CF, cc.CouLogee_ratio,
-          ms.computeProbability(p, 1.0, pkg->Param<Real>("dt_LA"), 1.002)
-      ) << std::endl;
-    }
-  }
 
   int nphi_data = 1;
   int nt = 2;
@@ -419,14 +404,14 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const int npart =  pin->GetOrAddInteger("ParticleSeed", "num_particles_per_block", 16);
   pkg->AddParam("num_particles_per_block", npart);
   // Initialize random number generator pool
-  int rng_seed = pin->GetOrAddInteger("ParticleSeed", "rng_seed", 1234);
+  int rng_seed = pin->GetOrAddInteger("ParticleSeed", "rng_seed", 1234) + Globals::my_rank;
   RNGPool rng_pool(rng_seed);
   pkg->AddParam("rng_pool", rng_pool);
 
   pkg->AddParam("Rc", Rc);
   pkg->AddParam("Zc", Zc);
 
-  const Real seed_current = pin->GetOrAddReal("ParticleSeed", "current", 150e3); // 150 kAmps
+  const Real seed_current = pin->GetOrAddReal("ParticleSeed", "current", 15e3); // 15 kAmps
   pkg->AddParam("seed_current", seed_current * a / pc::qe / pc::c); // Convert from amps
   const Real gammamin = pin->GetOrAddReal("ParticleSeed", "gammamin", 10.0);
   pkg->AddParam("pmin", momentum_(gammamin));
@@ -436,6 +421,22 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("ximin", ximin);
   const Real ximax = pin->GetOrAddReal("ParticleSeed", "ximax", 1.0);
   pkg->AddParam("ximax", ximax);
+
+  if (Globals::my_rank == 0) {
+    std::ofstream ofs("collision_profiles.dat");
+    ofs << std::format("{:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s}",
+        "#     p", "gamma", "dtSA", "psi", "CB", "CF", "CouLogee ratio", "probability");
+    Real p = momentum_(1. + 2.e-3);
+    while (p < pkg->Param<Real>("pmax") + 20.0) {
+      auto cc = sa.getCollisionCoefficients(p);
+      ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
+          p, gamma_(p),
+          sa.getSmallAngleCollisionTimestep(p),
+          cc.psi, cc.CB, cc.CF, cc.CouLogee_ratio,
+          ms.computeProbability(p, 1.0, pkg->Param<Real>("dt_LA"), 1.002)
+      ) << std::endl;
+    }
+  }
 
   Metadata swarm_metadata({Metadata::Provides, Metadata::None});
   pkg->AddSwarm("particles", swarm_metadata);
