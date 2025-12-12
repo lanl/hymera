@@ -401,7 +401,33 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("ct_a", ct_a);
   pkg->AddParam("alpha0", alpha0);
 
-  const int npart =  pin->GetOrAddInteger("ParticleSeed", "num_particles_per_block", 16);
+  int npart =  pin->GetOrAddInteger("ParticleSeed", "num_particles_per_block", 16);
+
+  MPI_Comm node_comm;
+  MPI_Comm_split_type(MPI_COMM_WORLD,
+                      MPI_COMM_TYPE_SHARED,
+                      0, MPI_INFO_NULL,
+                      &node_comm);
+
+
+  int local_rank = -1;
+  MPI_Comm_rank(node_comm, &local_rank);
+
+  int gpu_id = Kokkos::device_id();
+   MPI_Comm gpu_comm;
+  MPI_Comm_split(node_comm,
+                 gpu_id,      // color: all ranks with same gpu_id together
+                 local_rank,  // key: ordering
+                 &gpu_comm);
+
+  int gpu_comm_rank = -1;
+  MPI_Comm_rank(gpu_comm, &gpu_comm_rank);
+
+  if(gpu_comm_rank != 0) npart = 0;
+
+  MPI_Comm_free(&gpu_comm);
+  MPI_Comm_free(&node_comm);
+
   pkg->AddParam("num_particles_per_block", npart);
   // Initialize random number generator pool
   int rng_seed = pin->GetOrAddInteger("ParticleSeed", "rng_seed", 1234) + Globals::my_rank;

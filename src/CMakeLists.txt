@@ -52,7 +52,11 @@ target_include_directories(hybrid PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/mhd
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/kinetic
   )
-
 target_link_libraries(hybrid PRIVATE PkgConfig::PETSC)
 target_link_libraries(hybrid PRIVATE HDF5::HDF5 Parthenon::parthenon hflux::hflux)
 target_compile_features(hybrid PRIVATE cxx_std_20)
+
+set(SRC_LIST util/gpu_communicator.cpp)
+add_executable(gpu_comms ${SRC_LIST})
+
+
