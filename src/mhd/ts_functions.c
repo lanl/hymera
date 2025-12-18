@@ -23135,38 +23135,20 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
     //Destroy vectors
     VecDestroy(& Xcopy);
     VecDestroy(& curl);
+  }
 
 
-    if(user->EnableReadICFromBinary){
-      char filename[PETSC_MAX_PATH_LEN];
-      PetscViewer viewerX;
-
-      /* Read X in binary file */
-      PetscSNPrintf(filename, sizeof(filename), "%s/X_ic%.2d_grid%.2dx%.2dx%.2d_step%.3d_time%5.7f.dat", user->input_folder, user -> ictype, user -> Nr, user -> Nphi, user -> Nz, 30, 3000.0);  //466, 148.7528808   113, 2514.1526823
-      PetscPrintf(PETSC_COMM_WORLD, "Reading X vector from file %s ...\n", filename);
-      PetscViewerBinaryOpen(PETSC_COMM_WORLD, filename, FILE_MODE_READ, & viewerX);
-      VecLoad(X, viewerX);
-      /* Destroy the viewer */
-      PetscViewerDestroy( & viewerX);
-      PetscPrintf(PETSC_COMM_WORLD, "Reading from file %s is over.\n", filename);
-    }
-
-  } else if(user->EnableReadICFromBinary){
-    char filename[PETSC_MAX_PATH_LEN];
+  // The following will replace the X with something from binary file, if no binary file is specified, the solution will come from efit and relaxation
+  if(user->ic_binary_mode == 'l'){ // If loading binary
     PetscViewer viewerX;
-    // THIS READS X data after relaxation for unknown resitivity
-
-    /* Read X in binary file */
-    PetscSNPrintf(filename, sizeof(filename), "%s/X_ic%.2d_grid%.2dx%.2dx%.2d_step%.3d_time%5.7f.dat", user->input_folder, user -> ictype, user -> Nr, user -> Nphi, user -> Nz, (int)(user -> oldstep), (double) user -> itime);
-    PetscPrintf(PETSC_COMM_WORLD, "Reading X vector from file %s ...\n", filename);
-    PetscViewerBinaryOpen(PETSC_COMM_WORLD, filename, FILE_MODE_READ, & viewerX);
+    PetscPrintf(PETSC_COMM_WORLD, "Reading X vector from file %s ...\n", user->ic_binary_path);
+    PetscViewerBinaryOpen(PETSC_COMM_WORLD, user->ic_binary_path, FILE_MODE_READ, & viewerX);
     VecLoad(X, viewerX);
     /* Destroy the viewer */
     PetscViewerDestroy( & viewerX);
-    PetscPrintf(PETSC_COMM_WORLD, "Reading from file %s is over.\n", filename);
-  }
-
-  if ( (user -> ictype == 9 || user -> ictype == 15) && user -> itime == 0.0 && user->EnableRelaxation) {
+    PetscPrintf(PETSC_COMM_WORLD, "Reading from file %s is over.\n", user->ic_binary_path);
+  }  // If creating the binary
+  else if ( (user -> ictype == 9 || user -> ictype == 15) && user -> itime == 0.0) {
     SNES dummysnes;
     TS dummyts;
     KSP dummyKSP;
@@ -23443,24 +23425,17 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
     TSSolve(dummyts, X);
     TSGetSolveTime(dummyts, & ftime);
     TSGetStepNumber(dummyts, & steps);
-    PetscPrintf(PETSC_COMM_WORLD, "Saving solution after relaxation with resitivity %le...", user->etaplasma);
+
+    PetscMPIInt size;
+    MPI_Comm_size(PETSC_COMM_WORLD, &size);
+    PetscPrintf(PETSC_COMM_WORLD, "Saving solution after relaxation with resitivity %le, MPI size = %d", user->etaplasma, size);
+
+    PetscViewer viewerX;
+    PetscViewerBinaryOpen(PETSC_COMM_WORLD, user->ic_binary_path, FILE_MODE_WRITE, & viewerX);
+    VecView(X, viewerX);
+    PetscViewerDestroy( & viewerX);
+
     SaveIntermediateSolution(dummyts, steps, ftime, X, user);
-
-    if(0){
-      Vec residual;
-      VecDuplicate(X,&residual);
-
-      //Vec Xdot;
-      //VecDuplicate(X,&Xdot);
-      //VecZeroEntries(Xdot);
-      //FormIFunction_Vperp_viscosity(ts, time, X, Xdot, residual, user);
-      //VecDestroy( & Xdot);
-
-      SNESGetFunction(dummysnes, & residual, NULL, NULL);
-      DumpSolution_Cell(dummyts, (int)(900), residual, user);
-      //VecDestroy( & residual);
-    }
-
 
     TSGetSolveTime(dummyts, & ftime);
     TSGetStepNumber(dummyts, & steps);

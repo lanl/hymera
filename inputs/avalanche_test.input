@@ -46,11 +46,17 @@ nx3 = 1
 pred_loop=1
 
 <ParticleSeed>
-num_particles_per_block = 16
+num_particles_per_block = 2048
 rng_seed = 1234
 <MHD_Config>
-EnableRelaxation = 0
-EnableReadICFromBinary = 1
+ic_binary_path=X0.petscbin
+ic_binary_load=1
+<Time>
+dt_mhd=86.19e-6       #< mhd timestep [s]
+dt_cd=86.19e-7        #< current deposit timestep for electric field readjustment [s]
+dt_LA=86.19e-8        #< large-angle collision step [s]
+<Plasma>
+fI = 1.0              #<Fraction of impurity density, normalized to deuterium denstiy (nD0)
 
 <parthenon/output8>
 file_type = rst

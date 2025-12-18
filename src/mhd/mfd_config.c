@@ -74,8 +74,8 @@ PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx) {
   PetscPrintf(comm,"dumpfreq    = %d\n",(int)ctx->dumpfreq);
   PetscPrintf(comm,"testSpGD    = %d\n",(int)ctx->testSpGD);
   PetscPrintf(comm,"testSpGDsamerhs = %d\n",(int)ctx->testSpGDsamerhs);
-  PetscPrintf(comm,"EnableRelaxation       = %d\n",(int)ctx->EnableRelaxation);
-  PetscPrintf(comm,"EnableReadICFromBinary = %d\n",(int)ctx->EnableReadICFromBinary);
+  PetscPrintf(comm,"ic_binary_mode       = %c\n",ctx->ic_binary_mode);
+  PetscPrintf(comm,"ic_binary_path       = %s\n",ctx->ic_binary_path);
   PetscPrintf(comm,"delay_kinetic          = %d\n",(int)ctx->delay_kinetic);
   PetscPrintf(comm,"poincare_counter       = %d\n",(int)ctx->poincare_counter);
   PetscPrintf(comm,"field_counter          = %d\n",(int)ctx->field_counter);

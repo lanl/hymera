@@ -261,7 +261,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   // Create an accessor to particles, allocate particles
   // Dirty fix for darwin GH
 
-  // if (parthenon::Globals::my_rank == 0) N = 0;
+  if (parthenon::Globals::my_rank != 0) N = 0;
   auto newParticlesContext = swarm->AddEmptyParticles(N);
 
   // Make a SwarmPack via types to get positions

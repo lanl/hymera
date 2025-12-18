@@ -93,7 +93,7 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
   const auto ms = pkg->Param<MollerSource>("MollerSource");
   const auto cdg = pkg->Param<ConfigurationDomainGeometry>("CDG");
   const auto sa = pkg->Param<SmallAngleCollision<PartialScreening, EnergyScattering, ModifiedCouLog>>("SmallAngleCollision");
-  const Real dtSA_min = sa.getSmallAngleCollisionTimestep(momentum_(1.000020));
+  const Real dtSA_min = sa.getSmallAngleCollisionTimestep(momentum_(1.002));
   const Real dtSA_max = tm.dt;
   auto f = pkg->Param<std::shared_ptr<EM_Field>>("Field");
 

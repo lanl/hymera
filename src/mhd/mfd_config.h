@@ -150,9 +150,6 @@ typedef struct {
   Mat         OffDiagBlock_U;    /* Upper Off-diagonal block of Jacobian matrix according to the {ETBN,V} partitioning */
   Mat         OffDiagBlock_L;    /* Lower Off-diagonal block of Jacobian matrix according to the {ETBN,V} partitioning */
 
-  PetscInt EnableRelaxation;
-  PetscInt EnableReadICFromBinary;
-
   double * jre_data;
   double * field_data;
   double * jre;
@@ -164,6 +161,8 @@ typedef struct {
   int CorrectorIdentifier;
 
   char input_folder [PETSC_MAX_PATH_LEN];
+  char ic_binary_path [PETSC_MAX_PATH_LEN];
+  char ic_binary_mode;
 
   int delay_kinetic;
 

@@ -47,11 +47,11 @@ void InitializeMHDConfig(ParameterInput *pin, User* mhd_context) {
   /// Time discretization parameters
   const Real dt_mhd = pin->GetOrAddReal("Time","dt_mhd", 86.19e-6);       ///< mhd timestep [s]
   const Real dt_cd =  pin->GetOrAddReal("Time","dt_cd",  dt_mhd * 1e-1);  ///< current deposit timestep for electric field readjustment [s]
-  const Real dt_LA =  pin->GetOrAddReal("Time","dt_LA",  dt_cd  * 1e-3 ); ///< large-angle collision step [s]
+  const Real dt_LA =  pin->GetOrAddReal("Time","dt_LA",  dt_cd  * 1e-1 ); ///< large-angle collision step [s]
   const Real final_time = pin->GetOrAddReal("Time", "final_time", 1.0);   /// Final time [s]
   const Real timeStep = pin->GetOrAddReal("Simulation", "hRK", 1.e-6);    /// Runge kutta time in tau_c [-]
-  const Real atol = pin->GetOrAddReal("Simulation", "atol", 1.e-10);      /// Absoulte tolerance for RK [-]
-  const Real rtol = pin->GetOrAddReal("Simulation", "rtol", 1.e-7);       /// Realative toleratnce for RK[ [-]
+  const Real atol = pin->GetOrAddReal("Simulation", "atol", 1.e-6);      /// Absoulte tolerance for RK [-]
+  const Real rtol = pin->GetOrAddReal("Simulation", "rtol", 1.e-5);       /// Realative toleratnce for RK[ [-]
 
   /// Reference parameters
   const Real B0 = pin->GetOrAddReal("Reference", "B0", 5.3);  ///< On-axis magnetic field [T]
@@ -168,8 +168,6 @@ void InitializeMHDConfig(ParameterInput *pin, User* mhd_context) {
   mhd_context->adaptdt                = pin->GetOrAddInteger("MHD_Config", "adaptdt",  0);
   mhd_context->debug                  = pin->GetOrAddInteger("MHD_Config", "debug",  0);
   mhd_context->dump                   = pin->GetOrAddInteger("MHD_Config", "dump",  0);
-  mhd_context->EnableRelaxation       = pin->GetOrAddInteger("MHD_Config", "EnableRelaxation",  0);
-  mhd_context->EnableReadICFromBinary = pin->GetOrAddInteger("MHD_Config", "EnableReadICFromBinary",  1);
   mhd_context->prestep                = pin->GetOrAddInteger("MHD_Config", "prestep",  1);
   mhd_context->savecoords             = pin->GetOrAddInteger("MHD_Config", "savecoords",  0);
   mhd_context->savesol                = pin->GetOrAddInteger("MHD_Config", "savesol",  0);
@@ -183,8 +181,11 @@ void InitializeMHDConfig(ParameterInput *pin, User* mhd_context) {
   mhd_context->isE_boundary           = NULL;
   mhd_context->isni_boundary          = NULL;
 
+
   // Set default location for input data.
   strcpy(mhd_context->input_folder, pin->GetOrAddString("MHD_Config", "input_folder", "../../inputs/mhd").c_str());
+  strcpy(mhd_context->ic_binary_path, pin->GetOrAddString("MHD_Config", "ic_binary_path", "").c_str());
+  mhd_context->ic_binary_mode = pin->GetOrAddInteger("MHD_Config", "ic_binary_load", 1) == 1 ? 'l' : 'c';
 
 
   mhd_context->axis[0] = Rc;
