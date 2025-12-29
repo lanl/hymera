@@ -514,7 +514,13 @@ void Push(ParthenonManager * man) {
   auto pkg = man->pmesh.get()->packages.Get("Deck");
   auto driver = pkg->Param<std::shared_ptr<RunawayDriver>>("Driver");
 
+
   auto f = pkg->Param<std::shared_ptr<EM_Field>>("Field");
+  auto field_data = f -> getDataRef();
+  using Host = Kokkos::HostSpace;
+  using Unmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged>;
+  auto field_data_h = pkg->Param<Kokkos::View<Real******, Kokkos::LayoutLeft, Host, Unmanaged>>("FieldData");
+  Kokkos::deep_copy(field_data, field_data_h);
 
   // Set current timeframe
   const auto dt_mhd = pkg->Param<Real>("dt_mhd");

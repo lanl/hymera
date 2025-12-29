@@ -263,19 +263,22 @@ TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA) {
   auto pack_swarm_i = desc_swarm_i.GetPack(data.get());
 
   auto swarm_d = swarm->GetDeviceContext();
-  int ntot = 0;
+  int ntot = 0, nalive = 0;
   Kokkos::parallel_reduce(
       PARTHENON_AUTO_LABEL, pack_swarm_r.GetMaxFlatIndex() + 1,
-      KOKKOS_LAMBDA(const int n, int &nnew) {
+      KOKKOS_LAMBDA(const int n, int &nnew, int &nnalive) {
         const int b = 0;
         if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n)&& (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE)) {
+          nnalive += 1;
           if (pack_swarm_i(b, Kinetic::will_scatter(), n) == 1)
             nnew += 1;
         }
       },
-      ntot);
+      ntot, nalive);
   Kokkos::fence();
   if (ntot > 0) {
+    std::cout << std::format("Adding {} new particles, total alive {}, ratio {}", ntot, nalive, (Real) (ntot + nalive) / (Real) nalive) << std::endl;
+
     const int oldMaxIndex = pack_swarm_r.GetMaxFlatIndex();
     auto newParticlesContext = swarm->AddEmptyParticles(ntot);
     auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
@@ -467,7 +470,7 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   f->interpolate(); // sets jre to electric field
   auto f_d = *f;
 
-  const auto time = tm.time;
+  const auto t = tm.time;
 
   Real maxE;
   Kokkos::parallel_reduce("max E",
@@ -482,7 +485,7 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
     if (level == 2) {
       Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, Jre = {}, V = {}, dbdt = {};
 
-      auto ret = f_d(X, time, B, curlB, dBdR, dBdZ, E, Jre, V, dbdt);
+      auto ret = f_d(X, t, B, curlB, dBdR, dBdZ, E, Jre, V, dbdt);
       Epar  = Kokkos::abs(dot_product(E,B)
            / Kokkos::sqrt(dot_product(B,B)));
     }
@@ -531,7 +534,6 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
         const auto swarm_d = pack_swarm_r.GetContext(b);
         if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n) && (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE)) {
           Dim5 X;
-          Real t = 0.0;
           X[0] = pack_swarm_r(b, Kinetic::p(), n);
           X[1] = pack_swarm_r(b, Kinetic::xi(), n);
           X[2] = pack_swarm_r(b, Kinetic::R(), n);
@@ -554,7 +556,6 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
       // loop over all particles
       KOKKOS_LAMBDA(int i, int j, Real& integral, Real& integral_ohmic) {
         integral += cdg.dR * cdg.dZ * jre(i,j,1);
-        Real t = 0;
 
         Real R = cdg.R0 + i * cdg.dR;
         Real Z = cdg.Z0 + j * cdg.dZ;
@@ -571,7 +572,7 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   if (Globals::my_rank == 0) {
     std::ofstream ofs(filePath, std::ios::app);
     ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e}",
-        tm.time, I_re * pc::qe * pc::c * .5, I_re_integral * pc::qe * pc::c * .5,
+        t, I_re * pc::qe * pc::c * .5, I_re_integral * pc::qe * pc::c * .5,
         I_ohmic * 5.3  * 2.0 / pc::mu0) << std::endl;
   }
   *ts += 1;

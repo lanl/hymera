@@ -42,25 +42,28 @@ nx1 = 32
 nx2 = 32
 nx3 = 1
 
-<MHD_Config>
-pred_loop=1
 
 <ParticleSeed>
-num_particles_per_block = 2048
+num_particles_per_block = 512
 rng_seed = 1234
+
 <MHD_Config>
+pred_loop=1
 ic_binary_path=X0.petscbin
 ic_binary_load=1
+delay_kinetic=1
+savesol=1
+
 <Time>
 dt_mhd=86.19e-6       #< mhd timestep [s]
 dt_cd=86.19e-7        #< current deposit timestep for electric field readjustment [s]
-dt_LA=86.19e-8        #< large-angle collision step [s]
+dt_LA=43.0995e-8        #< large-angle collision step [s]
 <Plasma>
 fI = 1.0              #<Fraction of impurity density, normalized to deuterium denstiy (nD0)
 
 <parthenon/output8>
 file_type = rst
-dt = 20.0
+dt = 4.0
 
 <parthenon/output2>
 file_type = hdf5
