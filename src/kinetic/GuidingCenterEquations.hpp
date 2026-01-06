@@ -71,7 +71,7 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
     const Real R =   X[2];
     const Real phi = X[3];
     const Real Z =   X[4];
-    const Real gamma = std::sqrt(p * p + 1.0);
+    const Real gamma = momentum_(p);
 
     if constexpr (SlabModel) {
       dXdt[0] = -xi * field.E_0 - alpha0 * p * gamma * (1.0 - xi * xi);
@@ -92,7 +92,7 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
 
 
     Real Bsq = dot_product(vB, vB);
-    Real B = std::sqrt(Bsq);
+    Real B = Kokkos::sqrt(Bsq);
     Dim3 b = {};
     for (int i = 0; i < 3; ++i)
       b[i] = vB[i] / B;
@@ -199,29 +199,25 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
      *   \f}
      *
      */
-    for (int i = 0; i < 3; i += 2)
+    for (int i = 0; i < 3; ++i)
       dXdt[i + 2] = ct_a * xi * p / gamma * Bstar[i] / Bpar -
                     0.5 * ct_a * c_aw0 / Bpar * one_m_xisq * p * p / gamma *
                         b_x_gradlnB[i] +
                     c_aw0 / Bpar * E_x_b[i];
     dXdt[3] = 0.0;
-
-    // DEBUG("X = (%le %le %le %le %le), dX = (%le %le %le %le %le), t = %le",
-    // X[0], X[1], X[2], X[3], X[4] ,dXdt[0], dXdt[1], dXdt[2], dXdt[3],
-    // dXdt[4], t);
     return SUCCESS;
   };
 
 
   KOKKOS_INLINE_FUNCTION
   void computeConservedQuantities(const Dim5 &X, Real &p_phi, Real &mu,
-                                  const Real &t) const {
+                                  const Real &t, const Real Psi) const {
     // Compute magnitude B
-    Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {};
-    field(X, t, B, curlB, dBdR, dBdZ, E);
-    // if constexpr (EF == false) E = {};
+    Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, dbdt = {};
+    field(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+    if constexpr (EF == false) E = {};
 
-    const Real Bmag = sqrt(dot_product(B, B));
+    const Real Bmag = Kokkos::sqrt(dot_product(B, B));
 
     // Get variables
     const Real &p = X[0];
@@ -232,12 +228,11 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
     // compute mu = p_\perp / |B|
     mu = p * p * (1 - xi * xi) / Bmag;
 
-    Real Psi = field.Psi(X);
     // p_phi = (c over a omega) p_perp B_phi R + (-) psi
     // - stands for charge p is gamma m_e c
     // p_phi += t * c_a omega_0 * E_phi * R  if E is present
     p_phi = c_aw0 * xi * p * B[1] / Bmag * R - Psi;
-    p_phi += t * c_aw0 * E[1] * field.R_a;
+    // p_phi += t * c_aw0 * E[1] * field.R_a;
   };
 
   template<typename ViewType>
@@ -249,7 +244,7 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
     field(idx, v, t, B, curlB, dBdR, dBdZ, E);
     if constexpr (EF == false) E = {};
 
-    const Real Bmag = sqrt(dot_product(B, B));
+    const Real Bmag = Kokkos::sqrt(dot_product(B, B));
 
     // Get variables
     const Real p =  v(idx, 0);

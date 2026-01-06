@@ -497,6 +497,13 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddSwarmValue(Kinetic::status::name(), "particles",
                      int_swarmvalue_metadata);
 
+  int EnableLargeAngleCollisions = pin->GetOrAddInteger("Simulation", "EnableLargeAngleCollisions", 1);
+  int EnableSmallAngleCollisions = pin->GetOrAddInteger("Simulation", "EnableSmallAngleCollisions", 1);
+  int EnableComputeConservedQuantities = pin->GetOrAddInteger("Simulation", "EnableComputeConservedQuantities", 0);
+
+  pkg->AddParam("EnableLargeAngleCollisions",      EnableLargeAngleCollisions);
+  pkg->AddParam("EnableSmallAngleCollisions",      EnableSmallAngleCollisions);
+  pkg->AddParam("EnableComputeConservedQuantities",EnableComputeConservedQuantities);
 
   return pkg;
 }

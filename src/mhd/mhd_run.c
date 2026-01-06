@@ -124,10 +124,6 @@ int mhd_run(int argc, char ** argv, double* raw_field_ptr) {
       }
     }
 
-  PetscPrintf(PETSC_COMM_WORLD, "Initializing Runaway solver...");
-
-
-
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Create 3D DMStag for the solution, and set up.
   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */

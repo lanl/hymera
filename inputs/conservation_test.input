@@ -12,18 +12,18 @@
 # ========================================================================================
 
 <parthenon/job>
-problem_id = montecarlo
+problem_id = avalanche
 
 <parthenon/mesh>
-nx1 = 64
-x1min = -1.0
-x1max = 1.0
+nx1 = 256
+x1min = -2.0
+x1max = 2.0
 ix1_bc = periodic
 ox1_bc = periodic
 
-nx2 = 64
-x2min = -1.0
-x2max = 1.0
+nx2 = 256
+x2min = -2.0
+x2max = 2.0
 ix2_bc = periodic
 ox2_bc = periodic
 
@@ -38,20 +38,45 @@ ox3_bc = periodic
 pack_size = -1
 
 <parthenon/meshblock>
-nx1 = 4
-nx2 = 4
+nx1 = 32
+nx2 = 32
 nx3 = 1
 
-<Pusher>
-finalTime = 1e-4
-timeStep = 1e-5
+<Simulation>
+EnableLargeAngleCollisions=0
+EnableSmallAngleCollisions=0
+EnableComputeConservedQuantities=1
 
 <ParticleSeed>
-num_particles_per_block = 128
+num_particles_per_block = 512
 rng_seed = 1234
 
-<GCE>
-alpha0 = 0.0
+<MHD_Config>
+pred_loop=1
+ic_binary_path=X.petscbin
+ic_binary_load=0
+delay_kinetic=1
+# savesol=1
 
-<AnalyticField>
-E_0 = 5000000.0
+<Time>
+dt_mhd=86.19e-6       #< mhd timestep [s]
+dt_cd=86.19e-7        #< current deposit timestep for electric field readjustment [s]
+dt_LA=43.0995e-8        #< large-angle collision step [s]
+<Plasma>
+fI = 1.0              #<Fraction of impurity density, normalized to deuterium denstiy (nD0)
+
+<parthenon/output8>
+file_type = rst
+dt = 4.0
+
+<parthenon/output2>
+file_type = hdf5
+write_xdmf = false # Determines whether xdmf annotations are output
+# nonexistent variables/swarms are ignored
+swarms = particles  # Particle swarms
+particles_variables = x, y, z, particle.p, particle.xi, particle.R, particle.phi, particle.Z, particle.weight, particle.will_scatter, particle.secondary_index
+
+dt = 0.02
+file_number_width = 6 # default: 5
+use_final_label = true # default: true
+

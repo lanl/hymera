@@ -122,6 +122,9 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
 
   auto field_interpolation = *f;
 
+  int EnableLargeAngleCollisions = pkg->Param<int>("EnableLargeAngleCollisions");
+  int EnableSmallAngleCollisions = pkg->Param<int>("EnableSmallAngleCollisions");
+
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
                      DevExecSpace(), 0, pack_swarm_r.GetMaxFlatIndex(),
                      // new_n ranges from 0 to N_new_particles
@@ -178,7 +181,8 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
               DepositCurrent(X, t, w, jre, dtSA, field_interpolation, cdg);
             }
 
-            sa(X[0], X[1], dtSA, rng_pool);
+            if (EnableSmallAngleCollisions == 1)
+              sa(X[0], X[1], dtSA, rng_pool);
             t += dtSA;
             if (t > tstop)
               break;
@@ -190,8 +194,8 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
         	pack_swarm_r(b, Kinetic::phi(), n) = X[3];
         	pack_swarm_r(b, Kinetic::Z(), n)   = X[4];
 
-          pack_swarm_i(b, Kinetic::will_scatter(), n) =
-                 ms(X[0], w, tm.dt, gamma_min, rng_pool);
+          if (EnableLargeAngleCollisions == 1)
+            pack_swarm_i(b, Kinetic::will_scatter(), n) = ms(X[0], w, tm.dt, gamma_min, rng_pool);
         }
       });
   Kokkos::fence();
@@ -524,6 +528,11 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
 
   const Real p_RE_d = *p_RE;
 
+  const auto c_aw0 = pkg->Param<Real>("c_aw0");
+  const auto ct_a = pkg->Param<Real>("ct_a");
+  const auto alpha0 = pkg->Param<Real>("alpha0");
+  GuidingCenterEquations<EM_Field, true, false> gce(field_interpolation, c_aw0, ct_a, alpha0);
+
   Real I_re = 0.0;
   Kokkos::parallel_reduce(
       PARTHENON_AUTO_LABEL, pack_swarm_r.GetMaxFlatIndex() + 1,
@@ -569,11 +578,66 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
 
   Kokkos::fence();
 
+  Real p_phi_total = 0.0;
+  Real mu_total = 0.0;
+  Real w_total = 0.0;
+
+  int EnableComputeConservedQuantities = pkg->Param<int>("EnableComputeConservedQuantities");
+
+  if (EnableComputeConservedQuantities == 1) {
+    Kokkos::View<Real******> psi_hermite_data("psi",
+        field_interpolation.hermite_data.extent(0),
+        field_interpolation.hermite_data.extent(1),
+        field_interpolation.hermite_data.extent(2) + 1,
+        field_interpolation.hermite_data.extent(3),
+        field_interpolation.hermite_data.extent(6),
+        field_interpolation.hermite_data.extent(7));
+    Kokkos::parallel_for("psi_compute",
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {field_interpolation.nphi_data,field_interpolation.nt}),
+    KOKKOS_LAMBDA(int k, int ti){
+      auto sbv_hermite_data = Kokkos::subview(field_interpolation.hermite_data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, 0, Kokkos::ALL, k, ti);
+      auto sbv_psi_data = Kokkos::subview(psi_hermite_data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, k, ti);
+      computeFlux<2>(sbv_hermite_data, sbv_psi_data, field_interpolation.hR, field_interpolation.hZ);
+    });
+    Kokkos::parallel_reduce(
+        PARTHENON_AUTO_LABEL, pack_swarm_r.GetMaxFlatIndex() + 1,
+        // loop over all particles
+        KOKKOS_LAMBDA(const int idx, Real& p_phi, Real& mu, Real &weight) {
+          // block and particle indices
+          auto [b, n] = pack_swarm_r.GetBlockParticleIndices(idx);
+          const auto swarm_d = pack_swarm_r.GetContext(b);
+          if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n) && (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE)) {
+            Dim5 X;
+            X[0] = pack_swarm_r(b, Kinetic::p(), n);
+            X[1] = pack_swarm_r(b, Kinetic::xi(), n);
+            X[2] = pack_swarm_r(b, Kinetic::R(), n);
+            X[3] = pack_swarm_r(b, Kinetic::phi(), n);
+            X[4] = pack_swarm_r(b, Kinetic::Z(), n);
+            Real w = pack_swarm_r(b, Kinetic::weight(), n);
+            weight += w;
+
+            Real my_phi, my_mu;
+            Real psi;
+            field_interpolation.evalPsi(psi, X, t, psi_hermite_data);
+            gce.computeConservedQuantities(X, my_phi, my_mu, t, psi);
+
+            p_phi += my_phi * w;
+            mu += my_mu * w;
+          }
+        },
+        p_phi_total, mu_total, w_total);
+    MPI_Allreduce(MPI_IN_PLACE,&p_phi_total,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&mu_total,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE,&w_total,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  }
+
+
   if (Globals::my_rank == 0) {
     std::ofstream ofs(filePath, std::ios::app);
-    ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e}",
+    ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
         t, I_re * pc::qe * pc::c * .5, I_re_integral * pc::qe * pc::c * .5,
-        I_ohmic * 5.3  * 2.0 / pc::mu0) << std::endl;
+        I_ohmic * 5.3  * 2.0 / pc::mu0,
+        p_phi_total, mu_total, w_total) << std::endl;
   }
   *ts += 1;
   Kokkos::fence();
@@ -599,6 +663,10 @@ TaskCollection RunawayDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm
     // add tasks that are per mesh here
     auto push = tl.AddTask(none, PushParticles, pmesh, tm);
   }
+
+  auto pkg = pmesh->packages.Get("Deck");
+  int EnableLargeAngleCollisions = pkg->Param<int>("EnableLargeAngleCollisions");
+  if (EnableLargeAngleCollisions == 0) return tc;
 
   // these are per block tasklists
   TaskRegion &async_region = tc.AddRegion(blocks.size());
