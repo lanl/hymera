@@ -174,6 +174,10 @@ typedef struct {
 
   void* manager;
   int ParticlesCreated;
+
+	int enable_push;
+	int enable_write_raw_fields;
+	int raw_field_file_counter;
 } User;
 
 typedef struct LocalCoordinate

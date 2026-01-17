@@ -86,7 +86,6 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
     Dim3 vB = {}, dBdR = {}, dBdZ = {}, curlB = {}, E = {}, dbdt = {};
 
     ERROR_CODE status = field(X, t, vB, curlB, dBdR, dBdZ, E, dbdt);
-    if constexpr (EF == false) E = {};
     if (status != ERROR_CODE::SUCCESS)
       return status;
 
@@ -109,6 +108,7 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
       // Modify electric field by p_parallel * dbdt
       E[i] -= p * xi * dbdt[i];
     }
+    if constexpr (EF == false) E = {};
 
     Real Bpar = dot_product(b, Bstar);
     Real B_d_gradlnB = dot_product(vB, gradlnB);
@@ -233,33 +233,5 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
     // p_phi += t * c_a omega_0 * E_phi * R  if E is present
     p_phi = c_aw0 * xi * p * B[1] / Bmag * R - Psi;
     // p_phi += t * c_aw0 * E[1] * field.R_a;
-  };
-
-  template<typename ViewType>
-  KOKKOS_INLINE_FUNCTION
-  void computeConservedQuantities(const int idx, const ViewType& v, Real &p_phi, Real &mu,
-                                  const Real &t) const {
-    // Compute magnitude B
-    Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {};
-    field(idx, v, t, B, curlB, dBdR, dBdZ, E);
-    if constexpr (EF == false) E = {};
-
-    const Real Bmag = Kokkos::sqrt(dot_product(B, B));
-
-    // Get variables
-    const Real p =  v(idx, 0);
-    const Real xi = v(idx, 1);
-    const Real R =  v(idx, 2);
-    const Real Z =  v(idx, 4);
-
-    // compute mu = p_\perp / |B|
-    mu = p * p * (1 - xi * xi) / Bmag;
-
-    Real Psi = field.Psi(idx, v, t);
-    // p_phi = (c over a omega) p_perp B_phi R + (-) psi
-    // - stands for charge p is gamma m_e c
-    // p_phi += t * c_a omega_0 * E_phi * R  if E is present
-    p_phi = c_aw0 * xi * p * B[1] / Bmag * R - Psi;
-    // p_phi += t * c_aw0 * field.E_0 * field.R_a;
   };
 };

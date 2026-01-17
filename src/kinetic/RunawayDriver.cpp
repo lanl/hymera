@@ -28,53 +28,9 @@ using parthenon::constants::SI;
 using parthenon::constants::PhysicalConstants;
 using pc = PhysicalConstants<SI>;
 
+static const bool EnableEfield = false;
+
 namespace Kinetic {
-
-KOKKOS_INLINE_FUNCTION Real S2(Real x) {
-    if (x < 0.5) return 0.75 - x * x;
-    else return (3.0 - 2.0 * x) * (3.0 - 2.0 * x) / 8.0;
-}
-
-template <class CurrentDensityView, class CDG, class Field>
-KOKKOS_INLINE_FUNCTION
-void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityView jre, const Real time_interval, Field& field, CDG cdg) {
-
-  const Dim5::value_type p = X[0];
-  const Dim5::value_type xi = X[1];
-  const Dim5::value_type R = X[2];
-
-  Real contribution = -p * xi / gamma_(p) / R / cdg.dR / cdg.dZ / 2.0 / M_PI * time_interval * w;
-
-  Dim3 B, curlB, dBdR, dBdZ, E, dbdt;
-  ERROR_CODE ret = field(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-  KOKKOS_ASSERT(ret == SUCCESS);
-
-  int i, j;
-  int level = cdg.indicator(X, i, j);
-
-  Dim2 Xlocd = {};
-  cdg.getLocalCoordinate(X, i, j, Xlocd);
-
-  if (level < 1) return;
-
-  Real BB = norm_(B);
-
-  for (int ii = -1; ii < 2; ++ii) {
-      if(i + ii >= 0 and i + ii < jre.extent(0)) {
-          Real wr = S2(abs(Xlocd[0] - static_cast<Real>(ii)));
-          for (int jj = -1; jj < 2; ++jj) {
-              if(j + jj >= 0 and j + jj < jre.extent(1)) {
-                  Real wz = S2(abs(Xlocd[1] - static_cast<Real>(jj)));
-                  Real weighted_contribution = contribution * wr * wz;
-                  for (int kk = 0; kk < 3; ++kk) {
-                      Real wcB = weighted_contribution * B[kk] / BB;
-                      Kokkos::atomic_add(&(jre(i,j,kk)), wcB);
-                  }
-              }
-          }
-      }
-  }
-}
 
 TaskStatus PushParticles(Mesh *pm, SimTime tm) {
   // get mesh data
@@ -91,7 +47,6 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
   const auto p_RE = *(pkg->Param<std::shared_ptr<Real>>("p_RE"));
 
   const auto ms = pkg->Param<MollerSource>("MollerSource");
-  const auto cdg = pkg->Param<ConfigurationDomainGeometry>("CDG");
   const auto sa = pkg->Param<SmallAngleCollision<PartialScreening, EnergyScattering, ModifiedCouLog>>("SmallAngleCollision");
   const Real dtSA_min = sa.getSmallAngleCollisionTimestep(momentum_(1.002));
   const Real dtSA_max = tm.dt;
@@ -100,7 +55,7 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
   const auto c_aw0 = pkg->Param<Real>("c_aw0");
   const auto ct_a = pkg->Param<Real>("ct_a");
   const auto alpha0 = pkg->Param<Real>("alpha0");
-  GuidingCenterEquations<EM_Field, true, false> gce(*f, c_aw0, ct_a, alpha0);
+  GuidingCenterEquations<EM_Field, EnableEfield, false> gce(*f, c_aw0, ct_a, alpha0);
 
   Kokkos::Timer timer;
 
@@ -143,6 +98,7 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
           X[3] = pack_swarm_r(b, Kinetic::phi(), n);
           X[4] = pack_swarm_r(b, Kinetic::Z(), n);
           Real w = pack_swarm_r(b, Kinetic::weight(), n);
+          Kokkos::Array<Dim5, 10> work_d;
 
           bool last_step = false;
 
@@ -158,7 +114,6 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
               last_step = true;
             }
 
-            Kokkos::Array<Dim5, 10> work_d;
             auto ret = solve_dopri5(gce, X, t, t + dtSA, rtol, atol, h, 1e-9,
                          std::numeric_limits<int>::max(), work_d);
             if (ret != SUCCESS) {
@@ -168,9 +123,9 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
               break;
             }
             int ii,jj;
-            int level = cdg.indicator(X, ii,jj);
+            int level = field_interpolation.cdg.indicator(X, ii,jj);
 
-            if (level != 2 || X[0] < p_BC) {
+            if (level < 1 || X[0] < p_BC) {
               pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
               if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
                 swarm_d.MarkParticleForRemoval(n);
@@ -178,7 +133,7 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
             }
 
             if (X[0] > p_RE) {
-              DepositCurrent(X, t, w, jre, dtSA, field_interpolation, cdg);
+              DepositCurrent(X, t, w, jre, dtSA, field_interpolation);
             }
 
             if (EnableSmallAngleCollisions == 1)
@@ -379,7 +334,7 @@ void RunawayDriver::PreExecute() {
 
     int ii,jj;
     int level = f_d.cdg.indicator(X, ii,jj);
-    if (level == 2) {
+    if (level > 0) {
       Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, Jre = {}, V = {}, dbdt = {};
 
       auto ret = f_d(X, time, B, curlB, dBdR, dBdZ, E, Jre, V, dbdt);
@@ -486,7 +441,7 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
 
     int ii,jj;
     int level = cdg.indicator(X, ii,jj);
-    if (level == 2) {
+    if (level > 0) {
       Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, Jre = {}, V = {}, dbdt = {};
 
       auto ret = f_d(X, t, B, curlB, dBdR, dBdZ, E, Jre, V, dbdt);
@@ -531,7 +486,7 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   const auto c_aw0 = pkg->Param<Real>("c_aw0");
   const auto ct_a = pkg->Param<Real>("ct_a");
   const auto alpha0 = pkg->Param<Real>("alpha0");
-  GuidingCenterEquations<EM_Field, true, false> gce(field_interpolation, c_aw0, ct_a, alpha0);
+  GuidingCenterEquations<EM_Field, EnableEfield, false> gce(field_interpolation, c_aw0, ct_a, alpha0);
 
   Real I_re = 0.0;
   Kokkos::parallel_reduce(

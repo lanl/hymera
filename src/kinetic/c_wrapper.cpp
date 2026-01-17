@@ -92,4 +92,14 @@ void runaway_restoreState(void * man) {
   Kinetic::RestoreState(pman->pmesh.get());
 }
 
+void runaway_saveRawFieldData(void* man, const char* filename) {
+  ParthenonManager* pman = (ParthenonManager*) man;
+  Kinetic::SaveRawFieldData(pman, filename);
+}
+
+void runaway_loadRawFieldData(User* mhd_config, const char* filename) {
+  Kinetic::LoadRawFieldData(mhd_config, filename);
+}
+
+
 

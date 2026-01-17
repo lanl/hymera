@@ -27,6 +27,9 @@ extern "C" {
   void runaway_saveState(void * man);
   void runaway_restoreState(void * man);
 
+	void runaway_saveRawFieldData(void* man, const char* filename);
+	void runaway_loadRawFieldData(void* man, const char* filename);
+
 #ifdef __cplusplus
 }
 #endif

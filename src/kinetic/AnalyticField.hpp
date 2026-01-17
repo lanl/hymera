@@ -44,7 +44,7 @@ struct AnalyticField {
 
   KOKKOS_INLINE_FUNCTION
   ERROR_CODE operator()(const Dim5 &X, const Real &t, Dim3 &B, Dim3 &curlB,
-                        Dim3 &dBdR, Dim3 &dBdZ, Dim3 &E) const {
+                        Dim3 &dBdR, Dim3 &dBdZ, Dim3 &E, Dim3 &dbdt) const {
     const Dim5::value_type R = X[2];
     const Dim5::value_type Z = X[4];
 

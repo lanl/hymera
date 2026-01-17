@@ -32,7 +32,7 @@ struct EM_Field: public FieldInterpolation<2,5> {
   ERROR_CODE operator() (const Dim5& X, const Real t, Dim3& B, Dim3& curlB, Dim3& dBdR, Dim3& dBdZ, Dim3& E, Dim3& dbdt) const {
     int ii,jj;
     int level = cdg.indicator(X, ii, jj);
-    if (level != 2) return ERROR_CODE::WALL_IMPACT;
+    if (level < 1) return ERROR_CODE::WALL_IMPACT;
 
     Real r =  X[2] - hR0;
     Real z =  X[4] - hZ0;
@@ -131,7 +131,7 @@ struct EM_Field: public FieldInterpolation<2,5> {
   ERROR_CODE operator() (const Dim5& X, const Real t, Dim3& B, Dim3& curlB, Dim3& dBdR, Dim3& dBdZ, Dim3& E, Dim3& J_re, Dim3& V, Dim3& dbdt) const {
     int ii,jj;
     int level = cdg.indicator(X, ii, jj);
-    if (level != 2) return ERROR_CODE::WALL_IMPACT;
+    if (level < 1) return ERROR_CODE::WALL_IMPACT;
 
     Real r =  X[2] - hR0;
     Real z =  X[4] - hZ0;

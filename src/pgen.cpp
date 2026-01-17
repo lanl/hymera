@@ -18,6 +18,7 @@ using namespace parthenon::package::prelude;
 #include "kinetic/kinetic.hpp"
 #include "kinetic/EM_Field.hpp"
 #include "kinetic/ConfigurationDomainGeometry.hpp"
+#include "kinetic/GuidingCenterEquations.hpp"
 #include "kinetic/CurrentDensity.hpp"
 #include "util/common.hpp"
 
@@ -275,7 +276,9 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
     Kinetic::R,
     Kinetic::phi,
     Kinetic::Z,
-    Kinetic::weight>("particles");
+    Kinetic::weight,
+    Kinetic::p_phi,
+    Kinetic::mu>("particles");
   static auto desc_markers =
     parthenon::MakeSwarmPackDescriptor<
     Kinetic::status
@@ -294,6 +297,24 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
     std::fprintf(fs, "\n");
   }
   std::fclose(fs);
+  Kokkos::View<Real******> psi_hermite_data("psi",
+      field_interpolation.hermite_data.extent(0),
+      field_interpolation.hermite_data.extent(1),
+      field_interpolation.hermite_data.extent(2) + 1,
+      field_interpolation.hermite_data.extent(3),
+      field_interpolation.hermite_data.extent(6),
+      field_interpolation.hermite_data.extent(7));
+  Kokkos::parallel_for("psi_compute",
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {field_interpolation.nphi_data,field_interpolation.nt}),
+  KOKKOS_LAMBDA(int k, int ti){
+    auto sbv_hermite_data = Kokkos::subview(field_interpolation.hermite_data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, 0, Kokkos::ALL, k, ti);
+    auto sbv_psi_data = Kokkos::subview(psi_hermite_data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, k, ti);
+    computeFlux<2>(sbv_hermite_data, sbv_psi_data, field_interpolation.hR, field_interpolation.hZ);
+    });
+  const auto c_aw0 = pkg->Param<Real>("c_aw0");
+  const auto ct_a = pkg->Param<Real>("ct_a");
+  const auto alpha0 = pkg->Param<Real>("alpha0");
+  GuidingCenterEquations<EM_Field, false, false> gce(field_interpolation, c_aw0, ct_a, alpha0);
 
   // loop over new particles created
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
@@ -332,7 +353,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
       X[4] = Zc;
       int i, j;
       int level = cdg.indicator(X, i, j);
-      KOKKOS_ASSERT(level == 2);
+      KOKKOS_ASSERT(level > 0);
 
 
       Dim3 B = {}, dBdR = {}, dBdZ = {}, curlB = {}, E = {}, dbdt = {};
@@ -357,19 +378,28 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
         int i, j;
         int level = cdg.indicator(X, i, j);
-        if (level != 2)
+        if (level != 1)
           continue;
         status = field_interpolation(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-        KOKKOS_ASSERT(status == SUCCESS);
 
         if (randNum < abs(curlB[1])) break;
       }
+      Real my_phi, my_mu;
+      Real psi;
+      field_interpolation.evalPsi(psi, X, t, psi_hermite_data);
+      gce.computeConservedQuantities(X, my_phi, my_mu, t, psi);
+      KOKKOS_ASSERT(status == SUCCESS);
+
+			X[2] = 3.4;
+      X[4] = 0.3;
 
       pack_swarm(b, Kinetic::p(), n)   = X[0];
       pack_swarm(b, Kinetic::xi(), n)  = X[1];
       pack_swarm(b, Kinetic::R(), n)   = X[2];
       pack_swarm(b, Kinetic::phi(), n) = X[3];
       pack_swarm(b, Kinetic::Z(), n)   = X[4];
+      pack_swarm(b, Kinetic::p_phi(), n) = my_phi;
+      pack_swarm(b, Kinetic::mu(), n)   = my_mu;
 
       // set weights to 1
       pack_swarm(b, Kinetic::weight(), n) = 1.0;

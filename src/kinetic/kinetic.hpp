@@ -47,6 +47,9 @@ SWARM_VARIABLE(Real, particle, R);
 SWARM_VARIABLE(Real, particle, phi);
 SWARM_VARIABLE(Real, particle, Z);
 SWARM_VARIABLE(Real, particle, weight);
+SWARM_VARIABLE(Real, particle, p_phi);
+SWARM_VARIABLE(Real, particle, mu);
+
 // For collision book keeping
 SWARM_VARIABLE(int, particle, will_scatter);
 SWARM_VARIABLE(int, particle, secondary_index);
@@ -78,6 +81,9 @@ void SaveState(Mesh* pm);
 void RestoreState(Mesh* pm);
 void InitializeDriver(ParthenonManager* man);
 void Push(ParthenonManager* man);
+
+void SaveRawFieldData(ParthenonManager * man, const char* filename);
+void LoadRawFieldData(User * man, const char* filename);
 
 } // namespace Kinetic
 

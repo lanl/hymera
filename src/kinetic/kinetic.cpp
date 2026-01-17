@@ -172,6 +172,9 @@ void InitializeMHDConfig(ParameterInput *pin, User* mhd_context) {
   mhd_context->savecoords             = pin->GetOrAddInteger("MHD_Config", "savecoords",  0);
   mhd_context->savesol                = pin->GetOrAddInteger("MHD_Config", "savesol",  0);
   mhd_context->delay_kinetic          = pin->GetOrAddReal("MHD_Config", "delay_kinetic",  3);
+	mhd_context->enable_push            = pin->GetOrAddInteger("MHD_Config", "enable_push", 1);
+	mhd_context->enable_write_raw_fields= pin->GetOrAddInteger("MHD_Config", "enable_write_raw_fields", 0);
+	mhd_context->raw_field_file_counter = 0;
   mhd_context->isB                    = NULL;
   mhd_context->isEP                   = NULL;
   mhd_context->istau                  = NULL;
@@ -300,7 +303,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
 
 
-  if (Globals::my_rank) {
+  if (Globals::my_rank == 0) {
     std::cout << std::format("cBn = {:.8E} Jn = {:.8E} En = {:.8E} Ec = {:.8E}", eta_mu0aVa, etaec_a3VaB0, En, Ec) << std::endl
               << std::format("dt_LA = {:.8E} dt_cd = {:.8E} dt_mhd = {:.8E} [tau_c = {:.8E}]",
                      dt_LA / tau_c, dt_cd / tau_c, dt_mhd / tau_c, tau_c) << std::endl;
@@ -489,6 +492,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddSwarmValue(Kinetic::saved_Z::name(), "particles", real_swarmvalue_metadata);
   pkg->AddSwarmValue(Kinetic::saved_w::name(), "particles", real_swarmvalue_metadata);
 
+
   Metadata int_swarmvalue_metadata({Metadata::Integer});
   pkg->AddSwarmValue(Kinetic::will_scatter::name(), "particles",
                      int_swarmvalue_metadata);
@@ -505,6 +509,13 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("EnableSmallAngleCollisions",      EnableSmallAngleCollisions);
   pkg->AddParam("EnableComputeConservedQuantities",EnableComputeConservedQuantities);
 
+
+  if (EnableComputeConservedQuantities == 1) {
+		pkg->AddSwarmValue(p_phi::name(), "particles",real_swarmvalue_metadata);
+		pkg->AddSwarmValue(mu::name(), "particles",real_swarmvalue_metadata);
+	}
+
+
   return pkg;
 }
 
@@ -515,6 +526,47 @@ void InitializeDriver(ParthenonManager* man) {
   driver->tm.tlim = 0.0;
   pkg->AddParam("Driver", driver);
   pkg->AddParam("tm_backup", std::make_shared<SimTime>(driver->tm));
+}
+
+void SaveRawFieldData(ParthenonManager * man, const char* filename ) {
+  if (Globals::my_rank == 0) {
+    auto pkg = man->pmesh.get()->packages.Get("Deck");
+    auto field_data_h = pkg->Param<Kokkos::View<Real******,
+         Kokkos::LayoutLeft,
+         Kokkos::HostSpace,
+         Kokkos::MemoryTraits<Kokkos::Unmanaged>>>("FieldData");
+		int v_rank = 6;
+
+	  hid_t file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+	  if (file < 0) throw std::runtime_error("H5Fcreate failed");
+	  hsize_t dims[v_rank] = {};
+	  for (int i = 0; i < v_rank; ++i) dims[v_rank-i-1] = static_cast<hsize_t>(field_data_h.extent(i));
+    hid_t space = H5Screate_simple(v_rank, dims, nullptr);
+    hid_t dset  = H5Dcreate(file, "field", H5T_NATIVE_DOUBLE, space,
+                            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    // Write contiguous host data
+    H5Dwrite(dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+             H5P_DEFAULT, field_data_h.data());
+
+    H5Dclose(dset);
+    H5Sclose(space);
+    H5Fclose(file);
+  }
+}
+
+void LoadRawFieldData(User* mhd_config, const char* filename ) {
+ 	  hid_t file = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
+  	if (file < 0) throw std::runtime_error("H5Fopen failed");
+
+  	hid_t dset = H5Dopen2(file, "field", H5P_DEFAULT);
+
+    // Write contiguous host data
+    H5Dread(dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+             H5P_DEFAULT, mhd_config->field_data);
+
+    H5Dclose(dset);
+    H5Fclose(file);
 }
 
 void Push(ParthenonManager * man) {

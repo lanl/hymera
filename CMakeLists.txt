@@ -121,7 +121,7 @@ pkg_search_module(PETSC REQUIRED IMPORTED_TARGET PETSc)
 # src
 message("\nConfiguring src")
 add_subdirectory(src)
-install(TARGETS mhd RUNTIME DESTINATION bin COMPONENT runtime)
+install(TARGETS hybrid RUNTIME DESTINATION bin COMPONENT runtime)
 
 # tests
 if(ENABLE_UNIT_TESTS)

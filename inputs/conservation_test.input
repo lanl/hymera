@@ -61,7 +61,8 @@ delay_kinetic=1
 <Time>
 dt_mhd=86.19e-6       #< mhd timestep [s]
 dt_cd=86.19e-7        #< current deposit timestep for electric field readjustment [s]
-dt_LA=43.0995e-8        #< large-angle collision step [s]
+dt_LA=43.0995e-8      #< large-angle collision step [s]
+
 <Plasma>
 fI = 1.0              #<Fraction of impurity density, normalized to deuterium denstiy (nD0)
 

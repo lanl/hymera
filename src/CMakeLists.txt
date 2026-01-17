@@ -11,24 +11,6 @@
 #  the public, perform publicly and display publicly, and to permit others to do so.
 #========================================================================================
 
-set(SRC_LIST
-  mhd/main.c
-  mhd/ts_functions.c
-  mhd/mass_matrix_coefficients.c
-  mhd/mimetic_operators.c
-  mhd/geometry.c
-  mhd/monitor_functions.c
-  mhd/mhd_run.c
-)
-
-add_executable(mhd ${SRC_LIST})
-target_include_directories(mhd PRIVATE
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/mhd
-  )
-
-target_link_libraries(mhd PRIVATE PkgConfig::PETSC)
-target_link_libraries(mhd PRIVATE HDF5::HDF5 Parthenon::parthenon hflux::hflux)
-
 set(HYBRID_SRC_LIST
   mhd/main.c
   mhd/ts_functions.c
@@ -56,7 +38,27 @@ target_link_libraries(hybrid PRIVATE PkgConfig::PETSC)
 target_link_libraries(hybrid PRIVATE HDF5::HDF5 Parthenon::parthenon hflux::hflux)
 target_compile_features(hybrid PRIVATE cxx_std_20)
 
-set(SRC_LIST util/gpu_communicator.cpp)
-add_executable(gpu_comms ${SRC_LIST})
+
+set(GCE_SRC_LIST
+  kinetic/c_wrapper.cpp
+  kinetic/RunawayDriver.cpp
+  kinetic/GuidingCenterDriver.cpp
+  kinetic/kinetic.cpp
+  kinetic/EM_Field.cpp
+  pgen.cpp
+  kinetic/gce_run.cpp
+)
+
+
+add_executable(gce ${GCE_SRC_LIST})
+target_include_directories(gce PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/mhd
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/kinetic
+  )
+target_link_libraries(gce PRIVATE PkgConfig::PETSC)
+target_link_libraries(gce PRIVATE HDF5::HDF5 Parthenon::parthenon hflux::hflux)
+target_compile_features(gce PRIVATE cxx_std_20)
+
 
 

@@ -10193,8 +10193,20 @@ PetscErrorCode PushParticles(TS ts, Vec Xp, Vec X, void *ptr)
     runaway_saveState(user->manager);
   }
 
-  PetscPrintf(PETSC_COMM_WORLD, "Advancing for dt = %le\n", user->dt);
-  runaway_push(user->manager);
+  PetscPrintf(PETSC_COMM_WORLD, "kinetic start");
+
+
+	if (user->enable_write_raw_fields == 1) {
+		char filename[PETSC_MAX_PATH_LEN];
+		sprintf(filename, "raw_field_%04d.h5", user->raw_field_file_counter);
+		runaway_saveRawFieldData(user->manager, filename);
+		user->raw_field_file_counter += 1;
+	}
+
+	if (user->enable_push == 1) {
+  	PetscPrintf(PETSC_COMM_WORLD, "Advancing for dt = %le\n", user->dt);
+  	runaway_push(user->manager);
+	}
 
 
   PetscScalar * vecCR = (PetscScalar*) malloc(sizeof(PetscScalar)*(user->Nr)*(user->Nz)*(user->Nphi));
