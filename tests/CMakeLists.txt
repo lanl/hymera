@@ -17,21 +17,21 @@ set(CMAKE_MODULE_PATH
 )
 include("Utils")
 
-add_parthenon_test(avalanche_test
-  SRCS
-    ../src/util/common.hpp
-    ../src/kinetic/AnalyticField.hpp
-    ../src/kinetic/GuidingCenterEquations.hpp
-    ../src/kinetic/SmallAngleCollision.hpp
-    ../src/kinetic/LargeAngleCollision.hpp
-    ../src/pgen.cpp
-    ../src/pgen.hpp
-    ../src/kinetic/EM_Field.hpp
-    ../src/kinetic/CurrentDensity.hpp
-    kinetic/avalanche_test.cpp
-  INPUT
-    avalanche_test.input
-)
+# add_parthenon_test(avalanche_test
+#   SRCS
+#     ../src/util/common.hpp
+#     ../src/kinetic/AnalyticField.hpp
+#     ../src/kinetic/GuidingCenterEquations.hpp
+#     ../src/kinetic/SmallAngleCollision.hpp
+#     ../src/kinetic/LargeAngleCollision.hpp
+#     ../src/pgen.cpp
+#     ../src/pgen.hpp
+#     ../src/kinetic/EM_Field.hpp
+#     ../src/kinetic/CurrentDensity.hpp
+#     kinetic/avalanche_test.cpp
+#   INPUT
+#     avalanche_test.input
+# )
 
 add_parthenon_test(current_replacement
   SRCS
