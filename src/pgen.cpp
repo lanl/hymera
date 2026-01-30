@@ -378,20 +378,18 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
         int i, j;
         int level = cdg.indicator(X, i, j);
+        // Only keep particles within separatrix
         if (level != 1)
           continue;
         status = field_interpolation(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-
         if (randNum < abs(curlB[1])) break;
       }
+
       Real my_phi, my_mu;
       Real psi;
       field_interpolation.evalPsi(psi, X, t, psi_hermite_data);
       gce.computeConservedQuantities(X, my_phi, my_mu, t, psi);
       KOKKOS_ASSERT(status == SUCCESS);
-
-			X[2] = 3.4;
-      X[4] = 0.3;
 
       pack_swarm(b, Kinetic::p(), n)   = X[0];
       pack_swarm(b, Kinetic::xi(), n)  = X[1];
