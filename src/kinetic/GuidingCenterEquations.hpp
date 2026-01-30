@@ -71,7 +71,7 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
     const Real R =   X[2];
     const Real phi = X[3];
     const Real Z =   X[4];
-    const Real gamma = momentum_(p);
+    const Real gamma = gamma_(p);
 
     if constexpr (SlabModel) {
       dXdt[0] = -xi * field.E_0 - alpha0 * p * gamma * (1.0 - xi * xi);
@@ -145,7 +145,6 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
     Real Bstar_d_E = dot_product(Bstar, E);
 
     Real one_m_xisq = 1.0 - xi * xi;
-
     /**  \brief Momentum evolution
      *   \f{eqnarray*}{
      *     \frac {dp}{dt} &=& \frac c{a\omega_{ce,0}} \frac{p (1 +
