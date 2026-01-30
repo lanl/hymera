@@ -1,3 +1,14 @@
+//========================================================================================
+// (C) (or copyright) 2025. Triad National Security, LLC. All rights reserved.
+//
+// This program was produced under U.S. Government contract 89233218CNA000001 for Los
+// Alamos National Laboratory (LANL), which is operated by Triad National Security, LLC // for the U.S. Department of Energy/National Nuclear Security Administration. All rights
+// in the program are reserved by Triad National Security, LLC, and the U.S. Department
+// of Energy/National Nuclear Security Administration. The Government is granted for
+// itself and others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
+// license in this material to reproduce, prepare derivative works, distribute copies to
+// the public, perform publicly and display publicly, and to permit others to do so.
+//========================================================================================
 #include "RunawayDriver.h"
 #include <parthenon/driver.hpp>
 #include <parthenon/package.hpp>
@@ -28,8 +39,6 @@ using parthenon::constants::SI;
 using parthenon::constants::PhysicalConstants;
 using pc = PhysicalConstants<SI>;
 
-static const bool EnableEfield = false;
-
 namespace Kinetic {
 
 TaskStatus PushParticles(Mesh *pm, SimTime tm) {
@@ -55,7 +64,7 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
   const auto c_aw0 = pkg->Param<Real>("c_aw0");
   const auto ct_a = pkg->Param<Real>("ct_a");
   const auto alpha0 = pkg->Param<Real>("alpha0");
-  GuidingCenterEquations<EM_Field, EnableEfield, false> gce(*f, c_aw0, ct_a, alpha0);
+  GuidingCenterEquations<EM_Field, true, false> gce(*f, c_aw0, ct_a, alpha0);
 
   Kokkos::Timer timer;
 
@@ -486,7 +495,7 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   const auto c_aw0 = pkg->Param<Real>("c_aw0");
   const auto ct_a = pkg->Param<Real>("ct_a");
   const auto alpha0 = pkg->Param<Real>("alpha0");
-  GuidingCenterEquations<EM_Field, EnableEfield, false> gce(field_interpolation, c_aw0, ct_a, alpha0);
+  GuidingCenterEquations<EM_Field, true, false> gce(field_interpolation, c_aw0, ct_a, alpha0);
 
   Real I_re = 0.0;
   Kokkos::parallel_reduce(
