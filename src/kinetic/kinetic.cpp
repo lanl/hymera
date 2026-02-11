@@ -509,12 +509,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("EnableSmallAngleCollisions",      EnableSmallAngleCollisions);
   pkg->AddParam("EnableComputeConservedQuantities",EnableComputeConservedQuantities);
 
-
-  if (EnableComputeConservedQuantities == 1) {
-		pkg->AddSwarmValue(p_phi::name(), "particles",real_swarmvalue_metadata);
-		pkg->AddSwarmValue(mu::name(), "particles",real_swarmvalue_metadata);
-	}
-
+	pkg->AddSwarmValue(p_phi::name(), "particles",real_swarmvalue_metadata);
+  pkg->AddSwarmValue(mu::name(), "particles",real_swarmvalue_metadata);
 
   return pkg;
 }
