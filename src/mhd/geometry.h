@@ -63,6 +63,10 @@ PetscErrorCode FromPetscVecToArray_EfieldCell(TS,Vec,PetscScalar*,PetscScalar*,P
 PetscErrorCode FromPetscVecToArray(TS,Vec,PetscScalar*,PetscScalar*,PetscScalar*,PetscScalar*,PetscScalar*,PetscScalar*,void*);
 PetscErrorCode CellCoordArrays(TS,PetscScalar*,PetscScalar*,void*);
 PetscErrorCode ScatterTest(TS,void*);
+void slice2D(double * gf, double * gf_c, int nr, int nphi, int nz);
+void slice2DaddJre(double * gf, double * gf_c, int nr, int nphi, int nz, double* jre);
+PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivative);
+PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr);
 
 int isInDomain(const double *,const double*,void*);
 PetscErrorCode PushParticles(TS,Vec,Vec,void*);

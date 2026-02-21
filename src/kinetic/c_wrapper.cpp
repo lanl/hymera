@@ -47,8 +47,6 @@ int parthenon_init(void ** man, int argc, char *argv[], User* mhd_config) {
     return 1;
   }
 
-  Kinetic::InitializeMHDConfig(pman->pinput.get(), mhd_config);
-
   *man = (void*) pman;
 
   return 0;

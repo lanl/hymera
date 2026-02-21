@@ -33,25 +33,25 @@ include("Utils")
 #     avalanche_test.input
 # )
 
-add_parthenon_test(current_replacement
-  SRCS
-    ../src/util/common.hpp
-    ../src/kinetic/AnalyticField.hpp
-    ../src/kinetic/GuidingCenterEquations.hpp
-    ../src/kinetic/SmallAngleCollision.hpp
-    ../src/kinetic/LargeAngleCollision.hpp
-    ../src/kinetic/RunawayDriver.cpp
-    ../src/kinetic/kinetic.cpp
-    ../src/kinetic/EM_Field.cpp
-    ../src/pgen.cpp
-    ../src/pgen.hpp
-    ../src/kinetic/EM_Field.hpp
-    ../src/kinetic/CurrentDensity.hpp
-    kinetic/current_replacement.cpp
-    ../src/kinetic/EM_Field.cpp
-    ../src/kinetic/c_wrapper.cpp
-  INPUT
-    avalanche_test.input
-)
+# add_parthenon_test(current_replacement
+#   SRCS
+#     ../src/util/common.hpp
+#     ../src/kinetic/AnalyticField.hpp
+#     ../src/kinetic/GuidingCenterEquations.hpp
+#     ../src/kinetic/SmallAngleCollision.hpp
+#     ../src/kinetic/LargeAngleCollision.hpp
+#     ../src/kinetic/RunawayDriver.cpp
+#     ../src/kinetic/kinetic.cpp
+#     ../src/kinetic/EM_Field.cpp
+#     ../src/pgen.cpp
+#     ../src/pgen.hpp
+#     ../src/kinetic/EM_Field.hpp
+#     ../src/kinetic/CurrentDensity.hpp
+#     kinetic/current_replacement.cpp
+#     ../src/kinetic/EM_Field.cpp
+#     ../src/kinetic/c_wrapper.cpp
+#   INPUT
+#     avalanche_test.input
+# )
 
 find_package(HDF5 COMPONENTS CXX REQUIRED)

@@ -11,14 +11,22 @@
 // the public, perform publicly and display publicly, and to permit others to do so.
 //========================================================================================
 
-#ifndef MHD_RUN_H_
-#define MHD_RUN_H_
+#ifndef MHD_H_
+#define MHD_H_
+
+#include "mfd_config.h"
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int mhd_run(int argc, char ** argv, double* raw_field_ptr);
+int mhd_PetscInit(int argc, char ** argv);
+int mhd_initialize(User* mhd_config);
+int mhd_step(User* mhd_config);
+int mhd_getF(User* mhd_config, int code, double* gf2);
+int mhd_resetState(User* mhd_config);
+int mhd_destroy(User* mhd_config);
 
 #ifdef __cplusplus
 }

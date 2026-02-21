@@ -53,10 +53,7 @@ PetscErrorCode FormInitialSolution(TS,Vec,void*); /* This routine sets up the in
 PetscErrorCode FormExactSolution(PetscReal,TS,Vec*,void*); /* This routine sets up the vector which will be used to set the boundary conditions inside FormIFunction_DampingV */
 PetscErrorCode Update_J_RE(TS);
 PetscErrorCode Monitor(TS,PetscInt,PetscReal,Vec,void*);
-PetscErrorCode FormDummyIJacobian(TS,PetscReal,Vec,Vec,PetscReal,Mat,Mat,void*); /* When used with PCFieldSplitSetDetectSaddlePoint, this dummy jacobian gives a field splitting where B field is first and tau, EP, V and n fields are last */
-PetscErrorCode FormDummyIJacobian2(TS,PetscReal,Vec,Vec,PetscReal,Mat,Mat,void*); /* When used with PCFieldSplitSetDetectSaddlePoint, this dummy jacobian gives a field splitting where tau field is first and EP, B, V and n fields are last */
-PetscErrorCode FormDummyIJacobian3(TS,PetscReal,Vec,Vec,PetscReal,Mat,Mat,void*); /* When used with PCFieldSplitSetDetectSaddlePoint, this dummy jacobian gives a field splitting where the density n is first and tau, EP, B and V fields are last */
-PetscErrorCode FormDummyIJacobian4(TS,PetscReal,Vec,Vec,PetscReal,Mat,Mat,void*); /* When used with PCFieldSplitSetDetectSaddlePoint, this dummy jacobian gives a field splitting where the electrostatic potential Phi is first and n, tau, B and V fields are last */
+PetscErrorCode FormDummyIJacobian4(TS,Vec,Vec,PetscReal,Mat,Mat,void*); /* When used with PCFieldSplitSetDetectSaddlePoint, this dummy jacobian gives a field splitting where the electrostatic potential Phi is first and n, tau, B and V fields are last */
 PetscErrorCode SampleShellPCSetUp(PC); /* This routine sets up a Shell Preconditioner that has the same effect as a 2-field fieldsplit preconditioner where the velocity is split from the remaining unknowns */
 PetscErrorCode SampleShellPCApply(PC,Vec,Vec); /* This routine applies a Shell Preconditioner that has the same effect as a 2-field fieldsplit preconditioner where the velocity is split from the remaining unknowns */
 PetscErrorCode SampleShellPCDestroy(PC); /* This routine destroys a Shell Preconditioner that has the same effect as a 2-field fieldsplit preconditioner where the velocity is split from the remaining unknowns */

@@ -10,55 +10,55 @@
 #  license in this material to reproduce, prepare derivative works, distribute copies to
 #  the public, perform publicly and display publicly, and to permit others to do so.
 #========================================================================================
-
-set(HYBRID_SRC_LIST
-  mhd/main.c
+add_library(mhd_core
   mhd/ts_functions.c
   mhd/mass_matrix_coefficients.c
   mhd/mimetic_operators.c
   mhd/geometry.c
   mhd/monitor_functions.c
-  mhd/mhd_run.c
   mhd/mfd_config.c
-  kinetic/c_wrapper.cpp
-  kinetic/RunawayDriver.cpp
-  kinetic/kinetic.cpp
-  kinetic/EM_Field.cpp
-  pgen.cpp
+  mhd/mhd.c
+  mhd/default_petsc_options.c
 )
 
+target_link_libraries(mhd_core PUBLIC PkgConfig::PETSC)
+target_include_directories(mhd_core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/mhd
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/kinetic
+  )
+
+add_library(infrastructure
+  kinetic/c_wrapper.cpp
+  kinetic/EM_Field.cpp
+  kinetic/kinetic.cpp
+)
+
+target_link_libraries(infrastructure PUBLIC PkgConfig::PETSC)
+target_link_libraries(infrastructure PUBLIC HDF5::HDF5 Parthenon::parthenon hflux::hflux)
+target_include_directories(infrastructure PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/mhd
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/kinetic
+  )
+target_compile_features(infrastructure PUBLIC cxx_std_20)
+
+add_library(particles_core
+  kinetic/RunawayDriver.cpp
+  pgen.cpp
+)
+target_link_libraries(particles_core PUBLIC infrastructure)
+
+set(HYBRID_SRC_LIST
+  kinetic/hybrid.cpp
+)
 
 add_executable(hybrid ${HYBRID_SRC_LIST})
-target_include_directories(hybrid PRIVATE
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/mhd
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/kinetic
-  )
-target_link_libraries(hybrid PRIVATE PkgConfig::PETSC)
-target_link_libraries(hybrid PRIVATE HDF5::HDF5 Parthenon::parthenon hflux::hflux)
-target_compile_features(hybrid PRIVATE cxx_std_20)
+target_link_libraries(hybrid PRIVATE particles_core mhd_core infrastructure)
 
+add_executable(gce kinetic/gce_run.cpp)
+target_link_libraries(gce PRIVATE particles_core)
 
-set(GCE_SRC_LIST
-  kinetic/c_wrapper.cpp
-  kinetic/RunawayDriver.cpp
-  kinetic/GuidingCenterDriver.cpp
-  kinetic/kinetic.cpp
-  kinetic/EM_Field.cpp
-  pgen.cpp
-  kinetic/gce_run.cpp
-)
-
-
-add_executable(gce ${GCE_SRC_LIST})
-target_include_directories(gce PRIVATE
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/mhd
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/kinetic
-  )
-target_link_libraries(gce PRIVATE PkgConfig::PETSC)
-target_link_libraries(gce PRIVATE HDF5::HDF5 Parthenon::parthenon hflux::hflux)
-target_compile_features(gce PRIVATE cxx_std_20)
-
-
+add_executable(setup kinetic/setup.cpp)
+target_link_libraries(setup PRIVATE mhd_core particles_core infrastructure)
 

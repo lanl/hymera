@@ -94,8 +94,7 @@ PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx) {
   PetscPrintf(comm,"coorda        = %s\n", ctx->coorda ? "set" : "NULL");
 
   PetscPrintf(comm,"\n-- PETSc Vec/IS/Mat/TS objects (pointer presence only) --\n");
-  PetscPrintf(comm,"oldX          = %s\n", ctx->oldX ? "set" : "NULL");
-  PetscPrintf(comm,"X_star        = %s\n", ctx->X_star ? "set" : "NULL");
+  PetscPrintf(comm,"X0          = %s\n", ctx->X0 ? "set" : "NULL");
 
   PetscPrintf(comm,"isV           = %s\n", ctx->isV ? "set" : "NULL");
   PetscPrintf(comm,"isni          = %s\n", ctx->isni ? "set" : "NULL");

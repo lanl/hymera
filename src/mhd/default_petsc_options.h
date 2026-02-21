@@ -11,9 +11,11 @@
 // the public, perform publicly and display publicly, and to permit others to do so.
 //========================================================================================
 
-#include <stdlib.h>
-#include "mhd_run.h"
+#ifndef MHD_H_
+#define MHD_H_
 
-int main(int argc, char ** argv) {
-//  return mhd_run(argc, argv, 0);
-}
+PetscErrorCode default_petsc_options();
+
+#endif
+
+

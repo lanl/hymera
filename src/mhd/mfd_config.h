@@ -89,6 +89,7 @@ typedef struct {
   PetscReal   itime;            /* Initial time */
   PetscReal   ftime;            /* Final time */
   DM          coorda;           /* DM used only to get cell/face/edge/vertex center coordinates */
+  DM          da;
   PetscScalar ****arrCoord;
   PetscInt    ictype;           /* Type of initial conditions */
   PetscInt    phibtype;         /* Boundary Type for phi */
@@ -105,16 +106,16 @@ typedef struct {
   PetscInt    debug;            /* Flag for displaying debug information */
   PetscInt    dump;             /* Flag for saving output in vtk files */
   PetscInt    prestep;          /* Flag for activating the prestep to approximate the runaway current contribution */
-  Vec 	      oldX;
-  Vec         X_star;
+  Vec 	      X;
+  Vec         X0;
   IS          isV;              /* Indexing PETSc object for velocity */
-  IS          isni;              /* Indexing PETSc object for ion number density */
-  IS 	      isB;              /* Indexing PETSc object for B Field */
-  IS          isEP;              /* Indexing PETSc object for Electrostatic Potential */
-  IS          istau;              /* Indexing PETSc object for divergence-free tau field */
+  IS          isni;             /* Indexing PETSc object for ion number density */
+  IS 	        isB;              /* Indexing PETSc object for B Field */
+  IS          isEP;             /* Indexing PETSc object for Electrostatic Potential */
+  IS          istau;            /* Indexing PETSc object for divergence-free tau field */
   IS          isE_boundary;     /* Indexing PETSc object for boundary edges */
   IS          isB_boundary;     /* Indexing PETSc object for boundary faces */
-  IS          isni_boundary;     /* Indexing PETSc object for boundary cells */
+  IS          isni_boundary;    /* Indexing PETSc object for boundary cells */
   PetscReal   *dataC;           /* Array containing the level set function */
   PetscReal   *dataz,*dataphi,*datar;/* Arrays containing the initial B field components */
   PetscReal   *datag,*datapsi;/* Arrays containing the initial psi and G(psi) values */

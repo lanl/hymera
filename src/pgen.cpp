@@ -316,6 +316,8 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   const auto alpha0 = pkg->Param<Real>("alpha0");
   GuidingCenterEquations<EM_Field, false, false> gce(field_interpolation, c_aw0, ct_a, alpha0);
 
+  std::cout << "Generating particles!\n";
+
   // loop over new particles created
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
       DevExecSpace(), 0,

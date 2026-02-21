@@ -17,7 +17,6 @@
 #include "geometry.h"
 #include "mass_matrix_coefficients.h"
 #include "mimetic_operators.h"
-#include "../kinetic/c_wrapper.h"
 
 PetscErrorCode FormIJacobian_BImplicit(TS ts, PetscReal t, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
   return (0);
@@ -19415,356 +19414,356 @@ PetscErrorCode FormExactSolution_LargeData(PetscReal time, TS ts, Vec * X, void 
   return (0);
 }
 
-PetscErrorCode Update_J_RE(TS ts)
-{
-
-  PetscLogEvent  USER_EVENT;
-  PetscClassId   classid;
-  PetscLogDouble user_event_flops;
-
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("Update_J_RE",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
-
-
-  PetscPrintf(PETSC_COMM_WORLD, "Update_J_RE");
-
-  User          *user;
-  Vec X, postprocB, curl, postprocX, B, div, div2;
-  Mat D;
-  PetscReal dt, time, normmax, norm2;
-  PetscInt step, nr,  nphi, nz, count;
-  DM da;
-  TS dummyts;
-
-  TSGetDM(ts, & da);
-  DMGetApplicationContext(da, &user);
-
-  if (user -> delay_kinetic > 0)
-  {
-    PetscPrintf(PETSC_COMM_WORLD, "Skipping kinetic phase");
-    -- user->delay_kinetic;
-    return (0);
-
-  }
-  user->CorrectorIdentifier = 1;
-  TSGetTimeStep(ts, & dt);
-  TSGetTime(ts, & time);
-  TSGetStepNumber(ts, &step);
-  TSGetSolution(ts, &X);
-
-  // Duplicate X in X_star, first particle push is on constant fields
-  VecCopy(X, user->X_star);
-  PetscPrintf(PETSC_COMM_WORLD, "user dt = %g", (double) user->dt);
-  PetscPrintf(PETSC_COMM_WORLD, "Pushing particles with (B_n,E_n) at time %g, count =%d\n", (double) time, count);
-  PushParticles(ts, X, user->X_star, user);
-  PetscPrintf(PETSC_COMM_WORLD, "Finish particles with (B_n,E_n)\n");
-
-  for (count = 0; count < user->pred_loop; count++) {
-    runaway_restoreState(user->manager);
-
-    SNES dummysnes;
-    KSP dummyKSP;
-    PC dummypc;
-    Mat J;
-    PetscInt steps;
-    PetscReal ftime;
-    TSConvergedReason reason;
-
-    TSCreate(PETSC_COMM_WORLD, & dummyts);
-    TSSetDM(dummyts, user->coorda);
-
-    TSGetSNES(dummyts, & dummysnes);
-    TSSetType(ts, TSBEULER); /* Backward Euler method */
-
-    DMCreateMatrix(da, & J);
-
-    /* Use coloring to compute finite difference J efficiently */
-    SNESSetJacobian(dummysnes, J, J, SNESComputeJacobianDefaultColor, PETSC_NULLPTR);
-    TSSetIFunction(dummyts, NULL, FormIFunction_Vperp_viscosity, user);
-    TSSetRHSFunction(dummyts, NULL, FormRHSFunction_BImplicit, user);
-
-    SNESSetUseMatrixFree(dummysnes,PETSC_TRUE,PETSC_FALSE);
-    SNESSetOptionsPrefix(dummysnes, "dummySNES_");
-    SNESSetFromOptions(dummysnes);
-
-    TSSetTime(dummyts, time);
-    TSSetMaxSteps(dummyts, 1);
-    TSSetExactFinalTime(dummyts, TS_EXACTFINALTIME_STEPOVER);
-    TSSetTimeStep(dummyts, 1.0*dt);
-    TSSetSolution(dummyts, user->X_star);
-
-    //TSSetFromOptions(dummyts);
-    if(user -> adaptdt){
-      // Adaptive Time Step Controller
-      TSAdapt adapt;
-      TSGetAdapt(dummyts,&adapt);
-      TSAdaptSetScaleSolveFailed(adapt, 0.5);
-      adapt->ops->choose = TSAdaptChoose_user;
-      TSAdaptSetMonitor( adapt, PETSC_TRUE);
-      TSSetMaxSNESFailures( dummyts, -1);
-    }
-    TSSetUp(dummyts);
-
-    SNESGetKSP(dummysnes, & dummyKSP);
-    //TSGetKSP(dummyts, & dummyKSP);
-    KSPGetPC(dummyKSP, & dummypc);
-
-    PCSetType(dummypc,PCBJACOBI);
-    KSPSetOptionsPrefix(dummyKSP, "dummyKSP_");
-
-    /* Logic below modifies the PC directly, so this is the last chance to change the solver from the command line */
-    PetscCall(KSPSetFromOptions(dummyKSP));
-
-    PetscBool is_fieldsplit;
-    {/* first level -> split ni from the rest : {ni}, {V Phi tau B}
-        second level -> split tau from {V Phi B} : {ni}, {{tau},{V Phi B}}
-        third level -> split V from {Phi B} : {ni}, {{tau},{{Phi B}, {V}}}
-        fourth level -> split Phi from B : {ni}, {{tau},{{{Phi}, {B}}, {V}}}
-        */
-      IS            is[2];
-      DMStagStencil stencil0[1], stencil1[10];
-      PC            pc_notc, pc_noe;
-
-      const char *name[2] = {"ni", "TEBV"};
-
-      // First split is cells
-      stencil0[0].loc = DMSTAG_ELEMENT;
-      stencil0[0].c = 0;
-
-      // Second split is the rest
-      for (PetscInt c=0; c<4; ++c) {
-        stencil1[c].loc = DMSTAG_BACK_DOWN_LEFT;
-        stencil1[c].c = c;
-      }
-      stencil1[4].loc = DMSTAG_LEFT;
-      stencil1[4].c = 0;
-      stencil1[5].loc = DMSTAG_BACK;
-      stencil1[5].c = 0;
-      stencil1[6].loc = DMSTAG_DOWN;
-      stencil1[6].c = 0;
-      stencil1[7].loc = DMSTAG_BACK_DOWN;
-      stencil1[7].c = 0;
-      stencil1[8].loc = DMSTAG_BACK_LEFT;
-      stencil1[8].c = 0;
-      stencil1[9].loc = DMSTAG_DOWN_LEFT;
-      stencil1[9].c = 0;
-
-      PetscCall(DMStagCreateISFromStencils(da,1,stencil0,&is[0]));
-      PetscCall(DMStagCreateISFromStencils(da,10,stencil1,&is[1]));
-
-      for (PetscInt i=0; i<2; ++i) {
-        PetscCall(PCFieldSplitSetIS(dummypc,name[i],is[i]));
-      }
-
-      for (PetscInt i=0; i<2; ++i) {
-        PetscCall(ISDestroy(&is[i]));
-      }
-
-      /* If the fieldsplit PC wasn't overridden, further split the second split */
-      {
-        PCType pc_type;
-
-
-        PetscCall(KSPGetPC(dummyKSP, &dummypc));
-        PetscCall(PCGetType(dummypc,&pc_type));
-        PetscCall(PetscStrcmp(pc_type,PCFIELDSPLIT,&is_fieldsplit));
-        if (is_fieldsplit) {
-          DM            dm_notc;
-          KSP           *sub_ksp;
-
-          PetscInt      n_splits;
-          DMStagStencil stencil_notc_edges[3], stencil_notc_notedges[7];
-          IS            is_notc[2];
-          const char    *name_notc[2] = {"tau","EBV"};
-
-          PetscCall(PCSetUp(dummypc)); // Set up the Fieldsplit PC
-          PetscCall(PCFieldSplitGetSubKSP(dummypc,&n_splits,&sub_ksp));
-          PetscAssert(n_splits == 2,PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Expected a Fieldsplit PC with two fields");
-          PetscCall(KSPGetPC(sub_ksp[1],&pc_notc));
-          PetscCall(PetscFree(sub_ksp));
-
-          PetscCall(DMStagCreateCompatibleDMStag(da,4,1,1,0,&dm_notc));
-
-          // First split within notc is edges
-          stencil_notc_edges[0].loc = DMSTAG_BACK_DOWN;
-          stencil_notc_edges[0].c = 0;
-          stencil_notc_edges[1].loc = DMSTAG_BACK_LEFT;
-          stencil_notc_edges[1].c = 0;
-          stencil_notc_edges[2].loc = DMSTAG_DOWN_LEFT;
-          stencil_notc_edges[2].c = 0;
-
-          // Second split within notc is faces and vertices
-          for (PetscInt c=0; c<3; ++c) {
-            stencil_notc_notedges[c].loc = DMSTAG_BACK_DOWN_LEFT;
-            stencil_notc_notedges[c].c = c;
-          }
-          stencil_notc_notedges[3].loc = DMSTAG_BACK_DOWN_LEFT;
-          stencil_notc_notedges[3].c = 3;
-          stencil_notc_notedges[4].loc = DMSTAG_LEFT;
-          stencil_notc_notedges[4].c = 0;
-          stencil_notc_notedges[5].loc = DMSTAG_BACK;
-          stencil_notc_notedges[5].c = 0;
-          stencil_notc_notedges[6].loc = DMSTAG_DOWN;
-          stencil_notc_notedges[6].c = 0;
-
-          PetscCall(DMStagCreateISFromStencils(dm_notc,3,stencil_notc_edges,&is_notc[0]));
-          PetscCall(DMStagCreateISFromStencils(dm_notc,7,stencil_notc_notedges,&is_notc[1]));
-
-          for (PetscInt i=0; i<2; ++i) {
-            PetscCall(PCFieldSplitSetIS(pc_notc,name_notc[i],is_notc[i]));
-          }
-
-          for (PetscInt i=0; i<2; ++i) {
-            PetscCall(ISDestroy(&is_notc[i]));
-          }
-          PetscCall(DMDestroy(&dm_notc));
-        }
-      }
-
-      /* If the fieldsplit PC wasn't overridden, further split the second split of the second level */
-      if (is_fieldsplit) {
-        PCType pc_type;
-
-
-        PetscCall(PCGetType(pc_notc,&pc_type));
-        PetscCall(PetscStrcmp(pc_type,PCFIELDSPLIT,&is_fieldsplit));
-        if (is_fieldsplit) {
-          DM            dm_noe;
-          KSP           *sub_ksp;
-
-          PetscInt      n_splits;
-          DMStagStencil stencil_noe_EP[1], stencil_noe_notEP[6];
-          IS            is_noe[2];
-          const char    *name_noe[2] = {"EP", "BV"};
-
-          PetscCall(PCSetUp(pc_notc)); // Set up the Fieldsplit PC
-          PetscCall(PCFieldSplitGetSubKSP(pc_notc,&n_splits,&sub_ksp));
-          PetscAssert(n_splits == 2,PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Expected a Fieldsplit PC with two fields");
-          PetscCall(KSPGetPC(sub_ksp[1],&pc_noe));
-          PetscCall(PetscFree(sub_ksp));
-
-          PetscCall(DMStagCreateCompatibleDMStag(da,4,0,1,0,&dm_noe));
-
-          // First split within notv is 4th dofs on vertices
-          stencil_noe_EP[0].loc = DMSTAG_BACK_DOWN_LEFT;
-          stencil_noe_EP[0].c = 3;
-
-          // Second split within notv is faces and the first 3 dofs on vertices
-          for (PetscInt c=0; c<3; ++c) {
-            stencil_noe_notEP[c].loc = DMSTAG_BACK_DOWN_LEFT;
-            stencil_noe_notEP[c].c = c;
-          }
-          stencil_noe_notEP[3].loc = DMSTAG_LEFT;
-          stencil_noe_notEP[3].c = 0;
-          stencil_noe_notEP[4].loc = DMSTAG_BACK;
-          stencil_noe_notEP[4].c = 0;
-          stencil_noe_notEP[5].loc = DMSTAG_DOWN;
-          stencil_noe_notEP[5].c = 0;
-
-          PetscCall(DMStagCreateISFromStencils(dm_noe,1,stencil_noe_EP,&is_noe[0]));
-          PetscCall(DMStagCreateISFromStencils(dm_noe,6,stencil_noe_notEP,&is_noe[1]));
-
-          for (PetscInt i=0; i<2; ++i) {
-            PetscCall(PCFieldSplitSetIS(pc_noe,name_noe[i],is_noe[i]));
-          }
-
-          for (PetscInt i=0; i<2; ++i) {
-            PetscCall(ISDestroy(&is_noe[i]));
-          }
-          PetscCall(DMDestroy(&dm_noe));
-        }
-      }
-
-      PC            pc_noe_2;
-
-      /* If the fieldsplit PC wasn't overridden, further split the first split of the third level */
-      if (is_fieldsplit) {
-        PCType pc_type;
-
-
-        PetscCall(PCGetType(pc_noe,&pc_type));
-        PetscCall(PetscStrcmp(pc_type,PCFIELDSPLIT,&is_fieldsplit));
-        if (is_fieldsplit) {
-          DM            dm_notv;
-          KSP           *sub_ksp;
-
-          PetscInt      n_splits;
-          DMStagStencil stencil_notv_faces[3], stencil_notv_notfaces[3];
-          IS            is_notv[2];
-          const char    *name_notv[2] = {"B", "V"};
-
-          PetscCall(PCSetUp(pc_noe)); // Set up the Fieldsplit PC
-          PetscCall(PCFieldSplitGetSubKSP(pc_noe,&n_splits,&sub_ksp));
-          PetscAssert(n_splits == 2,PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Expected a Fieldsplit PC with two fields");
-          PetscCall(KSPGetPC(sub_ksp[1],&pc_noe_2));
-          PetscCall(PetscFree(sub_ksp));
-
-          PetscCall(DMStagCreateCompatibleDMStag(da,3,0,1,0,&dm_notv));
-
-          // First split within notv is faces
-          stencil_notv_faces[0].loc = DMSTAG_LEFT;
-          stencil_notv_faces[0].c = 0;
-          stencil_notv_faces[1].loc = DMSTAG_BACK;
-          stencil_notv_faces[1].c = 0;
-          stencil_notv_faces[2].loc = DMSTAG_DOWN;
-          stencil_notv_faces[2].c = 0;
-
-          // Second split within notv is vertices
-          for (PetscInt c=0; c<3; ++c) {
-            stencil_notv_notfaces[c].loc = DMSTAG_BACK_DOWN_LEFT;
-            stencil_notv_notfaces[c].c = c;
-          }
-
-          PetscCall(DMStagCreateISFromStencils(dm_notv,3,stencil_notv_faces,&is_notv[0]));
-          PetscCall(DMStagCreateISFromStencils(dm_notv,3,stencil_notv_notfaces,&is_notv[1]));
-
-
-          for (PetscInt i=0; i<2; ++i) {
-            PetscCall(PCFieldSplitSetIS(pc_noe_2,name_notv[i],is_notv[i]));
-          }
-
-          for (PetscInt i=0; i<2; ++i) {
-            PetscCall(ISDestroy(&is_notv[i]));
-          }
-          PetscCall(DMDestroy(&dm_notv));
-        }
-      }
-    }
-
-    KSPSetTolerances(dummyKSP,1e-5,PETSC_DEFAULT,PETSC_DEFAULT,300);
-
-    TSSolve(dummyts, user->X_star);
-    TSGetSolveTime(dummyts, & ftime);
-    TSGetStepNumber(dummyts, & steps);
-    TSGetConvergedReason(dummyts, & reason);
-    PetscPrintf(PETSC_COMM_WORLD, "PRESTEP => Computing (B_star,E_star): %s at time %g after %d steps, count =%d\n", TSConvergedReasons[reason], (double) ftime, steps, count);
-    //DumpSolution(ts, 50, X, user);
-    MatDestroy( & J);
-
-    {
-      Vec diffX;
-      PetscReal norm_2, norm_max;
-      VecDuplicate(X, & diffX);
-      VecZeroEntries(diffX);
-      VecWAXPY(diffX, -1.0, user -> X_star, X);
-      VecNorm(diffX, NORM_2, & norm_2);
-      VecNorm(diffX, NORM_MAX, & norm_max);
-      TSGetTimeStep(dummyts, & dt);
-      PetscPrintf(PETSC_COMM_WORLD, "Timestep %3D (PREDICTOR): step size = %g, time = %g, 2-norm of X^{n} - X^{n+1,*} = %g, max norm of X^{n} - X^{n+1,*} = %g  , count =%d\n", (int)(step + user -> oldstep), (double) dt, (double) time, (double) norm_2, (double) norm_max, count);
-      VecDestroy(& diffX);
-    }
-
-    TSDestroy( & dummyts);
-   // RuKS_reset(user->runaway_solver);
-    PetscPrintf(PETSC_COMM_WORLD, "(B_{n},E_{n})*(t_{n+1} - t)+ (B_{n+1,\ast},E_{n+1,\ast})*(t-t_n)/dt at time %g, count =%d \n", (double) ftime, count);
-    PushParticles(ts, X, user->X_star, user);
-    PetscPrintf(PETSC_COMM_WORLD, "(B_{n},E_{n})*(t_{n+1} - t)+ (B_{n+1,\ast},E_{n+1,\ast})*(t-t_n)/dt finish \n", (double) ftime, count);
-    /* user->present_current = RuKS_getIre(user->runaway_solver); */
-  }
-  runaway_saveState(user->manager);
-  return 0;
-}
+// PetscErrorCode Update_J_RE(TS ts)
+// {
+//
+//   PetscLogEvent  USER_EVENT;
+//   PetscClassId   classid;
+//   PetscLogDouble user_event_flops;
+//
+//   PetscClassIdRegister("class name",&classid);
+//   PetscLogEventRegister("Update_J_RE",classid,&USER_EVENT);
+//   PetscLogEventBegin(USER_EVENT,0,0,0,0);
+//
+//
+//   PetscPrintf(PETSC_COMM_WORLD, "Update_J_RE");
+//
+//   User          *user;
+//   Vec X, postprocB, curl, postprocX, B, div, div2;
+//   Mat D;
+//   PetscReal dt, time, normmax, norm2;
+//   PetscInt step, nr,  nphi, nz, count;
+//   DM da;
+//   TS dummyts;
+//
+//   TSGetDM(ts, & da);
+//   DMGetApplicationContext(da, &user);
+//
+//   if (user -> delay_kinetic > 0)
+//   {
+//     PetscPrintf(PETSC_COMM_WORLD, "Skipping kinetic phase");
+//     -- user->delay_kinetic;
+//     return (0);
+//
+//   }
+//   user->CorrectorIdentifier = 1;
+//   TSGetTimeStep(ts, & dt);
+//   TSGetTime(ts, & time);
+//   TSGetStepNumber(ts, &step);
+//   TSGetSolution(ts, &X);
+//
+//   // Duplicate X in X_star, first particle push is on constant fields
+//   VecCopy(X, user->X_star);
+//   PetscPrintf(PETSC_COMM_WORLD, "user dt = %g", (double) user->dt);
+//   PetscPrintf(PETSC_COMM_WORLD, "Pushing particles with (B_n,E_n) at time %g, count =%d\n", (double) time, count);
+//   // PushParticles(ts, X, user->X_star, user);
+//   PetscPrintf(PETSC_COMM_WORLD, "Finish particles with (B_n,E_n)\n");
+//
+//   for (count = 0; count < user->pred_loop; count++) {
+//     // runaway_restoreState(user->manager);
+//
+//     SNES dummysnes;
+//     KSP dummyKSP;
+//     PC dummypc;
+//     Mat J;
+//     PetscInt steps;
+//     PetscReal ftime;
+//     TSConvergedReason reason;
+//
+//     TSCreate(PETSC_COMM_WORLD, & dummyts);
+//     TSSetDM(dummyts, user->coorda);
+//
+//     TSGetSNES(dummyts, & dummysnes);
+//     TSSetType(ts, TSBEULER); /* Backward Euler method */
+//
+//     DMCreateMatrix(da, & J);
+//
+//     /* Use coloring to compute finite difference J efficiently */
+//     SNESSetJacobian(dummysnes, J, J, SNESComputeJacobianDefaultColor, PETSC_NULLPTR);
+//     TSSetIFunction(dummyts, NULL, FormIFunction_Vperp_viscosity, user);
+//     TSSetRHSFunction(dummyts, NULL, FormRHSFunction_BImplicit, user);
+//
+//     SNESSetUseMatrixFree(dummysnes,PETSC_TRUE,PETSC_FALSE);
+//     SNESSetOptionsPrefix(dummysnes, "dummySNES_");
+//     SNESSetFromOptions(dummysnes);
+//
+//     TSSetTime(dummyts, time);
+//     TSSetMaxSteps(dummyts, 1);
+//     TSSetExactFinalTime(dummyts, TS_EXACTFINALTIME_STEPOVER);
+//     TSSetTimeStep(dummyts, 1.0*dt);
+//     TSSetSolution(dummyts, user->X_star);
+//
+//     //TSSetFromOptions(dummyts);
+//     if(user -> adaptdt){
+//       // Adaptive Time Step Controller
+//       TSAdapt adapt;
+//       TSGetAdapt(dummyts,&adapt);
+//       TSAdaptSetScaleSolveFailed(adapt, 0.5);
+//       adapt->ops->choose = TSAdaptChoose_user;
+//       TSAdaptSetMonitor( adapt, PETSC_TRUE);
+//       TSSetMaxSNESFailures( dummyts, -1);
+//     }
+//     TSSetUp(dummyts);
+//
+//     SNESGetKSP(dummysnes, & dummyKSP);
+//     //TSGetKSP(dummyts, & dummyKSP);
+//     KSPGetPC(dummyKSP, & dummypc);
+//
+//     PCSetType(dummypc,PCBJACOBI);
+//     KSPSetOptionsPrefix(dummyKSP, "dummyKSP_");
+//
+//     /* Logic below modifies the PC directly, so this is the last chance to change the solver from the command line */
+//     PetscCall(KSPSetFromOptions(dummyKSP));
+//
+//     PetscBool is_fieldsplit;
+//     {/* first level -> split ni from the rest : {ni}, {V Phi tau B}
+//         second level -> split tau from {V Phi B} : {ni}, {{tau},{V Phi B}}
+//         third level -> split V from {Phi B} : {ni}, {{tau},{{Phi B}, {V}}}
+//         fourth level -> split Phi from B : {ni}, {{tau},{{{Phi}, {B}}, {V}}}
+//         */
+//       IS            is[2];
+//       DMStagStencil stencil0[1], stencil1[10];
+//       PC            pc_notc, pc_noe;
+//
+//       const char *name[2] = {"ni", "TEBV"};
+//
+//       // First split is cells
+//       stencil0[0].loc = DMSTAG_ELEMENT;
+//       stencil0[0].c = 0;
+//
+//       // Second split is the rest
+//       for (PetscInt c=0; c<4; ++c) {
+//         stencil1[c].loc = DMSTAG_BACK_DOWN_LEFT;
+//         stencil1[c].c = c;
+//       }
+//       stencil1[4].loc = DMSTAG_LEFT;
+//       stencil1[4].c = 0;
+//       stencil1[5].loc = DMSTAG_BACK;
+//       stencil1[5].c = 0;
+//       stencil1[6].loc = DMSTAG_DOWN;
+//       stencil1[6].c = 0;
+//       stencil1[7].loc = DMSTAG_BACK_DOWN;
+//       stencil1[7].c = 0;
+//       stencil1[8].loc = DMSTAG_BACK_LEFT;
+//       stencil1[8].c = 0;
+//       stencil1[9].loc = DMSTAG_DOWN_LEFT;
+//       stencil1[9].c = 0;
+//
+//       PetscCall(DMStagCreateISFromStencils(da,1,stencil0,&is[0]));
+//       PetscCall(DMStagCreateISFromStencils(da,10,stencil1,&is[1]));
+//
+//       for (PetscInt i=0; i<2; ++i) {
+//         PetscCall(PCFieldSplitSetIS(dummypc,name[i],is[i]));
+//       }
+//
+//       for (PetscInt i=0; i<2; ++i) {
+//         PetscCall(ISDestroy(&is[i]));
+//       }
+//
+//       /* If the fieldsplit PC wasn't overridden, further split the second split */
+//       {
+//         PCType pc_type;
+//
+//
+//         PetscCall(KSPGetPC(dummyKSP, &dummypc));
+//         PetscCall(PCGetType(dummypc,&pc_type));
+//         PetscCall(PetscStrcmp(pc_type,PCFIELDSPLIT,&is_fieldsplit));
+//         if (is_fieldsplit) {
+//           DM            dm_notc;
+//           KSP           *sub_ksp;
+//
+//           PetscInt      n_splits;
+//           DMStagStencil stencil_notc_edges[3], stencil_notc_notedges[7];
+//           IS            is_notc[2];
+//           const char    *name_notc[2] = {"tau","EBV"};
+//
+//           PetscCall(PCSetUp(dummypc)); // Set up the Fieldsplit PC
+//           PetscCall(PCFieldSplitGetSubKSP(dummypc,&n_splits,&sub_ksp));
+//           PetscAssert(n_splits == 2,PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Expected a Fieldsplit PC with two fields");
+//           PetscCall(KSPGetPC(sub_ksp[1],&pc_notc));
+//           PetscCall(PetscFree(sub_ksp));
+//
+//           PetscCall(DMStagCreateCompatibleDMStag(da,4,1,1,0,&dm_notc));
+//
+//           // First split within notc is edges
+//           stencil_notc_edges[0].loc = DMSTAG_BACK_DOWN;
+//           stencil_notc_edges[0].c = 0;
+//           stencil_notc_edges[1].loc = DMSTAG_BACK_LEFT;
+//           stencil_notc_edges[1].c = 0;
+//           stencil_notc_edges[2].loc = DMSTAG_DOWN_LEFT;
+//           stencil_notc_edges[2].c = 0;
+//
+//           // Second split within notc is faces and vertices
+//           for (PetscInt c=0; c<3; ++c) {
+//             stencil_notc_notedges[c].loc = DMSTAG_BACK_DOWN_LEFT;
+//             stencil_notc_notedges[c].c = c;
+//           }
+//           stencil_notc_notedges[3].loc = DMSTAG_BACK_DOWN_LEFT;
+//           stencil_notc_notedges[3].c = 3;
+//           stencil_notc_notedges[4].loc = DMSTAG_LEFT;
+//           stencil_notc_notedges[4].c = 0;
+//           stencil_notc_notedges[5].loc = DMSTAG_BACK;
+//           stencil_notc_notedges[5].c = 0;
+//           stencil_notc_notedges[6].loc = DMSTAG_DOWN;
+//           stencil_notc_notedges[6].c = 0;
+//
+//           PetscCall(DMStagCreateISFromStencils(dm_notc,3,stencil_notc_edges,&is_notc[0]));
+//           PetscCall(DMStagCreateISFromStencils(dm_notc,7,stencil_notc_notedges,&is_notc[1]));
+//
+//           for (PetscInt i=0; i<2; ++i) {
+//             PetscCall(PCFieldSplitSetIS(pc_notc,name_notc[i],is_notc[i]));
+//           }
+//
+//           for (PetscInt i=0; i<2; ++i) {
+//             PetscCall(ISDestroy(&is_notc[i]));
+//           }
+//           PetscCall(DMDestroy(&dm_notc));
+//         }
+//       }
+//
+//       /* If the fieldsplit PC wasn't overridden, further split the second split of the second level */
+//       if (is_fieldsplit) {
+//         PCType pc_type;
+//
+//
+//         PetscCall(PCGetType(pc_notc,&pc_type));
+//         PetscCall(PetscStrcmp(pc_type,PCFIELDSPLIT,&is_fieldsplit));
+//         if (is_fieldsplit) {
+//           DM            dm_noe;
+//           KSP           *sub_ksp;
+//
+//           PetscInt      n_splits;
+//           DMStagStencil stencil_noe_EP[1], stencil_noe_notEP[6];
+//           IS            is_noe[2];
+//           const char    *name_noe[2] = {"EP", "BV"};
+//
+//           PetscCall(PCSetUp(pc_notc)); // Set up the Fieldsplit PC
+//           PetscCall(PCFieldSplitGetSubKSP(pc_notc,&n_splits,&sub_ksp));
+//           PetscAssert(n_splits == 2,PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Expected a Fieldsplit PC with two fields");
+//           PetscCall(KSPGetPC(sub_ksp[1],&pc_noe));
+//           PetscCall(PetscFree(sub_ksp));
+//
+//           PetscCall(DMStagCreateCompatibleDMStag(da,4,0,1,0,&dm_noe));
+//
+//           // First split within notv is 4th dofs on vertices
+//           stencil_noe_EP[0].loc = DMSTAG_BACK_DOWN_LEFT;
+//           stencil_noe_EP[0].c = 3;
+//
+//           // Second split within notv is faces and the first 3 dofs on vertices
+//           for (PetscInt c=0; c<3; ++c) {
+//             stencil_noe_notEP[c].loc = DMSTAG_BACK_DOWN_LEFT;
+//             stencil_noe_notEP[c].c = c;
+//           }
+//           stencil_noe_notEP[3].loc = DMSTAG_LEFT;
+//           stencil_noe_notEP[3].c = 0;
+//           stencil_noe_notEP[4].loc = DMSTAG_BACK;
+//           stencil_noe_notEP[4].c = 0;
+//           stencil_noe_notEP[5].loc = DMSTAG_DOWN;
+//           stencil_noe_notEP[5].c = 0;
+//
+//           PetscCall(DMStagCreateISFromStencils(dm_noe,1,stencil_noe_EP,&is_noe[0]));
+//           PetscCall(DMStagCreateISFromStencils(dm_noe,6,stencil_noe_notEP,&is_noe[1]));
+//
+//           for (PetscInt i=0; i<2; ++i) {
+//             PetscCall(PCFieldSplitSetIS(pc_noe,name_noe[i],is_noe[i]));
+//           }
+//
+//           for (PetscInt i=0; i<2; ++i) {
+//             PetscCall(ISDestroy(&is_noe[i]));
+//           }
+//           PetscCall(DMDestroy(&dm_noe));
+//         }
+//       }
+//
+//       PC            pc_noe_2;
+//
+//       /* If the fieldsplit PC wasn't overridden, further split the first split of the third level */
+//       if (is_fieldsplit) {
+//         PCType pc_type;
+//
+//
+//         PetscCall(PCGetType(pc_noe,&pc_type));
+//         PetscCall(PetscStrcmp(pc_type,PCFIELDSPLIT,&is_fieldsplit));
+//         if (is_fieldsplit) {
+//           DM            dm_notv;
+//           KSP           *sub_ksp;
+//
+//           PetscInt      n_splits;
+//           DMStagStencil stencil_notv_faces[3], stencil_notv_notfaces[3];
+//           IS            is_notv[2];
+//           const char    *name_notv[2] = {"B", "V"};
+//
+//           PetscCall(PCSetUp(pc_noe)); // Set up the Fieldsplit PC
+//           PetscCall(PCFieldSplitGetSubKSP(pc_noe,&n_splits,&sub_ksp));
+//           PetscAssert(n_splits == 2,PetscObjectComm((PetscObject)da),PETSC_ERR_SUP,"Expected a Fieldsplit PC with two fields");
+//           PetscCall(KSPGetPC(sub_ksp[1],&pc_noe_2));
+//           PetscCall(PetscFree(sub_ksp));
+//
+//           PetscCall(DMStagCreateCompatibleDMStag(da,3,0,1,0,&dm_notv));
+//
+//           // First split within notv is faces
+//           stencil_notv_faces[0].loc = DMSTAG_LEFT;
+//           stencil_notv_faces[0].c = 0;
+//           stencil_notv_faces[1].loc = DMSTAG_BACK;
+//           stencil_notv_faces[1].c = 0;
+//           stencil_notv_faces[2].loc = DMSTAG_DOWN;
+//           stencil_notv_faces[2].c = 0;
+//
+//           // Second split within notv is vertices
+//           for (PetscInt c=0; c<3; ++c) {
+//             stencil_notv_notfaces[c].loc = DMSTAG_BACK_DOWN_LEFT;
+//             stencil_notv_notfaces[c].c = c;
+//           }
+//
+//           PetscCall(DMStagCreateISFromStencils(dm_notv,3,stencil_notv_faces,&is_notv[0]));
+//           PetscCall(DMStagCreateISFromStencils(dm_notv,3,stencil_notv_notfaces,&is_notv[1]));
+//
+//
+//           for (PetscInt i=0; i<2; ++i) {
+//             PetscCall(PCFieldSplitSetIS(pc_noe_2,name_notv[i],is_notv[i]));
+//           }
+//
+//           for (PetscInt i=0; i<2; ++i) {
+//             PetscCall(ISDestroy(&is_notv[i]));
+//           }
+//           PetscCall(DMDestroy(&dm_notv));
+//         }
+//       }
+//     }
+//
+//     KSPSetTolerances(dummyKSP,1e-5,PETSC_DEFAULT,PETSC_DEFAULT,300);
+//
+//     TSSolve(dummyts, user->X_star);
+//     TSGetSolveTime(dummyts, & ftime);
+//     TSGetStepNumber(dummyts, & steps);
+//     TSGetConvergedReason(dummyts, & reason);
+//     PetscPrintf(PETSC_COMM_WORLD, "PRESTEP => Computing (B_star,E_star): %s at time %g after %d steps, count =%d\n", TSConvergedReasons[reason], (double) ftime, steps, count);
+//     //DumpSolution(ts, 50, X, user);
+//     MatDestroy( & J);
+//
+//     {
+//       Vec diffX;
+//       PetscReal norm_2, norm_max;
+//       VecDuplicate(X, & diffX);
+//       VecZeroEntries(diffX);
+//       VecWAXPY(diffX, -1.0, user -> X_star, X);
+//       VecNorm(diffX, NORM_2, & norm_2);
+//       VecNorm(diffX, NORM_MAX, & norm_max);
+//       TSGetTimeStep(dummyts, & dt);
+//       PetscPrintf(PETSC_COMM_WORLD, "Timestep %3D (PREDICTOR): step size = %g, time = %g, 2-norm of X^{n} - X^{n+1,*} = %g, max norm of X^{n} - X^{n+1,*} = %g  , count =%d\n", (int)(step + user -> oldstep), (double) dt, (double) time, (double) norm_2, (double) norm_max, count);
+//       VecDestroy(& diffX);
+//     }
+//
+//     TSDestroy( & dummyts);
+//    // RuKS_reset(user->runaway_solver);
+//     PetscPrintf(PETSC_COMM_WORLD, "(B_{n},E_{n})*(t_{n+1} - t)+ (B_{n+1,\ast},E_{n+1,\ast})*(t-t_n)/dt at time %g, count =%d \n", (double) ftime, count);
+//     // PushParticles(ts, X, user->X_star, user);
+//     PetscPrintf(PETSC_COMM_WORLD, "(B_{n},E_{n})*(t_{n+1} - t)+ (B_{n+1,\ast},E_{n+1,\ast})*(t-t_n)/dt finish \n", (double) ftime, count);
+//     /* user->present_current = RuKS_getIre(user->runaway_solver); */
+//   }
+//   // runaway_saveState(user->manager);
+//   return 0;
+// }
 
 PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) {
 
@@ -19805,7 +19804,7 @@ PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) 
     PetscReal norm_2, norm_max;
     VecDuplicate(X, & diffX);
     VecZeroEntries(diffX);
-    VecWAXPY(diffX, -1.0, user -> oldX, X);
+    VecWAXPY(diffX, -1.0, user -> X0, X);
     VecNorm(diffX, NORM_2, & norm_2);
     VecNorm(diffX, NORM_MAX, & norm_max);
     PetscPrintf(PETSC_COMM_WORLD, "Timestep %3D (CORRECTOR): step size = %g, time = %g, 2-norm of X^{n+1} - X^{n} = %g, max norm of X^{n+1} - X^{n} = %g\n", (int)(step + user -> oldstep), (double) dt, (double) time, (double) norm_2, (double) norm_max);
@@ -19856,7 +19855,7 @@ PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) 
 
     if (step != 0) {
       VecCopy(X, LapV); /* LapV := X */
-      VecAXPBY(LapV, -10.0, 10.0, user -> oldX); /* LapV := - (1/dt) oldX + (1/dt) LapV */
+      VecAXPBY(LapV, -10.0, 10.0, user -> X0); /* LapV := - (1/dt) oldX + (1/dt) LapV */
       sprintf(prefix, "dv");
       DumpVelocity_Cell(ts, (int)(step + user -> oldstep), LapV, prefix, user);
     }
@@ -19944,9 +19943,9 @@ PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) 
 
   if (step != 0) {
     FormPrimaryCurl(ts, X, curl, user);
-    VecAXPBYPCZ(postprocX, 1.0, -user -> dt, 0.0, user -> oldX, curl); /* postprocX = oldX - dt * curl */
+    VecAXPBYPCZ(postprocX, 1.0, -user -> dt, 0.0, user -> X0, curl); /* postprocX = oldX - dt * curl */
   }
-  VecCopy(X, user -> oldX);
+  VecCopy(X, user -> X0);
 
 
   /* Check that the solution is divergence-free */
@@ -20041,536 +20040,7 @@ PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) 
   return 0;
 }
 
-PetscErrorCode FormDummyIJacobian(TS ts, PetscReal t, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
-  User * user = (User * ) ptr;
-  DM da, coordDA = user -> coorda;
-  PetscInt startr, startphi, startz, nr, nphi, nz;
-  PetscInt N[3], er, ephi, ez, d;
-
-  MatZeroEntries(Jpre);
-  TSGetDM(ts, & da);
-  DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-  DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-
-  /* Loop over all local elements */
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-        DMStagStencil row, col[5];
-        PetscScalar valJ[5];
-        PetscInt nEntries;
-
-        /* The edges are oriented in the directions of unit vectors: e_r, e_phi and e_z */
-
-        /* B Field part */
-
-        /*if (!(er == 0)){*/
-        /* Equation on left face */
-        nEntries = 1;
-        row.i = er;
-        row.j = ephi;
-        row.k = ez;
-        row.loc = LEFT;
-        row.c = 0;
-
-        col[0].i = er;
-        col[0].j = ephi;
-        col[0].k = ez;
-        col[0].loc = LEFT;
-        col[0].c = 0;
-        valJ[0] = a;
-
-        DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        /*}*/
-
-        /*if(user->phibtype || (ephi != 0 && !(user->phibtype)) ){*/
-        /* Equation on down face */
-        nEntries = 1;
-        row.i = er;
-        row.j = ephi;
-        row.k = ez;
-        row.loc = DOWN;
-        row.c = 0;
-
-        col[0].i = er;
-        col[0].j = ephi;
-        col[0].k = ez;
-        col[0].loc = DOWN;
-        col[0].c = 0;
-        valJ[0] = a;
-
-        DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        /*}*/
-
-        /*if (!(ez == 0)){*/
-        /* Equation on back face */
-        nEntries = 1;
-        row.i = er;
-        row.j = ephi;
-        row.k = ez;
-        row.loc = BACK;
-        row.c = 0;
-
-        col[0].i = er;
-        col[0].j = ephi;
-        col[0].k = ez;
-        col[0].loc = BACK;
-        col[0].c = 0;
-        valJ[0] = a;
-
-        DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        /*}*/
-
-        if (er == N[0] - 1) {
-          /* Equation on right boundary face */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = RIGHT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = RIGHT;
-          col[0].c = 0;
-          valJ[0] = a;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if (ephi == N[1] - 1 && !(user -> phibtype)) {
-          /* Equation on up boundary face */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = UP;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = UP;
-          col[0].c = 0;
-          valJ[0] = a;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if (ez == N[2] - 1) {
-          /* Equation on front boundary face */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = FRONT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = FRONT;
-          col[0].c = 0;
-          valJ[0] = a;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-      }
-    }
-  }
-
-  MatAssemblyBegin(Jpre, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(Jpre, MAT_FINAL_ASSEMBLY);
-
-  if (J != Jpre) {
-    MatAssemblyBegin(J, MAT_FINAL_ASSEMBLY);
-    MatAssemblyEnd(J, MAT_FINAL_ASSEMBLY);
-  }
-  if (user -> debug) {
-    PetscPrintf(PETSC_COMM_WORLD, "Jpre:\n");
-    MatView(Jpre, PETSC_VIEWER_STDOUT_WORLD);
-  }
-  return (0);
-}
-
-PetscErrorCode FormDummyIJacobian2(TS ts, PetscReal t, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
-  User * user = (User * ) ptr;
-  DM da, coordDA = user -> coorda;
-  PetscInt startr, startphi, startz, nr, nphi, nz;
-  PetscInt N[3], er, ephi, ez, d;
-
-  MatZeroEntries(Jpre);
-  TSGetDM(ts, & da);
-  DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-  DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-
-  /* Loop over all local elements */
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-        DMStagStencil row, col[5];
-        PetscScalar valJ[5];
-        PetscInt nEntries;
-
-        /* The edges are oriented in the directions of unit vectors: e_r, e_phi and e_z */
-
-        /* E field part */
-
-        if (er == 0 || ez == 0) {
-          /* Equation on the back or left boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = BACK_LEFT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = BACK_LEFT;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if ((user -> phibtype && (er == 0)) || (((er == 0 || ephi == 0)) && !(user -> phibtype))) {
-          /* Equation on the left or down boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = DOWN_LEFT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = DOWN_LEFT;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if ((user -> phibtype && (ez == 0)) || (((ephi == 0 || ez == 0)) && !(user -> phibtype))) {
-          /* Equation on the left or down boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = BACK_DOWN;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = BACK_DOWN;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if (er == N[0] - 1) {
-          /* Equation on the right boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = BACK_RIGHT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = BACK_RIGHT;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-
-          /* Equation on the right boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = DOWN_RIGHT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = DOWN_RIGHT;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if (ephi == N[1] - 1 && !(user -> phibtype)) {
-          /* Equation on the up boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = BACK_UP;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = BACK_UP;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-
-          /* Equation on the up boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = UP_LEFT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = UP_LEFT;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if (ez == N[2] - 1) {
-          /* Equation on the front boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = FRONT_LEFT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = FRONT_LEFT;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-
-          /* Equation on the front boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = FRONT_DOWN;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = FRONT_DOWN;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if (er == N[0] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
-          /* Equation on the right and up boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = UP_RIGHT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = UP_RIGHT;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if (ephi == N[1] - 1 && ez == N[2] - 1 && !(user -> phibtype)) {
-          /* Equation on the right and up boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = FRONT_UP;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = FRONT_UP;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if (er == N[0] - 1 && ez == N[2] - 1) {
-          /* Equation on the front and right boundary */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = FRONT_RIGHT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = FRONT_RIGHT;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if ((user -> phibtype && !(er == 0)) || ((!(er == 0 || ephi == 0)) && !(user -> phibtype))) {
-          /* Equation on internal down left edge */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = DOWN_LEFT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = DOWN_LEFT;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if ((user -> phibtype && !(ez == 0)) || ((!(ez == 0 || ephi == 0)) && !(user -> phibtype))) {
-          /* Equation on internal back down edge */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = BACK_DOWN;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = BACK_DOWN;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-        if (!(er == 0 || ez == 0)) {
-          /* Equation on internal back left edge */
-          nEntries = 1;
-          row.i = er;
-          row.j = ephi;
-          row.k = ez;
-          row.loc = BACK_LEFT;
-          row.c = 0;
-
-          col[0].i = er;
-          col[0].j = ephi;
-          col[0].k = ez;
-          col[0].loc = BACK_LEFT;
-          col[0].c = 0;
-          valJ[0] = 1.0;
-
-          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-        }
-
-      }
-    }
-  }
-
-  MatAssemblyBegin(Jpre, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(Jpre, MAT_FINAL_ASSEMBLY);
-
-  if (J != Jpre) {
-    MatAssemblyBegin(J, MAT_FINAL_ASSEMBLY);
-    MatAssemblyEnd(J, MAT_FINAL_ASSEMBLY);
-  }
-  if (user -> debug) {
-    PetscPrintf(PETSC_COMM_WORLD, "Jpre:\n");
-    MatView(Jpre, PETSC_VIEWER_STDOUT_WORLD);
-  }
-  return (0);
-}
-
-PetscErrorCode FormDummyIJacobian3(TS ts, PetscReal t, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
-  User * user = (User * ) ptr;
-  DM da, coordDA = user -> coorda;
-  PetscInt startr, startphi, startz, nr, nphi, nz;
-  PetscInt N[3], er, ephi, ez, d;
-
-  MatZeroEntries(Jpre);
-  TSGetDM(ts, & da);
-  DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-  DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-
-  /* Loop over all local elements */
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-        DMStagStencil row, col[1];
-        PetscScalar valJ[1];
-        PetscInt nEntries = 1;
-
-        /* density field part: n_i */
-
-        nEntries = 1;
-        row.i = er;
-        row.j = ephi;
-        row.k = ez;
-        row.loc = ELEMENT;
-        row.c = 0;
-
-        col[0].i = er;
-        col[0].j = ephi;
-        col[0].k = ez;
-        col[0].loc = ELEMENT;
-        col[0].c = 0;
-        valJ[0] = 1.0;
-
-        DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
-      }
-    }
-  }
-
-  MatAssemblyBegin(Jpre, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(Jpre, MAT_FINAL_ASSEMBLY);
-
-  if (J != Jpre) {
-    MatAssemblyBegin(J, MAT_FINAL_ASSEMBLY);
-    MatAssemblyEnd(J, MAT_FINAL_ASSEMBLY);
-  }
-  if (user -> debug) {
-    PetscPrintf(PETSC_COMM_WORLD, "Jpre:\n");
-    MatView(Jpre, PETSC_VIEWER_STDOUT_WORLD);
-  }
-  return (0);
-}
-
-PetscErrorCode FormDummyIJacobian4(TS ts, PetscReal t, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
+PetscErrorCode FormDummyIJacobian4(TS ts, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
   User * user = (User * ) ptr;
   DM da, coordDA = user -> coorda;
   PetscInt startr, startphi, startz, nr, nphi, nz;
@@ -23447,7 +22917,6 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
     TSDestroy( & dummyts);
   }
 
-  //  if(0){
   if ( (user -> ictype == 9 || user -> ictype == 15) && (user -> itime == 0.0) && 1) {
     SNES dummysnes;
     TS dummyts;
@@ -23735,15 +23204,6 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
     //DumpSolution(ts, 50, X, user);
     MatDestroy( & J);
     TSDestroy( & dummyts);
-  }
-
-  if(0){
-    Vec curl;
-    VecGetSubVector( X, user -> isV, & curl);
-    VecSet(curl, 1.0); // B := tilde{B} = (B_0^-1) B
-    VecRestoreSubVector( X, user -> isV, & curl);
-    //Destroy vectors
-    VecDestroy(& curl);
   }
 
   DMStagVecRestoreArrayRead(dmCoord, coordLocal, & arrCoord);
