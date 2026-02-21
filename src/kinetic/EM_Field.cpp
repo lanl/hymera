@@ -43,13 +43,7 @@ void dumpToHDF5(EM_Field f, const int i_file, const Real t) {
       f.hermite_data.extent(3),
       f.hermite_data.extent(6),
       f.hermite_data.extent(7));
-  Kokkos::parallel_for("psi_compute",
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {f.nphi_data,f.nt}),
-  KOKKOS_LAMBDA(int k, int ti){
-    auto sbv_hermite_data = Kokkos::subview(f.hermite_data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, 0, Kokkos::ALL, k, ti);
-    auto sbv_psi_data = Kokkos::subview(psi_hermite_data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, k, ti);
-    computeFlux<2>(sbv_hermite_data, sbv_psi_data, f.hR, f.hZ);
-  });
+  computeFlux<2>(f.hermite_data, psi_hermite_data, f.hR, f.hZ);
 
   Kokkos::parallel_for("eval fields",
   Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {Nplot,Nplot}),
@@ -60,7 +54,7 @@ void dumpToHDF5(EM_Field f, const int i_file, const Real t) {
     Dim5 X = {0.0,0.0,R,0.0,Z};
 
     auto ret = f(X, t, B, curlB, dBdR, dBdZ, E, Jre, V, dbdt);
-    KOKKOS_ASSERT((ret == SUCCESS) || (ret == WALL_IMPACT));
+    KOKKOS_ASSERT((ret == Success) || (ret == WallImpact));
     Real psi;
     ret = f.evalPsi(psi, X, t, psi_hermite_data);
     KOKKOS_ASSERT(ret == SUCCESS);

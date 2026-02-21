@@ -79,14 +79,14 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
       dXdt[2] = 0.0;
       dXdt[3] = 0.0;
       dXdt[4] = 0.0;
-      return SUCCESS;
+      return ErrorCode::Success;
     }
 
 
     Dim3 vB = {}, dBdR = {}, dBdZ = {}, curlB = {}, E = {}, dbdt = {};
 
     ERROR_CODE status = field(X, t, vB, curlB, dBdR, dBdZ, E, dbdt);
-    if (status != ERROR_CODE::SUCCESS)
+    if (status != ErrorCode::Success)
       return status;
 
 
@@ -204,7 +204,7 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
                         b_x_gradlnB[i] +
                     c_aw0 / Bpar * E_x_b[i];
     dXdt[3] = 0.0;
-    return SUCCESS;
+    return ErrorCode::Success;
   };
 
 

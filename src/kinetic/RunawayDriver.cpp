@@ -125,7 +125,7 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
 
             auto ret = solve_dopri5(gce, X, t, t + dtSA, rtol, atol, h, 1e-9,
                          std::numeric_limits<int>::max(), work_d);
-            if (ret != SUCCESS) {
+            if (ret != ErrorCode::Success) {
               pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
               if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
                 swarm_d.MarkParticleForRemoval(n);
@@ -536,7 +536,7 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
         Dim5 X = {0.0,0.0,R,0.0,Z};
 
         auto ret = field_interpolation(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-        if (ret == SUCCESS) integral_ohmic += cdg.dR * cdg.dZ * curlB[1];
+        if (ret == ErrorCode::Success) integral_ohmic += cdg.dR * cdg.dZ * curlB[1];
       },
       I_re_integral, I_ohmic);
 
@@ -556,13 +556,7 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
         field_interpolation.hermite_data.extent(3),
         field_interpolation.hermite_data.extent(6),
         field_interpolation.hermite_data.extent(7));
-    Kokkos::parallel_for("psi_compute",
-    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {field_interpolation.nphi_data,field_interpolation.nt}),
-    KOKKOS_LAMBDA(int k, int ti){
-      auto sbv_hermite_data = Kokkos::subview(field_interpolation.hermite_data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, 0, Kokkos::ALL, k, ti);
-      auto sbv_psi_data = Kokkos::subview(psi_hermite_data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, k, ti);
-      computeFlux<2>(sbv_hermite_data, sbv_psi_data, field_interpolation.hR, field_interpolation.hZ);
-    });
+    computeFlux<2>(field_interpolation.hermite_data, psi_hermite_data, field_interpolation.hR, field_interpolation.hZ);
     Kokkos::parallel_reduce(
         PARTHENON_AUTO_LABEL, pack_swarm_r.GetMaxFlatIndex() + 1,
         // loop over all particles
