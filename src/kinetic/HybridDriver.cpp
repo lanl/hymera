@@ -64,8 +64,6 @@ TaskStatus Interpolate(Mesh *pm, User *p_mhd_config, int ncycle) {
 
   Kokkos::deep_copy(field_data, field_data_h);
   f.interpolate();
-  if (Globals::my_rank == 0)
-    dumpToHDF5(f, ncycle, 0.0);
 
   return TaskStatus::complete;
 }

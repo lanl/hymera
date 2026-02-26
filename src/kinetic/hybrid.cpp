@@ -19,45 +19,56 @@ using namespace parthenon::driver::prelude;
 
 
 int main(int argc, char *argv[]) {
-  User mhd_config;
-  mhd_PetscInit(argc, argv);
-
+///  User mhd_config;
+///  mhd_PetscInit(argc, argv);
+///
   ParthenonManager pman;
+  for (int i = 0; i < argc; ++i) {
+    std::cout << argv[i] << std::endl;
+  }
   auto manager_status = pman.ParthenonInitEnv(argc, argv);
-  if (manager_status == ParthenonStatus::complete) {
-    pman.ParthenonFinalize();
-    return 0;
-  }
-  if (manager_status == ParthenonStatus::error) {
-    pman.ParthenonFinalize();
-    return 1;
-  }
-
- User * p_mhd_config = &mhd_config;
-  pman.app_input->ProcessPackages = [=](std::unique_ptr<ParameterInput> &pin) {
-    Packages_t packages;
-    packages.Add(Kinetic::Initialize(pin.get(), p_mhd_config));
-    return packages;
-  };
-  pman.app_input->ProblemGenerator = GenerateParticleCurrentDensity;
-  pman.app_input->UserWorkBeforeLoop = [=](Mesh * pm, ParameterInput * pin, SimTime const & tm) {
-    Kinetic::WorkBeforeLoop(pm, p_mhd_config);
-  };
-
-  pman.app_input->UserWorkBeforeRestartOutput = [=](Mesh * pm, ParameterInput * pin, SimTime const & tm, OutputParameters* op) {
-    Kinetic::WorkBeforeRestartOutput(pm, pin, op, p_mhd_config);
-  };
-
-  pman.app_input->UserMeshWorkBeforeOutput = Kinetic::WorkBeforeOutput;
-
-  pman.ParthenonInitPackagesAndMesh();
-  Kinetic::ComputeParticleWeights(pman.pmesh.get());
-
-  Kinetic::HybridDriver driver(pman.pinput.get(), pman.app_input.get(), pman.pmesh.get(),
-      p_mhd_config);
-  driver.Execute();
-
-  mhd_destroy(p_mhd_config);
+  if (Globals::my_rank == 0) std::cout << (manager_status == ParthenonStatus::complete ? "complete" : "not complete") << std::endl;
+  if (Globals::my_rank == 0) std::cout << (manager_status == ParthenonStatus::ok ? "ok" : "not ok") << std::endl;
+  if (Globals::my_rank == 0) std::cout << ((Globals::is_restart) ? "true" : "false") << std::endl;
+  std::cout << Globals::my_rank << " " << Globals::nranks << std::endl;
   pman.ParthenonFinalize();
   return 0;
 }
+
+//   if (manager_status == ParthenonStatus::complete) {
+//     pman.ParthenonFinalize();
+//     return 0;
+//   }
+//   if (manager_status == ParthenonStatus::error) {
+//     pman.ParthenonFinalize();
+//     return 1;
+//   }
+//
+//  User * p_mhd_config = &mhd_config;
+//   pman.app_input->ProcessPackages = [=](std::unique_ptr<ParameterInput> &pin) {
+//     Packages_t packages;
+//     packages.Add(Kinetic::Initialize(pin.get(), p_mhd_config));
+//     return packages;
+//   };
+//   pman.app_input->ProblemGenerator = GenerateParticleCurrentDensity;
+//   pman.app_input->UserWorkBeforeLoop = [=](Mesh * pm, ParameterInput * pin, SimTime const & tm) {
+//     Kinetic::WorkBeforeLoop(pm, p_mhd_config);
+//   };
+//
+//   pman.app_input->UserWorkBeforeRestartOutput = [=](Mesh * pm, ParameterInput * pin, SimTime const & tm, OutputParameters* op) {
+//     Kinetic::WorkBeforeRestartOutput(pm, pin, op, p_mhd_config);
+//   };
+//
+//   pman.app_input->UserMeshWorkBeforeOutput = Kinetic::WorkBeforeOutput;
+//
+//   pman.ParthenonInitPackagesAndMesh();
+//   Kinetic::ComputeParticleWeights(pman.pmesh.get());
+//
+//   Kinetic::HybridDriver driver(pman.pinput.get(), pman.app_input.get(), pman.pmesh.get(),
+//       p_mhd_config);
+//   driver.Execute();
+//
+//   mhd_destroy(p_mhd_config);
+//   pman.ParthenonFinalize();
+//   return 0;
+// }

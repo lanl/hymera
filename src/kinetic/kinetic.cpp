@@ -453,11 +453,14 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 }
 
 void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm) {
-
+  if (Globals::my_rank == 0) {
+    auto pkg = pm->packages.Get("Deck");
+    auto f = pkg->Param<EM_Field>("Field");
+    dumpToHDF5(f, tm.ncycle, 0.0);
+  }
 }
 
 void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context) {
-
   auto signal = SignalHandler::CheckSignalFlags();
   std::string ext = pin->GetOrAddString("MHD_Config", "file_extention", "dat");
 
@@ -467,8 +470,7 @@ void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters *
 
   if (signal == SignalHandler::OutputSignal::now) {
     filename.append("now");
-  } else if (signal == SignalHandler::OutputSignal::final &&
-             op -> file_label_final) {
+  } else if (op -> file_label_final) {
     filename.append("final");
     // default time based data dump
   } else {
@@ -485,7 +487,9 @@ void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters *
 }
 
 void WorkBeforeLoop(Mesh * pm, User* mhd_context) {
+  if (Globals::my_rank == 0) std::cout << "WorkBeforeLoop: start\n";
   if (Globals::is_restart) {
+    if (Globals::my_rank == 0) std::cout << "WorkBeforeLoop: reading mhd restart\n";
     auto pkg = pm->packages.Get("Deck");
     auto filename = pkg -> Param<std::string>("mhd_restart_filename");
 
