@@ -46,11 +46,12 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   static constexpr Real e = pc::qe;      ///< electron charge [C]
 
   /// Time discretization parameters
-  const Real dt_mhd = pin->GetOrAddReal("Time","dt_mhd", 86.19e-6);       ///< mhd timestep [s]
-  const Real dt_cd =  pin->GetOrAddReal("Time","dt_cd",  dt_mhd * 1e-1);  ///< current deposit timestep for electric field readjustment [s]
-  const Real dt_LA =  pin->GetOrAddReal("Time","dt_LA",  dt_cd  * 1e-1 ); ///< large-angle collision step [s]
-  const Real final_time = pin->GetOrAddReal("Time", "final_time", 1.0);   /// Final time [s]
+  const Real dt_mhd     = pin->GetOrAddReal("parthenon/time","dt_force", 0.00108);
+  const Real final_time = pin->GetOrAddReal("parthenon/time","tlim", 40*dt_mhd);
 
+  const int nPR = pin->GetOrAddInteger("Time","nPR", 0);  ///< current deposit timestep for electric field readjustment [s]
+  const int nCD = pin->GetOrAddInteger("Time","nCD", 10);  ///< current deposit timestep for electric field readjustment [s]
+  const int nLA = pin->GetOrAddInteger("Time","nLA", 50); ///< large-angle collision step [s]
   const Real timeStep = pin->GetOrAddReal("Simulation", "hRK", 1.e-6);    /// Runge kutta time in tau_c [-]
   const Real atol = pin->GetOrAddReal("Simulation", "atol", 1.e-6);      /// Absoulte tolerance for RK [-]
   const Real rtol = pin->GetOrAddReal("Simulation", "rtol", 1.e-5);       /// Realative toleratnce for RK[ [-]
@@ -78,7 +79,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real fI = pin->GetOrAddReal("Plasma", "fI", 100.0);  ///<Fraction of impurity density, normalized to deuterium denstiy (nD0)
   const Real nI = fI*nD0; ///< Impurity density [m^-3]
   const Real n_e0 = nD0 + ZI*nI; ///< Free electron density [m^-3]
-  const Real Zeff = pin->GetOrAddReal("Plasma", "Zeff", (ZI*ZI*nI + nD0)/n_e0);
+  const Real Zeff = pin->GetOrAddReal("Plasma", "Zeff", (ZI*ZI*nI + nD0)/n_e0); // TODO: why ZI is a square?
   const Real NeI = Z0 - ZI; ///< Number of bound electrons
   const Real Coulog0 = pin->GetOrAddReal("Plasma", "Coulog0", 14.9 - 0.5*log(n_e0/1.0e20) + log(Te0/1.e3));
   const Real Rc = pin->GetOrAddReal("Plasma", "Rc", 3.1158966549999998e+00); ///< Initial guess for magnetic axis, R [-], length normalized
@@ -114,7 +115,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   ///< Numerical paremters
   const Real dampV                  = pin->GetOrAddReal("Numerical", "dampV", 0.01); ///< Stabilization coefficeint for velocity gradient
-  const Real itime                  = pin->GetOrAddReal("Numerical", "itime", 0.0); ///< Initial time for mhd counters
+  const Real itime                  = pin->GetOrAddReal("Numerical", "itime", 0.0); ///< Initial time for mhd counters [sec]
   const int NR                      = pin->GetOrAddInteger("Numerical", "NR", 100);
   const int Nphi                    = pin->GetOrAddInteger("Numerical", "Nphi", 2);
   const int NZ                      = pin->GetOrAddInteger("Numerical", "NZ", 200);
@@ -166,7 +167,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     mhd_context->Nphi                   = Nphi;
     mhd_context->Nz                     = NZ;
     mhd_context->Re                     = Re;
-    mhd_context->itime                  = itime * tau_c / tauA;
+    mhd_context->itime                  = itime / tauA;
     mhd_context->ftime                  = final_time / tauA;
     mhd_context->phibtype               = pin->GetOrAddInteger("MHD_Config", "phibtype",  1);
     mhd_context->dr                     = dR;
@@ -231,12 +232,11 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   auto pkg = std::make_shared<StateDescriptor>("Deck");
 
-  pkg->AddParam("dt_LA",  dt_LA / tau_c);
-  pkg->AddParam("dt_cd",  dt_cd / tau_c);
-  pkg->AddParam("dt_mhd", dt_mhd / tau_c);
+  pkg->AddParam("nPR",  nPR);
+  pkg->AddParam("nCD",  nCD);
+  pkg->AddParam("nLA",  nLA);
 
-  pin->GetOrAddReal("parthenon/time","tlim",0.0);                 ///<WARNING: Setting this different in the input file would cause UB!
-  pin->GetOrAddReal("parthenon/time","dt_force",dt_LA / tau_c);   ///<WARNING: Setting this different in the input file would cause UB!
+  pkg->AddParam("tau_c",  tau_c);
 
 
   const std::string filePath = pin->GetOrAddString("Simulation", "file_path", "current.out");
@@ -249,14 +249,10 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real p_BC = momentum_(pin->GetOrAddReal("BoundaryConditions", "gamma_BC", 1.02));
   const Real p_RE = momentum_(pin->GetOrAddReal("BoundaryConditions", "gamma_RE", 1.02));
 
-  pkg->AddParam("gamma_min", std::make_shared<Real>(gamma_min));
-  pkg->AddParam("p_BC", std::make_shared<Real>(p_BC));
-  pkg->AddParam("p_RE", std::make_shared<Real>(p_RE));
+  pkg->AddParam("gamma_min", gamma_min);
+  pkg->AddParam("p_BC", p_BC);
+  pkg->AddParam("p_RE", p_RE);
 
-  auto ts = std::make_shared<int>(0);
-  pkg->AddParam("ts", ts);
-
-  pkg->AddParam("final_time", final_time);
   pkg->AddParam("hRK", timeStep);
   pkg->AddParam("atol", atol);
   pkg->AddParam("rtol", rtol);
@@ -299,8 +295,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   ConfigurationDomainGeometry cdg(RminCellCenter, ZminCellCenter, dR, dZ, -3, indicator);
   pkg->AddParam("CDG", cdg);
-  auto f = std::make_shared<EM_Field>(NR, NZ, nphi_data, nt, RminCellCenter, ZminCellCenter, dR, dZ, En, eta_mu0aVa, etaec_a3VaB0, cdg);
-  auto field_data = f -> getDataRef();
+  EM_Field f(NR, NZ, nphi_data, nt, RminCellCenter, ZminCellCenter, dR, dZ, En, eta_mu0aVa, etaec_a3VaB0, cdg);
+  auto field_data = f.getDataRef();
 
   using Host = Kokkos::HostSpace;
   using Unmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged>;
@@ -309,6 +305,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   mhd_getF(mhd_context, 0, B);
   mhd_getF(mhd_context, 1, V);
   Kokkos::View<Real******, Kokkos::LayoutLeft, Host, Unmanaged> field_data_h(mhd_context->field_data, NR, NZ, 4, 3, 1, 2);
+  Kokkos::deep_copy(field_data_h, 0.0);
   Kokkos::View<Real***, Kokkos::LayoutLeft, Host, Unmanaged> Bh(B, NR, NZ, 3);
   auto Bsub = Kokkos::subview(field_data_h, Kokkos::ALL, Kokkos::ALL, 0, Kokkos::ALL, 0, 0);
   Kokkos::deep_copy(Bsub, Bh);
@@ -318,11 +315,11 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   Kokkos::deep_copy(field_data, field_data_h);
   delete[] B;
   delete[] V;
-  f -> interpolate();
+  f.interpolate();
   pkg->AddParam("Field", f);
   pkg->AddParam("FieldData", field_data_h);
 
-  auto jre = f -> getJreDataSubview();
+  auto jre = f.getJreDataSubview();
   Kokkos::View<double***> jre_backup("jre_backup", jre.extent(0), jre.extent(1), jre.extent(2));
   pkg->AddParam("JreBackup", jre_backup);
 
@@ -390,13 +387,14 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     ofs << std::format("{:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s}",
         "#     p", "gamma", "dtSA", "psi", "CB", "CF", "CouLogee ratio", "probability");
     Real p = momentum_(1. + 2.e-3);
+    Real dt_LA = (dt_mhd / nCD) / nLA;
     while (p < pkg->Param<Real>("pmax") + 20.0) {
       auto cc = sa.getCollisionCoefficients(p);
       ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
           p, gamma_(p),
           sa.getSmallAngleCollisionTimestep(p),
           cc.psi, cc.CB, cc.CF, cc.CouLogee_ratio,
-          ms.computeProbability(p, 1.0, pkg->Param<Real>("dt_LA"), 1.002)
+          ms.computeProbability(p, 1.0, dt_LA, 1.002)
       ) << std::endl;
 
       p += 1e-2;
@@ -445,8 +443,56 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 	pkg->AddSwarmValue(p_phi::name(), "particles",real_swarmvalue_metadata);
   pkg->AddSwarmValue(mu::name(), "particles",real_swarmvalue_metadata);
 
+  // This filename is updated with OutputParameters.file_number and file_basename before each restart.
+  // It is required to remember the Petsc file name associated with Parthenon restart.
+  // Petsc file is where the mhd state is stored, it is separate from Parthenon restart file
+  std::string mhd_restart_filename = "";
+  pkg->AddParam("mhd_restart_filename", mhd_restart_filename, Params::Mutability::Restart);
+
   return pkg;
 }
+
+void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm) {
+
+}
+
+void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context) {
+
+  auto signal = SignalHandler::CheckSignalFlags();
+  std::string ext = pin->GetOrAddString("MHD_Config", "file_extention", "dat");
+
+  std::string filename = std::format("{}.{}.",
+      op -> file_basename,
+      op -> file_id);
+
+  if (signal == SignalHandler::OutputSignal::now) {
+    filename.append("now");
+  } else if (signal == SignalHandler::OutputSignal::final &&
+             op -> file_label_final) {
+    filename.append("final");
+    // default time based data dump
+  } else {
+    filename.append(std::format("{:0>{}}", op->file_number, op -> file_number_width));
+  }
+
+  filename.append(".r");
+  filename.append(ext);
+
+  mhd_savesolution(mhd_context, filename.c_str());
+
+  auto pkg = pm->packages.Get("Deck");
+  pkg->UpdateParam("mhd_restart_filename", filename);
+}
+
+void WorkBeforeLoop(Mesh * pm, User* mhd_context) {
+  if (Globals::is_restart) {
+    auto pkg = pm->packages.Get("Deck");
+    auto filename = pkg -> Param<std::string>("mhd_restart_filename");
+
+    mhd_loadsolution(mhd_context, filename.c_str());
+  }
+}
+
 
 
 void SaveRawFieldData(ParthenonManager * man, const char* filename ) {
@@ -490,48 +536,6 @@ void LoadRawFieldData(User* mhd_config, const char* filename ) {
     H5Fclose(file);
 }
 
-void Push(ParthenonManager * man) {
-  auto pkg = man->pmesh.get()->packages.Get("Deck");
-  auto driver = pkg->Param<std::shared_ptr<RunawayDriver>>("Driver");
-
-
-  auto f = pkg->Param<std::shared_ptr<EM_Field>>("Field");
-  auto field_data = f -> getDataRef();
-  using Host = Kokkos::HostSpace;
-  using Unmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged>;
-  auto field_data_h = pkg->Param<Kokkos::View<Real******, Kokkos::LayoutLeft, Host, Unmanaged>>("FieldData");
-  Kokkos::deep_copy(field_data, field_data_h);
-
-  // Set current timeframe
-  const auto dt_mhd = pkg->Param<Real>("dt_mhd");
-  const auto dt_cd = pkg->Param<Real>("dt_cd");
-
-  // Zero out current
-  using Host = Kokkos::HostSpace;
-  using Unmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged>;
-  auto jre_mhd = pkg->Param<Kokkos::View<Real****, Kokkos::LayoutLeft, Host, Unmanaged>>("JreData");
-  Kokkos::deep_copy(jre_mhd, 0.0);
-
-  f->t_a = driver->tm.tlim;
-  f->t_b = driver->tm.tlim + dt_mhd;
-
-  if (Globals::my_rank == 0) {
-    std::cout << std::format("Fields are interpolated in time from {:.8e} to {:.8e}", f->t_a, f->t_b) << std::endl;
-  }
-
-  int n = std::floor(dt_mhd / dt_cd);
-  Real tstart = driver->tm.tlim;
-
-  for (int icd = 0; icd < n; ++icd) {
-    if(Globals::my_rank == 0)
-      std::cout << std::format("Executing driver from {:.8e} ", driver->tm.tlim);
-    driver->tm.tlim += dt_cd;
-    if(Globals::my_rank == 0)
-      std::cout << std::format(" to {:.8e}", driver->tm.tlim) << std::endl;
-	  auto driver_status = driver.get()->Execute();
-  }
-}
-
 auto &GetCoords(std::shared_ptr<MeshBlock> &pmb) { return pmb->coords; }
 auto &GetCoords(MeshBlock *pmb) { return pmb->coords; }
 auto &GetCoords(Mesh *pm) { return pm->block_list[0]->coords; }
@@ -572,11 +576,9 @@ void SaveState(Mesh* pm) {
       });
 
   auto pkg = pm->packages.Get("Deck");
-  auto jre = pkg->Param<std::shared_ptr<EM_Field>>("Field")->getJreDataSubview();
-  auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
 
-  auto tm_backup = pkg->Param<std::shared_ptr<SimTime>>("tm_backup");
-  *tm_backup = pkg->Param<std::shared_ptr<RunawayDriver>>("Driver")->tm;
+  auto jre = pkg->Param<EM_Field>("Field").getJreDataSubview();
+  auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
 
   Kokkos::deep_copy(jre_backup, jre);
 }
@@ -616,11 +618,8 @@ void RestoreState(Mesh* pm) {
       });
 
   auto pkg = pm->packages.Get("Deck");
-  auto jre = pkg->Param<std::shared_ptr<EM_Field>>("Field")->getJreDataSubview();
+  auto jre = pkg->Param<EM_Field>("Field").getJreDataSubview();
   auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
-
-  auto tm_backup = pkg->Param<std::shared_ptr<SimTime>>("tm_backup");
-  pkg->Param<std::shared_ptr<RunawayDriver>>("Driver")->tm = *tm_backup;
 
   Kokkos::deep_copy(jre, jre_backup);
 }
@@ -629,9 +628,9 @@ void ComputeParticleWeights(Mesh* pm) {
 
   auto md = pm->mesh_data.Get();
   auto pkg = pm->packages.Get("Deck");
-  const auto f = pkg->Param<std::shared_ptr<EM_Field>>("Field");
+  const auto f = pkg->Param<EM_Field>("Field");
 
-  const Real p_RE = *(pkg->Param<std::shared_ptr<Real>>("p_RE"));
+  const Real p_RE = pkg->Param<Real>("p_RE");
   const Real seed_current = pkg->Param<Real>("seed_current");
 
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
@@ -648,10 +647,6 @@ void ComputeParticleWeights(Mesh* pm) {
 
   if (Globals::my_rank == 0)
     std::cout << "Calculating current: \n";
-
-  auto field_interpolation = *f;
-  field_interpolation.t_a = 0.0;
-  field_interpolation.t_b = 1.0;
 
   Kokkos::parallel_reduce(
       PARTHENON_AUTO_LABEL, pack_swarm_r.GetMaxFlatIndex() + 1,
@@ -670,7 +665,7 @@ void ComputeParticleWeights(Mesh* pm) {
           X[4] = pack_swarm_r(b, Kinetic::Z(), n);
           Real w = pack_swarm_r(b, Kinetic::weight(), n);
           if (X[0] > p_RE) {
-            weight += getParticleCurrent(X, t, w, field_interpolation);
+            weight += getParticleCurrent(X, t, w, f);
           }
 
         }

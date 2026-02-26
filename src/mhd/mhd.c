@@ -756,3 +756,29 @@ int mhd_destroy(User* user) {
   return 0;
 }
 
+int mhd_savesolution(User* user, const char* filename) {
+  PetscViewer viewerX;
+  PetscPrintf(PETSC_COMM_WORLD, "Writing X vector into file %s ...\n", filename);
+  PetscViewerBinaryOpen(PETSC_COMM_WORLD, filename, FILE_MODE_WRITE, & viewerX);
+
+  Vec X;
+  TSGetSolution(user->ts, &X);
+  VecView(X, viewerX);
+
+  PetscViewerDestroy( & viewerX);
+  PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+  return 0;
+}
+
+int mhd_loadsolution(User* user, const char* filename) {
+  PetscViewer viewerX;
+  PetscPrintf(PETSC_COMM_WORLD, "Reading X vector from file %s ...\n", filename);
+  PetscViewerBinaryOpen(PETSC_COMM_WORLD, filename, FILE_MODE_READ, & viewerX);
+  Vec X;
+  VecLoad(X, viewerX);
+  TSSetSolution(user->ts, X);
+
+  PetscViewerDestroy( & viewerX);
+  PetscPrintf(PETSC_COMM_WORLD, "Reading from file %s is over.\n", filename);
+}
+

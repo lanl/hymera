@@ -33,8 +33,6 @@ PetscErrorCode FormIFunction_Vperp_viscosity_halo(TS,PetscReal,Vec,Vec,Vec,void*
 PetscErrorCode FormIFunction_Vperp_viscosity_halo_isolcell(TS,PetscReal,Vec,Vec,Vec,void*); /* This IFunction has the \eta(\nabla x B) in the tau and EP constraints replaced by: \eta_\phi (\nabla x B)_phi + \eta_perp [ (\nabla x B) - (\nabla x B)_\phi]; inside the wall and \eta_\phi is lower on three separate cells */
 PetscErrorCode FormIFunction_Inertia_viscosity(TS,PetscReal,Vec,Vec,Vec,void*); /* This IFunction has the constraints: (\nabla x B) x B = n_i m_i (V . \nabla) V - lambda (\nabla^2 V); */
 PetscErrorCode FormIFunction_Vperp_viscosity(TS,PetscReal,Vec,Vec,Vec,void*); /* This IFunction has the constraints: [(\nabla x B) x B = - lambda (\nabla^2 V)].e_{R/Z}; V . B = 0 */
-PetscErrorCode FormIFunction_purediffusionVV(TS,PetscReal,Vec,Vec,Vec,void*); /* This IFunction has the constraints: tau = (\nabla x B); dB/dt + \nabla x tau = 0; */
-PetscErrorCode FormIFunction_purediffusion(TS,PetscReal,Vec,Vec,Vec,void*); /* This IFunction has the constraints: tau = (\nabla x B); dB/dt + \nabla x tau = 0; */
 PetscErrorCode FormIFunction_Inertia_V(TS,PetscReal,Vec,Vec,Vec,void*); /* This IFunction has the constraints: [(\nabla x B) x B].e_{R/Z} = [n_i(t=0) m_i (V . \nabla) V].e_{R/Z}; [V . \nabla V] . B = 0 */
 PetscErrorCode FormIFunction_Inertia_V_ni(TS,PetscReal,Vec,Vec,Vec,void*); /* This IFunction has the constraints: (\nabla x B) x B = n_i m_i (V . \nabla) V; */
 PetscErrorCode FormIFunction_Inertia(TS,PetscReal,Vec,Vec,Vec,void*); /* This IFunction has the constraints: [(\nabla x B) x B].e_{R/Z} = [n_i m_i (V . \nabla) V - lambda (\nabla^2 V)].e_{R/Z}; V . B = 0 */

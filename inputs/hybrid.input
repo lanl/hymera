@@ -54,11 +54,10 @@ pred_loop=1
 input_file=../inputs/AxisSymmetricGeometry.dat
 
 <Time>
-dt_mhd=0.00108
-#dt_mhd=0.0008619         #< mhd timestep [s]
-dt_cd=86.19e-7          #< current deposit timestep for electric field readjustment [s]
-dt_LA=43.0995e-9        #< large-angle collision step [s]
-final_time = 86.19e-3
+dt_force = 0.00108
+tlim = 0.04320
+nCD = 10
+nLA = 50
 
 <ParticleSeed>
 num_particles_per_block = 2

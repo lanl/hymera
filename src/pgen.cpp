@@ -234,11 +234,8 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   const Real Rc  = pkg->Param<Real>("Rc");
   const Real Zc  = pkg->Param<Real>("Zc");
 
-  const auto f = pkg->Param<std::shared_ptr<EM_Field>>("Field");
-  auto field_interpolation = *f;
-  field_interpolation.t_a = 0.0;
-  field_interpolation.t_b = 1.0;;
-  const auto cdg = field_interpolation.cdg;
+  const auto f = pkg->Param<EM_Field>("Field");
+  const auto cdg = f.cdg;
   const auto seed_current = pkg->Param<Real>("seed_current");
 
   // Pull out swarm object
@@ -296,19 +293,20 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
     }
     std::fprintf(fs, "\n");
   }
+
   std::fclose(fs);
   Kokkos::View<Real******> psi_hermite_data("psi",
-      field_interpolation.hermite_data.extent(0),
-      field_interpolation.hermite_data.extent(1),
-      field_interpolation.hermite_data.extent(2) + 1,
-      field_interpolation.hermite_data.extent(3),
-      field_interpolation.hermite_data.extent(6),
-      field_interpolation.hermite_data.extent(7));
-  computeFlux<2>(field_interpolation.hermite_data, psi_hermite_data, field_interpolation.hR, field_interpolation.hZ);
+      f.hermite_data.extent(0),
+      f.hermite_data.extent(1),
+      f.hermite_data.extent(2) + 1,
+      f.hermite_data.extent(3),
+      f.hermite_data.extent(6),
+      f.hermite_data.extent(7));
+  computeFlux<2>(f.hermite_data, psi_hermite_data, f.hR, f.hZ);
   const auto c_aw0 = pkg->Param<Real>("c_aw0");
   const auto ct_a = pkg->Param<Real>("ct_a");
   const auto alpha0 = pkg->Param<Real>("alpha0");
-  GuidingCenterEquations<EM_Field, false, false> gce(field_interpolation, c_aw0, ct_a, alpha0);
+  GuidingCenterEquations<EM_Field, false, false> gce(f, c_aw0, ct_a, alpha0);
 
   std::cout << "Generating particles!\n";
 
@@ -354,7 +352,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
       Dim3 B = {}, dBdR = {}, dBdZ = {}, curlB = {}, E = {}, dbdt = {};
       Dim3 B_center = {}, curlB_center = {};
-      ERROR_CODE status = field_interpolation(X, t, B_center, curlB_center, dBdR, dBdZ, E, dbdt);
+      ERROR_CODE status = f(X, t, B_center, curlB_center, dBdR, dBdZ, E, dbdt);
       KOKKOS_ASSERT(status == SUCCESS);
 
       // Generate particles:
@@ -365,8 +363,8 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
         auto rng_gen = rng_pool.get_state();
 
         Real randNum = rng_gen.drand(abs(curlB_center[1]));
-        X[0] =  rng_gen.drand(pmin, pmax);
-        X[1] =  rng_gen.drand(ximin, ximax);
+        X[0] = rng_gen.drand(pmin, pmax);
+        X[1] = rng_gen.drand(ximin, ximax);
         X[2] = rng_gen.drand(Rmin, Rmax);
         X[4] = rng_gen.drand(Zmin, Zmax);
 
@@ -377,13 +375,13 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
         // Only keep particles within separatrix
         if (level != 1)
           continue;
-        status = field_interpolation(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+        status = f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
         if (randNum < abs(curlB[1])) break;
       }
 
       Real my_phi, my_mu;
       Real psi;
-      field_interpolation.evalPsi(psi, X, t, psi_hermite_data);
+      f.evalPsi(psi, X, t, psi_hermite_data);
       gce.computeConservedQuantities(X, my_phi, my_mu, t, psi);
       KOKKOS_ASSERT(status == SUCCESS);
 

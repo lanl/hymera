@@ -79,10 +79,13 @@ void ComputeParticleWeights(Mesh* pm);
 void SaveState(Mesh* pm);
 void RestoreState(Mesh* pm);
 void InitializeDriver(ParthenonManager* man);
-void Push(ParthenonManager* man);
 
 void SaveRawFieldData(ParthenonManager * man, const char* filename);
 void LoadRawFieldData(User * man, const char* filename);
+
+void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm);
+void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context);
+void WorkBeforeLoop(Mesh * pm, User* mhd_context);
 
 } // namespace Kinetic
 

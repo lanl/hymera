@@ -111,6 +111,7 @@ add_subdirectory(external/parthenon parthenon)
 else()
 find_package(parthenon)
 endif()
+find_package(MPI REQUIRED)
 find_package(HDF5 COMPONENTS C CXX)
 find_package(hflux CONFIG REQUIRED)
 

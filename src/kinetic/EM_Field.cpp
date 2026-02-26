@@ -43,6 +43,7 @@ void dumpToHDF5(EM_Field f, const int i_file, const Real t) {
       f.hermite_data.extent(3),
       f.hermite_data.extent(6),
       f.hermite_data.extent(7));
+
   computeFlux<2>(f.hermite_data, psi_hermite_data, f.hR, f.hZ);
 
   Kokkos::parallel_for("eval fields",
@@ -53,11 +54,10 @@ void dumpToHDF5(EM_Field f, const int i_file, const Real t) {
     Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, Jre = {}, V = {}, dbdt = {};
     Dim5 X = {0.0,0.0,R,0.0,Z};
 
-    auto ret = f(X, t, B, curlB, dBdR, dBdZ, E, Jre, V, dbdt);
-    KOKKOS_ASSERT((ret == Success) || (ret == WallImpact));
+    f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+    f.evalVJre(X, t, Jre, V);
     Real psi;
-    ret = f.evalPsi(psi, X, t, psi_hermite_data);
-    KOKKOS_ASSERT(ret == SUCCESS);
+    f.evalPsi(psi, X, t, psi_hermite_data);
 
     dview(i,j,0,0) = R;
     dview(i,j,0,1) = psi;

@@ -21,6 +21,8 @@ add_library(mhd_core
   mhd/default_petsc_options.c
 )
 
+target_include_directories(mhd_core PRIVATE ${MPI_C_INCLUDE_DIRS})
+target_link_libraries(mhd_core PRIVATE MPI::MPI_C)
 target_link_libraries(mhd_core PUBLIC PkgConfig::PETSC)
 target_include_directories(mhd_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -29,7 +31,6 @@ target_include_directories(mhd_core PUBLIC
   )
 
 add_library(infrastructure
-  kinetic/c_wrapper.cpp
   kinetic/EM_Field.cpp
   kinetic/kinetic.cpp
 )
@@ -44,12 +45,12 @@ target_include_directories(infrastructure PUBLIC
 target_compile_features(infrastructure PUBLIC cxx_std_20)
 
 add_library(particles_core
-  kinetic/RunawayDriver.cpp
   pgen.cpp
 )
 target_link_libraries(particles_core PUBLIC infrastructure)
 
 set(HYBRID_SRC_LIST
+  kinetic/HybridDriver.cpp
   kinetic/hybrid.cpp
 )
 

@@ -40,3 +40,5 @@ typename T::value_type norm_(const T& v) {
     }
     return sqrt(ret);
 }
+
+
