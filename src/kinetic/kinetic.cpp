@@ -14,8 +14,10 @@
 #include <numeric>
 #include <iostream>
 #include <format>
+#include <random>
 #include <typeinfo>  //for 'typeid' to work
 #include <parthenon/package.hpp>
+#include <Kokkos_DualView.hpp>
 
 using namespace parthenon;
 
@@ -46,12 +48,12 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   static constexpr Real e = pc::qe;      ///< electron charge [C]
 
   /// Time discretization parameters
-  const Real dt_mhd     = pin->GetOrAddReal("parthenon/time","dt_force", 0.00108);
-  const Real final_time = pin->GetOrAddReal("parthenon/time","tlim", 40*dt_mhd);
+  const Real dt_mhd     = pin->GetReal("parthenon/time","dt_force");
+  const Real final_time = pin->GetReal("parthenon/time","tlim");
 
   const int nPR = pin->GetOrAddInteger("Time","nPR", 0);  ///< current deposit timestep for electric field readjustment [s]
-  const int nCD = pin->GetOrAddInteger("Time","nCD", 10);  ///< current deposit timestep for electric field readjustment [s]
-  const int nLA = pin->GetOrAddInteger("Time","nLA", 50); ///< large-angle collision step [s]
+  const int nCD = pin->GetOrAddInteger("Time","nCD", 100);  ///< current deposit timestep for electric field readjustment [s]
+
   const Real timeStep = pin->GetOrAddReal("Simulation", "hRK", 1.e-6);    /// Runge kutta time in tau_c [-]
   const Real atol = pin->GetOrAddReal("Simulation", "atol", 1.e-6);      /// Absoulte tolerance for RK [-]
   const Real rtol = pin->GetOrAddReal("Simulation", "rtol", 1.e-5);       /// Realative toleratnce for RK[ [-]
@@ -132,10 +134,16 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real tau_c = 4*M_PI*pow(eps0,2)*me*me*c*c*c/(e*e*e*e*n_e0*Coulog0); ///< Relativistic collision time
   const Real Ec = me * c / e / tau_c;                                       ///< Connor-Hastie Electric field
   const Real En = E0 / Ec;
-  const Real eta_mu0aVa = etaplasma / eta0; // converts eta * \curl B to V_A B_0
-  const Real etaec_a3VaB0 = etaplasma * e * c / pow(a,3) / E0; // converts eta J to V_A B_0
+  const Real eta_norm = etaplasma / eta0; // converts eta * \curl B to V_A B_0
+  const Real eta_a3VaB0 = etaplasma / pow(a,3) / E0; // converts eta J to V_A B_0
 
-  if (mhd_context != NULL) {
+  Kokkos::DualView<Real***, Kokkos::LayoutRight> jre("Jre_mhd", NR, NZ, 3);
+  Kokkos::deep_copy(jre.d_view, 0.0);
+  jre.modify_device();
+  jre.sync_host();
+
+
+  if (mhd_context != nullptr) {
     /// Initialize MHD context
     mhd_context->mi                     = mi;
     mhd_context->mu0                    = mu0;
@@ -173,19 +181,11 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     mhd_context->dr                     = dR;
     mhd_context->dphi                   = (mhd_context->phimax - mhd_context->phimin) / mhd_context->Nphi;
     mhd_context->dz                     = dZ;
-    mhd_context->pred_loop              = pin->GetOrAddInteger("MHD_Config", "pred_loop",  0);
     mhd_context->tstype                 = pin->GetOrAddInteger("MHD_Config", "tstype",  2);
     mhd_context->jtype                  = pin->GetOrAddInteger("MHD_Config", "jtype",  2);
-    mhd_context->adaptdt                = pin->GetOrAddInteger("MHD_Config", "adaptdt",  0);
     mhd_context->debug                  = pin->GetOrAddInteger("MHD_Config", "debug",  0);
     mhd_context->dump                   = pin->GetOrAddInteger("MHD_Config", "dump",  0);
-    mhd_context->prestep                = pin->GetOrAddInteger("MHD_Config", "prestep",  1);
     mhd_context->savecoords             = pin->GetOrAddInteger("MHD_Config", "savecoords",  0);
-    mhd_context->savesol                = pin->GetOrAddInteger("MHD_Config", "savesol",  0);
-    mhd_context->delay_kinetic          = pin->GetOrAddReal("MHD_Config", "delay_kinetic",  3);
-	  mhd_context->enable_push            = pin->GetOrAddInteger("MHD_Config", "enable_push", 1);
-	  mhd_context->enable_write_raw_fields= pin->GetOrAddInteger("MHD_Config", "enable_write_raw_fields", 0);
-	  mhd_context->raw_field_file_counter = 0;
     mhd_context->isB                    = NULL;
     mhd_context->isEP                   = NULL;
     mhd_context->istau                  = NULL;
@@ -201,20 +201,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     strcpy(mhd_context->ic_binary_path, pin->GetOrAddString("MHD_Config", "ic_binary_path", "").c_str());
     mhd_context->ic_binary_mode = pin->GetOrAddInteger("MHD_Config", "ic_binary_load", 1) == 1 ? 'l' : 'c';
 
-    mhd_context->axis[0] = Rc;
-    mhd_context->axis[1] = Zc;
-
-    int nt = 2, ndims = 3;
-    mhd_context->jre_data = new double[NR * NZ * ndims * nt];
-    mhd_context->jre    = mhd_context->jre_data;
-    for (int i = 0; i < NR * NZ * 3 * 2; ++i)
-      mhd_context->jre_data[i] = 0.0;
-    mhd_context->jreR   = mhd_context->jre;
-    mhd_context->jrephi = mhd_context->jre +     NR * NZ;
-    mhd_context->jreZ   = mhd_context->jre + 2 * NR * NZ;
-
-    mhd_context->field_data = new double[NR * NZ * 4 * ndims * nt];
-
     mhd_context->Ebc = 0;
     mhd_context->tempdump = 0;
     mhd_context->dumpfreq = std::ceil(mhd_context->ftime / (10.0 * mhd_context->dt));
@@ -223,20 +209,40 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     mhd_context->oldstep = 0;
     mhd_context->n_record =0;
     mhd_context->n_record_Steady_jRE = 0;
-    mhd_context->CorrectorIdentifier = 1;
 
-    mhd_context->ParticlesCreated = 0;
+    mhd_context -> jre = wrap_view(jre.h_view);
+
     mhd_initialize(mhd_context);
+
+    /// Do single step before seeding particles
+    mhd_step(mhd_context);
+
   }
+
 
 
   auto pkg = std::make_shared<StateDescriptor>("Deck");
 
+  pkg->AddParam("NR", NR);
+  pkg->AddParam("NZ", NZ);
+
   pkg->AddParam("nPR",  nPR);
   pkg->AddParam("nCD",  nCD);
-  pkg->AddParam("nLA",  nLA);
+
 
   pkg->AddParam("tau_c",  tau_c);
+  pkg->AddParam("eta_norm",  eta_norm);
+  pkg->AddParam("eta_a3VaB0",  eta_a3VaB0);
+
+  Real dtLA_over_tauC = pin->GetOrAddReal("Time","dtLA_over_tauC", 1e-5);  ///< current deposit timestep for electric field readjustment [s]
+  int nLA = std::ceil((dt_mhd / nCD) / (dtLA_over_tauC * tau_c));
+  Real my_dtLA_over_tauC = (dt_mhd / nCD / tau_c) / nLA;
+
+  if(Globals::my_rank == 0) std::cout <<
+    std::format("Adjusting dtLA to evenly devide RE current deposition step:\n {:g} -> {:g} x {:g} sec\n", dtLA_over_tauC, my_dtLA_over_tauC, tau_c);
+
+  pkg->AddParam("dtLA_over_tauC", my_dtLA_over_tauC);
+  pkg->AddParam("nLA", nLA);
 
 
   const std::string filePath = pin->GetOrAddString("Simulation", "file_path", "current.out");
@@ -276,9 +282,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("MollerSource", ms);
 
 
-  int nphi_data = 1;
-  int nt = 2;
-
   const std::string configurationdomain_file = pin->GetOrAddString("Geometry", "input_file", "../../inputs/AxisSymmetricGeometry.dat");
 
   ConfigurationDomainGeometry::IndicatorViewType indicator("indicator", NR, NZ);
@@ -292,39 +295,95 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
 
   Kokkos::deep_copy(indicator, indicator_h);
+  pkg->AddParam("DomainIndicator", indicator_h);
 
   ConfigurationDomainGeometry cdg(RminCellCenter, ZminCellCenter, dR, dZ, -3, indicator);
   pkg->AddParam("CDG", cdg);
-  EM_Field f(NR, NZ, nphi_data, nt, RminCellCenter, ZminCellCenter, dR, dZ, En, eta_mu0aVa, etaec_a3VaB0, cdg);
-  auto field_data = f.getDataRef();
+  EM_Field f(NR, NZ, RminCellCenter, ZminCellCenter, dR, dZ, En, cdg);
 
-  using Host = Kokkos::HostSpace;
-  using Unmanaged = Kokkos::MemoryTraits<Kokkos::Unmanaged>;
-  Real * B = new Real[NR * NZ * 3];
-  Real * V = new Real[NR * NZ * 3];
-  mhd_getF(mhd_context, 0, B);
-  mhd_getF(mhd_context, 1, V);
-  Kokkos::View<Real******, Kokkos::LayoutLeft, Host, Unmanaged> field_data_h(mhd_context->field_data, NR, NZ, 4, 3, 1, 2);
+  Kokkos::deep_copy(f.data, 0.0);
+  Kokkos::deep_copy(f.hermite_data, 0.0);
+  Kokkos::fence();
+
+  auto field_data_h = Kokkos::create_mirror_view(f.data);
   Kokkos::deep_copy(field_data_h, 0.0);
-  Kokkos::View<Real***, Kokkos::LayoutLeft, Host, Unmanaged> Bh(B, NR, NZ, 3);
-  auto Bsub = Kokkos::subview(field_data_h, Kokkos::ALL, Kokkos::ALL, 0, Kokkos::ALL, 0, 0);
-  Kokkos::deep_copy(Bsub, Bh);
-  auto Vsub = Kokkos::subview(field_data_h, Kokkos::ALL, Kokkos::ALL, 1, Kokkos::ALL, 0, 0);
-  Kokkos::View<Real***, Kokkos::LayoutLeft, Host, Unmanaged> Vh(B, NR, NZ, 3);
-  Kokkos::deep_copy(Vsub, Vh);
-  Kokkos::deep_copy(field_data, field_data_h);
-  delete[] B;
-  delete[] V;
-  f.interpolate();
+  Kokkos::fence();
+
+
+  for (size_t fi = 0; fi < static_cast<size_t>(fid::Count); ++fi) {
+    auto sub = Kokkos::subview(field_data_h, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, fi, 0);
+    mhd_getF(mhd_context, static_cast<field_id>(fi), wrap_view(sub));
+  }
+  Kokkos::deep_copy(f.data, field_data_h);
+  Kokkos::fence();
+
+  std::array<fid, 6> fids = {fid::B, fid::E, fid::Jre, fid::J,  fid::V, fid::GradB};
+  f.interpolate(fids, 0);
+  Kokkos::fence();
+  f.cleanDiv(fid::B, 0);
+  Kokkos::fence();
+
   pkg->AddParam("Field", f);
-  pkg->AddParam("FieldData", field_data_h);
 
-  auto jre = f.getJreDataSubview();
-  Kokkos::View<double***> jre_backup("jre_backup", jre.extent(0), jre.extent(1), jre.extent(2));
-  pkg->AddParam("JreBackup", jre_backup);
+  pkg->AddParam("Jre_mhd", jre);
 
-  Kokkos::View<Real****, Kokkos::LayoutLeft, Host, Unmanaged> jre_h(mhd_context->jre_data, NR, NZ, 3, 2);
-  pkg->AddParam("JreData", jre_h);
+  ParArrayHost<Real> Jre_deposit("jre_deposit", NR, NZ, 3, nCD);
+  pkg->AddParam("Jre_deposit", Jre_deposit);
+  ParArray3D<Real> Jre_push_deposit("jre_push_deposit", NR, NZ, 3);
+  Kokkos::deep_copy(Jre_push_deposit, 0.0);
+  pkg->AddParam("Jre_push_deposit", Jre_push_deposit);
+
+  int nfields = static_cast<size_t>(fid_Count);
+  ParArrayHost<Real> field_data_mhd("MHD_Field_data", NR, NZ, 3, nfields);
+  Kokkos::deep_copy(field_data_mhd, 0.0);
+  auto kv = field_data_mhd.KokkosView();
+  for (size_t fid = 0; fid < static_cast<size_t>(fid_Count); ++fid) {
+    auto sub = Kokkos::subview(kv, 0, 0, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, fid);
+    mhd_getF(mhd_context, static_cast<field_id>(fid), wrap_view(sub));
+  }
+
+
+  /// Set runaway current as 10% of the current
+  for (int i = 0; i < jre.extent(0); ++i)
+  for (int j = 0; j < jre.extent(1); ++j)
+  for (int k = 0; k < jre.extent(2); ++k)
+    if (indicator_h(i,j) > 0)
+      jre.h_view(i,j,k) = 1.e-3 * eta_norm * kv(0, 0, 0, i, j, k, static_cast<size_t>(fid::J));
+  jre.modify_host();
+  jre.sync_device();
+
+  pkg->AddParam("MHD_Field_data", field_data_mhd);
+
+  // Create plotting mesh for interpolated fields
+  const int NR_plot = pin->GetOrAddInteger("Output", "NR_plot", 400);
+  const int NZ_plot = pin->GetOrAddInteger("Output", "NZ_plot", 800);
+
+  const Real R0_plot = f.hR0 + 1e-10;
+  const Real Z0_plot = f.hZ0 + 1e-10;
+  const Real dR_plot = (f.nR_hermite_data * f.hR - 2e-10) / static_cast<Real> (NR_plot);
+  const Real dZ_plot = (f.nZ_hermite_data * f.hZ - 2e-10) / static_cast<Real> (NZ_plot);
+
+  ParArray1D<Real> hpd_R("Hermite_Field_Plot_data_R", NR_plot);
+  ParArray1D<Real> hpd_Z("Hermite_Field_Plot_data_Z", NZ_plot);
+  ParArray3D<Real> gce_data("GCE_data", NR_plot, NZ_plot, 5);
+  ParArrayND<Real> hpd_F("Hermite_Field_Plot_data_F", NR_plot, NZ_plot, 3, 6);
+  ParArrayND<Real> hpd_eval("Hermite_Field_Plot_data_eval", NR_plot, NZ_plot, 3,
+      static_cast<size_t>(fid::Count));
+
+  Kokkos::parallel_for("FillGrids", NR_plot,
+      KOKKOS_LAMBDA(const int n) {
+        hpd_R(n) = R0_plot + n * dR_plot;
+      });
+  Kokkos::parallel_for("FillGrids", NZ_plot,
+      KOKKOS_LAMBDA(const int n) {
+        hpd_Z(n) = Z0_plot + n * dZ_plot;
+      });
+
+  pkg->AddParam("Hermite_Field_Plot_data_R", hpd_R);
+  pkg->AddParam("Hermite_Field_Plot_data_Z", hpd_Z);
+  pkg->AddParam("Hermite_Field_Plot_data_F", hpd_F);
+  pkg->AddParam("Hermite_Field_Plot_data_eval", hpd_eval);
+  pkg->AddParam("GCE_data", gce_data);
 
   const Real wce0 = pc::qe * B0 / pc::me; // Electron gyrofrequency
   const Real c_aw0 =  pin->GetOrAddReal("GuidingCenterEquations", "c_aw0", pc::c/a/wce0);
@@ -372,7 +431,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("Zc", Zc);
 
   const Real seed_current = pin->GetOrAddReal("ParticleSeed", "current", 15e3); // 15 kAmps
-  pkg->AddParam("seed_current", seed_current * a / pc::qe / pc::c); // Convert from amps
+  pkg->AddParam("seed_current", seed_current * a); // Convert from amps
   const Real gammamin = pin->GetOrAddReal("ParticleSeed", "gammamin", 10.0);
   pkg->AddParam("pmin", momentum_(gammamin));
   const Real gammamax = pin->GetOrAddReal("ParticleSeed", "gammamax", 20.0);
@@ -387,14 +446,13 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     ofs << std::format("{:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s}",
         "#     p", "gamma", "dtSA", "psi", "CB", "CF", "CouLogee ratio", "probability");
     Real p = momentum_(1. + 2.e-3);
-    Real dt_LA = (dt_mhd / nCD) / nLA;
     while (p < pkg->Param<Real>("pmax") + 20.0) {
       auto cc = sa.getCollisionCoefficients(p);
       ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
           p, gamma_(p),
           sa.getSmallAngleCollisionTimestep(p),
           cc.psi, cc.CB, cc.CF, cc.CouLogee_ratio,
-          ms.computeProbability(p, 1.0, dt_LA, 1.002)
+          ms.computeProbability(p, 1.0, dtLA_over_tauC, 1.002)
       ) << std::endl;
 
       p += 1e-2;
@@ -448,15 +506,150 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   // Petsc file is where the mhd state is stored, it is separate from Parthenon restart file
   std::string mhd_restart_filename = "";
   pkg->AddParam("mhd_restart_filename", mhd_restart_filename, Params::Mutability::Restart);
+  if (Globals::my_rank == 0) std::cout << "Init finished\n";
 
   return pkg;
 }
 
-void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm) {
+void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context) {
+  auto pkg = pm->packages.Get("Deck");
+  auto field_data_mhd = pkg->Param<ParArrayHost<Real>>("MHD_Field_data").KokkosView();
+  for (size_t fid = 0; fid < static_cast<size_t>(fid_Count); ++fid) {
+    auto sub = Kokkos::subview(field_data_mhd, 0, 0, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, fid);
+    mhd_getF(mhd_context, static_cast<field_id>(fid), wrap_view(sub));
+  }
+
+  auto hpd_R = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_R");
+  auto hpd_Z = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_Z");
+  auto hpd_F = pkg->Param<ParArrayND<Real>>("Hermite_Field_Plot_data_F");
+  auto hpd_eval = pkg->Param<ParArrayND<Real>>("Hermite_Field_Plot_data_eval").KokkosView();
+  auto gce_data = pkg->Param<ParArray3D<Real>>("GCE_data");
+  const auto pmin  = pkg->Param<Real>("pmin");
+  const auto pmax  = pkg->Param<Real>("pmax");
+  const auto ximin = pkg->Param<Real>("ximin");
+  const auto ximax = pkg->Param<Real>("ximax");
+
+  const Real p0 = .5 * (pmax + pmin);
+  const Real xi0 = .5 * (ximax + ximin);
+
+
+
+  const int NR_plot = hpd_R.size();
+  const int NZ_plot = hpd_Z.size();
+
+  const auto c_aw0  = pkg->Param<Real>("c_aw0");
+  const auto ct_a   = pkg->Param<Real>("ct_a");
+  const auto alpha0 = pkg->Param<Real>("alpha0");
+  auto f = pkg->Param<EM_Field>("Field");
+  GuidingCenterEquations<EM_Field, true, false> gce(f, c_aw0, ct_a, alpha0);
+
+  // Now plot all Hermite fields
+  Kokkos::parallel_for("FillInterpolatedData_plot",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR_plot,NZ_plot}),
+      KOKKOS_LAMBDA(const int i, const int j) {
+        Real R = hpd_R(i);
+        Real Z = hpd_Z(j);
+        Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, dbdt = {};
+        Dim5 X = {p0, xi0, R, 0.0, Z};
+        Real t = 0.0;
+        f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+
+        for (int k = 0; k < 3; ++k) {
+          hpd_F(i,j,k,0) = B[k];
+          hpd_F(i,j,k,1) = curlB[k];
+          hpd_F(i,j,k,2) = dBdR[k];
+          hpd_F(i,j,k,3) = dBdZ[k];
+          hpd_F(i,j,k,4) = E[k];
+          hpd_F(i,j,k,5) = dbdt[k];
+        }
+
+        auto sub = Kokkos::subview(hpd_eval, 0, 0, 0, i, j, Kokkos::ALL, Kokkos::ALL);
+        f.eval_all(R, Z, t, sub);
+        Dim5 dX = {};
+
+        gce(0.0, X, dX);
+        for (int k = 0; k < 5; ++k) {
+          gce_data(i,j,k) = dX[k];
+        }
+
+      });
+  Kokkos::fence();
+  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
+      swarm_position::x, swarm_position::y, swarm_position::z, Kinetic::p,
+      Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight>(
+      "particles");
+  auto desc_swarm_i =
+      parthenon::MakeSwarmPackDescriptor<Kinetic::will_scatter,
+                                         Kinetic::secondary_index,
+                                         Kinetic::status>("particles");
+  auto md = pm->mesh_data.Get();
+  auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
+  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
+
+  Real I_re = 0.0;
+
+  const Real p_RE = pkg->Param<Real>("p_RE");
+  Kokkos::parallel_reduce(
+      PARTHENON_AUTO_LABEL, pack_swarm_r.GetMaxFlatIndex() + 1,
+      // loop over all particles
+      KOKKOS_LAMBDA(const int idx, Real &weight) {
+        // block and particle indices
+        auto [b, n] = pack_swarm_r.GetBlockParticleIndices(idx);
+        const auto swarm_d = pack_swarm_r.GetContext(b);
+        if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n) && (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE)) {
+          Dim5 X;
+          Real t = 0.0;
+          X[0] = pack_swarm_r(b, Kinetic::p(), n);
+          X[1] = pack_swarm_r(b, Kinetic::xi(), n);
+          X[2] = pack_swarm_r(b, Kinetic::R(), n);
+          X[3] = pack_swarm_r(b, Kinetic::phi(), n);
+          X[4] = pack_swarm_r(b, Kinetic::Z(), n);
+          Real w = pack_swarm_r(b, Kinetic::weight(), n);
+          if (X[0] > p_RE) {
+            weight += getParticleCurrent(X, t, w, f);
+          }
+        }
+      },
+      I_re);
+
+  Kokkos::fence();
+
+  MPI_Allreduce(MPI_IN_PLACE,&I_re,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+
+  auto jre_deposit = pkg->Param<ParArrayHost<Real>>("Jre_deposit");
+  auto jre_deposit_d = create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(),jre_deposit);
+  Real I_ohmic = 0.0;
+  Real I_re_integral;
+  Kokkos::parallel_reduce(
+      PARTHENON_AUTO_LABEL,
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {f.nR_data, f.nZ_data}),
+      // loop over all particles
+      KOKKOS_LAMBDA(int i, int j, Real& integral, Real& integral_ohmic) {
+        Real R = f.R0 + i * f.dR;
+        Real Z = f.Z0 + j * f.dZ;
+        Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, dbdt = {};
+        Dim5 X = {0.0, 0.0, R, 0.0, Z};
+        Real t = 0.0;
+
+        int ii,jj;
+        int level = f.cdg.indicator(X, ii,jj);
+
+        if (level >= 1) {
+          auto ret = f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+          if (ret == ErrorCode::Success) integral_ohmic += f.dR * f.dZ * curlB[1];
+        }
+
+        integral += f.dR * f.dZ * jre_deposit_d(i,j,1,0);
+
+      },
+      I_re_integral, I_ohmic);
+
+  Kokkos::fence();
+
   if (Globals::my_rank == 0) {
-    auto pkg = pm->packages.Get("Deck");
-    auto f = pkg->Param<EM_Field>("Field");
-    dumpToHDF5(f, tm.ncycle, 0.0);
+    std::cout << std::format("{:20.14e} {:20.14e} {:20.14e}",
+        I_re * .5, I_re_integral * .5,
+        I_ohmic * 5.3  * 2.0 / pc::mu0) << std::endl;
   }
 }
 
@@ -470,7 +663,7 @@ void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters *
 
   if (signal == SignalHandler::OutputSignal::now) {
     filename.append("now");
-  } else if (op -> file_label_final) {
+  } else if (signal == SignalHandler::OutputSignal::final && op -> file_label_final) {
     filename.append("final");
     // default time based data dump
   } else {
@@ -487,7 +680,6 @@ void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters *
 }
 
 void WorkBeforeLoop(Mesh * pm, User* mhd_context) {
-  if (Globals::my_rank == 0) std::cout << "WorkBeforeLoop: start\n";
   if (Globals::is_restart) {
     if (Globals::my_rank == 0) std::cout << "WorkBeforeLoop: reading mhd restart\n";
     auto pkg = pm->packages.Get("Deck");
@@ -497,54 +689,9 @@ void WorkBeforeLoop(Mesh * pm, User* mhd_context) {
   }
 }
 
-
-
-void SaveRawFieldData(ParthenonManager * man, const char* filename ) {
-  if (Globals::my_rank == 0) {
-    auto pkg = man->pmesh.get()->packages.Get("Deck");
-    auto field_data_h = pkg->Param<Kokkos::View<Real******,
-         Kokkos::LayoutLeft,
-         Kokkos::HostSpace,
-         Kokkos::MemoryTraits<Kokkos::Unmanaged>>>("FieldData");
-		int v_rank = 6;
-
-	  hid_t file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-	  if (file < 0) throw std::runtime_error("H5Fcreate failed");
-	  hsize_t dims[v_rank] = {};
-	  for (int i = 0; i < v_rank; ++i) dims[v_rank-i-1] = static_cast<hsize_t>(field_data_h.extent(i));
-    hid_t space = H5Screate_simple(v_rank, dims, nullptr);
-    hid_t dset  = H5Dcreate(file, "field", H5T_NATIVE_DOUBLE, space,
-                            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-
-    // Write contiguous host data
-    H5Dwrite(dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
-             H5P_DEFAULT, field_data_h.data());
-
-    H5Dclose(dset);
-    H5Sclose(space);
-    H5Fclose(file);
-  }
-}
-
-void LoadRawFieldData(User* mhd_config, const char* filename ) {
- 	  hid_t file = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
-  	if (file < 0) throw std::runtime_error("H5Fopen failed");
-
-  	hid_t dset = H5Dopen2(file, "field", H5P_DEFAULT);
-
-    // Write contiguous host data
-    H5Dread(dset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
-             H5P_DEFAULT, mhd_config->field_data);
-
-    H5Dclose(dset);
-    H5Fclose(file);
-}
-
 auto &GetCoords(std::shared_ptr<MeshBlock> &pmb) { return pmb->coords; }
 auto &GetCoords(MeshBlock *pmb) { return pmb->coords; }
 auto &GetCoords(Mesh *pm) { return pm->block_list[0]->coords; }
-
-
 
 void SaveState(Mesh* pm) {
   auto md = pm->mesh_data.Get();
@@ -581,10 +728,10 @@ void SaveState(Mesh* pm) {
 
   auto pkg = pm->packages.Get("Deck");
 
-  auto jre = pkg->Param<EM_Field>("Field").getJreDataSubview();
-  auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
+//  auto jre = pkg->Param<EM_Field>("Field").getJreDataSubview();
+//  auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
 
-  Kokkos::deep_copy(jre_backup, jre);
+//  Kokkos::deep_copy(jre_backup, jre);
 }
 
 void RestoreState(Mesh* pm) {
@@ -622,10 +769,10 @@ void RestoreState(Mesh* pm) {
       });
 
   auto pkg = pm->packages.Get("Deck");
-  auto jre = pkg->Param<EM_Field>("Field").getJreDataSubview();
-  auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
+  // auto jre = pkg->Param<EM_Field>("Field").getJreDataSubview();
+  // auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
 
-  Kokkos::deep_copy(jre, jre_backup);
+  // Kokkos::deep_copy(jre, jre_backup);
 }
 
 void ComputeParticleWeights(Mesh* pm) {
@@ -675,12 +822,11 @@ void ComputeParticleWeights(Mesh* pm) {
         }
       },
       I_re);
+  Kokkos::fence();
 
   MPI_Allreduce(MPI_IN_PLACE,&I_re,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-
-
-  Kokkos::fence();
   Real w = seed_current / I_re;
+
   if (Globals::my_rank == 0)
     std::cout << std::format("I_re = {:.8E}, w = {:.8E}\n", I_re, w) << std::endl;
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
@@ -692,5 +838,62 @@ void ComputeParticleWeights(Mesh* pm) {
         pack_swarm_r(b, Kinetic::weight(), n) = w;
       });
 }
+
+TaskStatus Interpolate(Mesh *pm, User *p_mhd_config) {
+  // Interpolate fields and make derivative zero, for static initial background field
+  auto pkg = pm->packages.Get("Deck");
+  auto f = pkg->Param<EM_Field>("Field");
+
+  using Host = Kokkos::HostSpace;
+
+  auto field_data_h = Kokkos::create_mirror_view(f.data);
+
+  Kokkos::deep_copy(field_data_h, 0.0);
+
+  for (size_t fid = 0; fid < static_cast<size_t>(fid_Count); ++fid) {
+    if (fid == static_cast<size_t>(fid::Jre)) continue;
+    auto sub = Kokkos::subview(field_data_h, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, fid, 0);
+    mhd_getF(p_mhd_config, static_cast<field_id>(fid), wrap_view(sub));
+  }
+
+  Kokkos::deep_copy(f.data, field_data_h);
+
+  auto E = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::E), 0);
+  auto B = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::B), 0);
+  auto V = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::V), 0);
+  auto J = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::J), 0);
+  auto eta_norm = pkg->Param<Real>("eta_norm");
+
+  auto NR = pkg->Param<int>("NR");
+  auto NZ = pkg->Param<int>("NZ");
+  Kokkos::parallel_for("FillInterpolatedData_plot",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR,NZ}),
+      KOKKOS_LAMBDA(const int i, const int j) {
+        Dim3 B_, V_, J_, E_;
+        Real R = f.R0 + i * f.dR;
+        for (int k = 0; k < 3; ++k) {
+           B_[k] = B(i,j,k) / R;
+           V_[k] = V(i,j,k);
+           J_[k] = J(i,j,k);
+        }
+        E_ = {};
+        cross_product(B_, V_, E_); // E:= -vxB
+        for (int k = 0; k < 3; ++k) {
+           E_[k] += eta_norm * J_[k];
+           E(i,j,k) = E_[k];
+        }
+      });
+  Kokkos::fence();
+
+  std::array<fid, 5> fids = {fid::B, fid::E, fid::J, fid::V, fid::GradB};
+  f.interpolate(fids, 0);
+  Kokkos::fence();
+  f.cleanDiv(fid::B, 0);
+  Kokkos::fence();
+
+  return TaskStatus::complete;
+}
+
+
 
 } // namespace Kinetic

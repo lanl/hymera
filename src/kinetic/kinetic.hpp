@@ -57,7 +57,9 @@ SWARM_VARIABLE(int, particle, secondary_index);
 // For save/restore particle state (predictor corrector implementation)
 typedef enum STATUS_ENUM {
     PROTECTED = 1,
-    ALIVE = 2
+    ALIVE = 2,
+    DEATH_BY_MOMENTUM=4,
+    DEATH_BY_WALL=8
 } STATUS;
 SWARM_VARIABLE(int, particle, status);
 SWARM_VARIABLE(Real, particle, saved_p);
@@ -83,9 +85,13 @@ void InitializeDriver(ParthenonManager* man);
 void SaveRawFieldData(ParthenonManager * man, const char* filename);
 void LoadRawFieldData(User * man, const char* filename);
 
-void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm);
+void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context);
 void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context);
 void WorkBeforeLoop(Mesh * pm, User* mhd_context);
+TaskStatus Interpolate(Mesh *pm, User *mhd_context);
+
+
+
 
 } // namespace Kinetic
 

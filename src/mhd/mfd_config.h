@@ -28,6 +28,41 @@
 #include <unistd.h>
 #include <petsc/private/dmstagimpl.h>
 
+typedef struct  {
+  double * data;
+
+  size_t dim0;
+  size_t dim1;
+  size_t dim2;
+
+  size_t stride0;
+  size_t stride1;
+  size_t stride2;
+} view3d_t;
+
+typedef struct  {
+  PetscScalar * data;
+
+  size_t dim0;
+  size_t dim1;
+  size_t dim2;
+  size_t dim3;
+
+  size_t stride0;
+  size_t stride1;
+  size_t stride2;
+  size_t stride3;
+} view4d_t;
+
+typedef enum {
+  fid_B = 0,
+  fid_E = 1,
+  fid_Jre = 2,
+  fid_J = 3,
+  fid_V = 4,
+  fid_GradB = 5,
+  fid_Count = 6
+} field_id;
 
 /* Shorter, more convenient names for DMStagStencilLocation entries */
 #define BACK_DOWN_LEFT   DMSTAG_BACK_DOWN_LEFT
@@ -96,10 +131,8 @@ typedef struct {
   PetscReal   dr;               /* Radius step size */
   PetscReal   dphi;             /* Azimuth step size */
   PetscReal   dz;               /* Height step size */
-  PetscInt    pred_loop;	/* Number of times the predictor step is being executed */
   PetscInt    tstype;	        /* Timestepping method: 1 for Forward Euler, 2 for Backward Euler, 3 for Crank-Nicholson */
   PetscInt    jtype;            /* Jacobian type (0: user provide Jacobian, 1: slow finite difference, 2: fd with coloring) */
-  PetscInt    adaptdt;          /* Flag for using adaptive step size */
   PetscInt    n_record;        /* Counter for successful TS steps */
   PetscInt    n_record_Steady_jRE;        /* Counter for TS step where j_RE change is less than 10% */
 
@@ -151,60 +184,17 @@ typedef struct {
   Mat         OffDiagBlock_U;    /* Upper Off-diagonal block of Jacobian matrix according to the {ETBN,V} partitioning */
   Mat         OffDiagBlock_L;    /* Lower Off-diagonal block of Jacobian matrix according to the {ETBN,V} partitioning */
 
-  double * jre_data;
-  double * field_data;
-  double * jre;
-  double * jreR;
-  double * jrephi;
-  double * jreZ;
-  double prev_current;        /* Stores the runaway current of the previous time step */
-  double present_current;
-  int CorrectorIdentifier;
-
   char input_folder [PETSC_MAX_PATH_LEN];
   char ic_binary_path [PETSC_MAX_PATH_LEN];
   char ic_binary_mode;
 
-  int delay_kinetic;
+  double prev_current;        /* Stores the runaway current of the previous time step */
+  double present_current;
 
-  int poincare_counter;
-  int field_counter;
+  view3d_t jre;
 
-  void* field_interpolation;
-  double axis[2];
-
-  void* manager;
-  int ParticlesCreated;
-
-	int enable_push;
-	int enable_write_raw_fields;
-	int raw_field_file_counter;
 } User;
 
-typedef struct LocalCoordinate
-{
-  PetscScalar R;
-  PetscScalar Z;
-  int iR;
-  int iZ;
-} tLocalCoordinate;
-
-typedef struct HermiteDivFreeFields
-{
-  PetscScalar *m_hd_psi_iz;
-  PetscScalar *m_hd_chi_iz;
-  PetscScalar *m_hd_psi_ir;
-
-  int m_nRR;
-  int m_nZR;
-  int m_nRZ;
-  int m_nZZ;
-
-  PetscScalar *m_hp_RR;
-  PetscScalar *m_hp_RZ;
-  PetscScalar *m_hp_ZR;
-  PetscScalar *m_hp_ZZ;
-} tHermiteDivFreeFields;
-
 PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx);
+
 #endif /* defined(MFD_CONFIG_H) */

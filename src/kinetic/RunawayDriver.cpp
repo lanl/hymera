@@ -542,6 +542,14 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
 
   Kokkos::fence();
 
+  if (Globals::my_rank == 0) {
+    std::ofstream ofs(filePath, std::ios::app);
+    ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
+        t, I_re * .5, I_re_integral * .5,
+        I_ohmic * 5.3  * 2.0 / pc::mu0,
+        p_phi_total, mu_total, w_total) << std::endl;
+  }
+
   Real p_phi_total = 0.0;
   Real mu_total = 0.0;
   Real w_total = 0.0;
@@ -590,13 +598,6 @@ void RunawayDriver::PostExecute(parthenon::DriverStatus st) {
   }
 
 
-  if (Globals::my_rank == 0) {
-    std::ofstream ofs(filePath, std::ios::app);
-    ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
-        t, I_re * pc::qe * pc::c * .5, I_re_integral * pc::qe * pc::c * .5,
-        I_ohmic * 5.3  * 2.0 / pc::mu0,
-        p_phi_total, mu_total, w_total) << std::endl;
-  }
   *ts += 1;
   Kokkos::fence();
 }

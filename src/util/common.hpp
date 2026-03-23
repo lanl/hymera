@@ -15,6 +15,8 @@
 
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
+
+#include "mfd_config.h"
 using RNGPool=Kokkos::Random_XorShift64_Pool<>;
 
 constexpr int _p = 8; // Precision to output doubles
@@ -39,6 +41,19 @@ typename T::value_type norm_(const T& v) {
         ret += v[i] * v[i];
     }
     return sqrt(ret);
+}
+
+template<typename T>
+view3d_t wrap_view(T v) {
+    return {
+        v.data(),
+        v.extent(0),
+        v.extent(1),
+        v.extent(2),
+        v.stride(0),
+        v.stride(1),
+        v.stride(2)
+    };
 }
 
 

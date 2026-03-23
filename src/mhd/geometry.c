@@ -22,7 +22,7 @@
 #include <petscdmpatch.h>
 #include <petscsf.h>
 
-#include "kinetic/c_wrapper.h"
+#include "mhd.h"
 
 #define PETSC_NULL_VEC PETSC_NULLPTR
 
@@ -8655,8 +8655,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
     return(0);
 }
 
-PetscErrorCode FromPetscVecToArray_EfieldCell(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, PetscScalar *ge_EZ, void *ptr)
-{
+PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, PetscScalar *ge_EZ, void *ptr, int code) {
     PetscLogEvent  USER_EVENT;
     PetscClassId   classid;
     PetscLogDouble user_event_flops;
@@ -8681,7 +8680,10 @@ PetscErrorCode FromPetscVecToArray_EfieldCell(TS ts, Vec X, PetscScalar *ge_ER, 
     VecDuplicate(X, & C);
     VecZeroEntries(C);
     //NEED TO CREATE VEC C AND RECONSTRUCT FROM EDGES TO CELLS THE THREE COMPONENTS OF E BEFORE CALLING THE SCATTERING
-    FormElectricField(ts, X, F, user);
+    if (code == 0)
+      FormElectricField(ts, X, F, user);
+    if (code == 1)
+      FormDerivedCurlnomp(ts, X, F, user);
     //DumpEdgeField(ts, 0, X, user);
     //DumpEdgeField(ts, 1, F, user);
     EdgeToCellReconstruction_r(ts,F,C,user);
@@ -9029,6 +9031,130 @@ PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
   return(0);
 }
 
+PetscErrorCode getJArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr) {
+  PetscLogEvent  USER_EVENT;
+  PetscClassId   classid;
+  PetscLogDouble user_event_flops;
+
+  PetscClassIdRegister("class name",&classid);
+  PetscLogEventRegister("getVArray",classid,&USER_EVENT);
+  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+
+  User           *user = (User*)ptr;
+  DM             da, dmV, daV;
+  PetscInt       startr,startphi,startz,nr,nphi,nz;
+  Vec            vecV, V, X_local;
+  PetscInt       er,ephi,ez,d;
+  const PetscScalar *array;
+  int            len;
+
+  TSGetDM(ts,& da);
+
+  DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmV); /* 3 dofs per element */
+  DMSetUp(dmV);
+  DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
+  DMCreateGlobalVector(dmV, & V);
+  DMGetLocalVector(da, & X_local);
+  DMGlobalToLocal(da, X, INSERT_VALUES, X_local);
+
+  DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+
+  for (ez = startz; ez < startz + nz; ++ez)
+  {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi)
+    {
+      for (er = startr; er < startr + nr; ++er)
+      {
+        DMStagStencil from[24], to[3];
+        PetscScalar valFrom[24], valTo[3];
+        for (PetscInt comp = 0; comp < 3; ++comp)
+        {
+          for (PetscInt index = 0; index < 8; ++index)
+          {
+            from[index + comp*8].i = er;
+            from[index + comp*8].j = ephi;
+            from[index + comp*8].k = ez;
+            from[index + comp*8].c = comp;
+          }
+          from[0 + comp*8].loc = BACK_DOWN_LEFT;
+          from[1 + comp*8].loc = BACK_DOWN_RIGHT;
+          from[2 + comp*8].loc = BACK_UP_LEFT;
+          from[3 + comp*8].loc = BACK_UP_RIGHT;
+          from[4 + comp*8].loc = FRONT_DOWN_LEFT;
+          from[5 + comp*8].loc = FRONT_DOWN_RIGHT;
+          from[6 + comp*8].loc = FRONT_UP_LEFT;
+          from[7 + comp*8].loc = FRONT_UP_RIGHT;
+        }
+
+        DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom);
+
+        for (PetscInt comp = 0; comp < 3; ++comp)
+        {
+          to[comp].i = er;
+          to[comp].j = ephi;
+          to[comp].k = ez;
+          to[comp].loc = ELEMENT;
+          to[comp].c = comp;
+          valTo[comp] = 0.0;
+          for (PetscInt index = 0; index < 8; ++index)
+            valTo[comp] += valFrom[index + comp*8];
+          valTo[comp] /= 8.0;
+        }
+
+        DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES);
+      }
+    }
+  }
+  VecAssemblyBegin(V);
+  VecAssemblyEnd(V);
+
+  DMStagVecSplitToDMDA(dmV, V, ELEMENT, -3, & daV, & vecV); /* note -3 : pad with zero in 2D case */
+  PetscObjectSetName((PetscObject) vecV, "Velocity");
+
+  PetscMPIInt rank;
+  MPI_Comm    comm;
+  VecScatter  scat;
+  Vec         Xseq, naturalX;
+
+
+  DMDACreateNaturalVector(daV,&naturalX);
+  DMDAGlobalToNaturalBegin(daV, vecV, INSERT_VALUES, naturalX);
+  DMDAGlobalToNaturalEnd(daV, vecV, INSERT_VALUES, naturalX);
+
+  /* create scater to zero */
+  //VecScatterCreateToZero(naturalX, &scat, &Xseq);
+  VecScatterCreateToAll(naturalX, &scat, &Xseq);
+  VecScatterBegin(scat, naturalX, Xseq, INSERT_VALUES, SCATTER_FORWARD);
+  VecScatterEnd(scat, naturalX, Xseq, INSERT_VALUES, SCATTER_FORWARD);
+
+  MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
+  /* Only rank == 0 has the entries of the patch, so run code only at that rank */
+  if (rank == 0 || 1) {
+    PetscInt sizeX;
+    VecGetSize(Xseq, &sizeX);
+    //PetscPrintf(PETSC_COMM_SELF,"The size of Xseq is %d, and the grid size is %d\n",sizeX,user->Nphi*(user->Nr+1)*user->Nz);
+    VecGetArrayRead(Xseq, &array);
+    memcpy(gf_V, array, 3*user->Nr*user->Nz*user->Nphi*(sizeof(PetscScalar)));
+    VecRestoreArrayRead(Xseq, &array);
+  }
+
+  VecDestroy(&naturalX);
+
+
+  /* Destroy DMDAs and Vecs */
+  VecDestroy( & vecV);
+  DMDestroy( & daV);
+  VecDestroy( & V);
+  DMDestroy( & dmV);
+
+
+  PetscLogFlops(user_event_flops);
+  PetscLogEventEnd(USER_EVENT,0,0,0,0);
+
+  return(0);
+}
+
+
 PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivative)
 {
   PetscLogEvent  USER_EVENT;
@@ -9158,6 +9284,7 @@ PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivat
 
   return(0);
 }
+
 
 PetscErrorCode FromPetscVecToArray(TS ts, Vec X, PetscScalar *gf_BR, PetscScalar *gf_BP, PetscScalar *gf_BZ, PetscScalar *g_R, PetscScalar *g_P, PetscScalar *g_Z, void *ptr)
 {
@@ -10027,18 +10154,6 @@ int isInDomain(const double * R, const double * Z, void * ptr){
 }
 
 
-void slice2D(double * gf, double * gf_c, int nr, int nphi, int nz)
-{
-  for (int dim = 0; dim < 3; ++dim)
-  for (int k = 0; k < nz; ++k)
-  for (int i = 0; i < nr; ++i)
-    gf_c[i + k * nr + dim * nr * nz] = gf[dim + 3 * (i + k * nr * nphi)];
-}
-void slice2DaddJre(double * gf, double * gf_c, int nr, int nphi, int nz, double* jre)
-{
-  for (int k = 0; k < nz; ++k)
-  for (int i = 0; i < nr; ++i)
-    gf_c[i + k * nr] = gf[i + k * nr * nphi] + jre[i + k * nr];
-}
+
 
 

@@ -52,8 +52,6 @@ PetscErrorCode integrateHermite_1D_r(PetscScalar*,PetscScalar*,int,int,const Pet
 PetscErrorCode integrateHermite_2D_z(PetscScalar*,PetscScalar*,int,int,const PetscScalar,const PetscScalar);
 PetscScalar evalHermite1D(const PetscScalar*,const PetscScalar*,const PetscScalar,const PetscScalar,const PetscScalar*,const int,const int,const int);
 PetscScalar evalHermite2D(const PetscScalar*,const PetscScalar*,const PetscScalar, const PetscScalar,const PetscScalar,const PetscScalar,const PetscScalar*,const int,const int,const int,const int,const int,const int);
-tLocalCoordinate getLocalCoordinate(const PetscScalar*,const PetscScalar*,const  PetscScalar,const  PetscScalar,const PetscScalar,const PetscScalar);
-PetscErrorCode evalPsi(PetscScalar*,const PetscScalar*,const PetscScalar*,int,tHermiteDivFreeFields);
 PetscErrorCode DumpPsi_Cell(TS,PetscInt,PetscScalar*,void*);
 PetscErrorCode TSAdaptChoose_user(TSAdapt,TS,PetscReal,PetscInt*,PetscReal*,PetscBool*,PetscReal*,PetscReal*,PetscReal*);
 

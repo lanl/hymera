@@ -53,8 +53,6 @@ PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx) {
   PetscPrintf(comm,"itime   = %g\n",(double)ctx->itime);
   PetscPrintf(comm,"ftime   = %g\n",(double)ctx->ftime);
   PetscPrintf(comm,"tstype  = %d\n",(int)ctx->tstype);
-  PetscPrintf(comm,"pred_loop = %d\n",(int)ctx->pred_loop);
-  PetscPrintf(comm,"adaptdt = %d\n",(int)ctx->adaptdt);
   PetscPrintf(comm,"n_record = %d\n",(int)ctx->n_record);
   PetscPrintf(comm,"n_record_Steady_jRE = %d\n",(int)ctx->n_record_Steady_jRE);
   PetscPrintf(comm,"oldstep = %d\n",(int)ctx->oldstep);
@@ -76,10 +74,6 @@ PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx) {
   PetscPrintf(comm,"testSpGDsamerhs = %d\n",(int)ctx->testSpGDsamerhs);
   PetscPrintf(comm,"ic_binary_mode       = %c\n",ctx->ic_binary_mode);
   PetscPrintf(comm,"ic_binary_path       = %s\n",ctx->ic_binary_path);
-  PetscPrintf(comm,"delay_kinetic          = %d\n",(int)ctx->delay_kinetic);
-  PetscPrintf(comm,"poincare_counter       = %d\n",(int)ctx->poincare_counter);
-  PetscPrintf(comm,"field_counter          = %d\n",(int)ctx->field_counter);
-  PetscPrintf(comm,"CorrectorIdentifier    = %d\n",(int)ctx->CorrectorIdentifier);
 
   PetscPrintf(comm,"\n-- Counters / currents --\n");
   PetscPrintf(comm,"Iphi1 = %g\n",(double)PetscRealPart(ctx->Iphi1));
@@ -87,8 +81,6 @@ PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx) {
   PetscPrintf(comm,"Iphi3 = %g\n",(double)PetscRealPart(ctx->Iphi3));
   PetscPrintf(comm,"dampV = %g\n",(double)PetscRealPart(ctx->dampV));
   PetscPrintf(comm,"Re    = %g\n",(double)PetscRealPart(ctx->Re));
-  PetscPrintf(comm,"prev_current    = %g\n",ctx->prev_current);
-  PetscPrintf(comm,"present_current = %g\n",ctx->present_current);
 
   PetscPrintf(comm,"\n-- Grid / coord DM --\n");
   PetscPrintf(comm,"coorda        = %s\n", ctx->coorda ? "set" : "NULL");
@@ -137,20 +129,6 @@ PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx) {
   PetscPrintf(comm,"numr       = %d\n",(int)ctx->numr);
   PetscPrintf(comm,"numg       = %d\n",(int)ctx->numg);
   PetscPrintf(comm,"numpsi     = %d\n",(int)ctx->numpsi);
-
-  PetscPrintf(comm,"jre_data   = %s\n", ctx->jre_data ? "set" : "NULL");
-  PetscPrintf(comm,"field_data = %s\n", ctx->field_data ? "set" : "NULL");
-  PetscPrintf(comm,"jre        = %s\n", ctx->jre ? "set" : "NULL");
-  PetscPrintf(comm,"jreR       = %s\n", ctx->jreR ? "set" : "NULL");
-  PetscPrintf(comm,"jrephi     = %s\n", ctx->jrephi ? "set" : "NULL");
-  PetscPrintf(comm,"jreZ       = %s\n", ctx->jreZ ? "set" : "NULL");
-
-  PetscPrintf(comm,"\n-- Misc / other pointers --\n");
-  PetscPrintf(comm,"field_interpolation = %s\n", ctx->field_interpolation ? "set" : "NULL");
-  PetscPrintf(comm,"manager             = %s\n", ctx->manager ? "set" : "NULL");
-  PetscPrintf(comm,"axis[0], axis[1]    = %g, %g\n",
-              ctx->axis[0], ctx->axis[1]);
-  PetscPrintf(comm,"ParticlesCreated    = %d\n", ctx->ParticlesCreated);
 
   PetscPrintf(comm,"\n-- Input folder --\n");
   PetscPrintf(comm,"input_folder = %s\n", ctx->input_folder);

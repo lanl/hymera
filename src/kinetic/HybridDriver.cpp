@@ -43,38 +43,9 @@ using pc = PhysicalConstants<SI>;
 
 namespace Kinetic {
 
-TaskStatus Interpolate(Mesh *pm, User *p_mhd_config, int ncycle) {
-  // Interpolate fields and make derivative zero, for static initial background field
-  auto pkg = pm->packages.Get("Deck");
-  auto f = pkg->Param<EM_Field>("Field");
-  auto field_data = f.getDataRef();
-
-  using Host = Kokkos::HostSpace;
-
-  auto field_data_h = Kokkos::create_mirror_view(field_data);
-
-  Kokkos::deep_copy(field_data_h, 0.0);
-  Kokkos::View<Real***, Kokkos::LayoutLeft, Host> field("mhdfield", field_data.extent(0), field_data.extent(1), 3);
-
-  for (int field_index = 0; field_index < 2; ++field_index) {
-    mhd_getF(p_mhd_config, field_index, field.data());
-    auto sub = Kokkos::subview(field_data_h, Kokkos::ALL, Kokkos::ALL, field_index, Kokkos::ALL, 0, 0);
-    Kokkos::deep_copy(sub, field);
-  }
-
-  Kokkos::deep_copy(field_data, field_data_h);
-  f.interpolate();
-
-  return TaskStatus::complete;
-}
-
 TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
-
-  return TaskStatus::complete;
-
   // get mesh data
   auto md = pm->mesh_data.Get();
-
   auto pkg = pm->packages.Get("Deck");
 
   const auto h = pkg->Param<Real>("hRK");
@@ -114,7 +85,9 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
   auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
   auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
 
-  auto jre = f.getJreDataSubview();
+  auto jre = pkg->Param<ParArray3D<Real>>("Jre_push_deposit");
+
+  Kokkos::fence();
 
   const Real tstart = t0;
   const Real tstop =  t0 + dt;
@@ -172,6 +145,10 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
               pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
               if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
                 swarm_d.MarkParticleForRemoval(n);
+              if (level < 1)
+                pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_WALL;
+              else
+                pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_MOMENTUM;
               break;
             }
 
@@ -243,8 +220,6 @@ TaskStatus CheckScatter(MeshBlock* pmb) {
 }
 
 TaskStatus CleanupParticles(MeshBlock* pmb) {
-  return TaskStatus::complete;
-
   pmb->meshblock_data.Get()
   ->GetSwarmData()->Get("particles")
   ->RemoveMarkedParticles();
@@ -360,7 +335,39 @@ TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA) {
 }
 
 
-TaskStatus CollectCurrent() {
+TaskStatus CollectCurrent(Mesh *pm, const int iCD, const Real dtCD) {
+  auto md = pm->mesh_data.Get();
+  auto pkg = pm->packages.Get("Deck");
+
+  auto NR = pkg->Param<int>("NR");
+  auto NZ = pkg->Param<int>("NZ");
+  auto eta_a3VaB0 = pkg->Param<Real>("eta_a3VaB0");
+
+  auto jre_d = pkg->Param<ParArray3D<Real>>("Jre_push_deposit");
+  auto jre_deposit = pkg->Param<ParArrayHost<Real>>("Jre_deposit").KokkosView();
+  Kokkos::parallel_for("FillInterpolatedData_plot",
+      Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {NR,NZ,3}),
+      KOKKOS_LAMBDA(const int i, const int j, const int k) {
+        jre_d(i,j,k) *= eta_a3VaB0 / dtCD;
+      });
+  Kokkos::fence();
+  auto jre_h = create_mirror_view_and_copy(Kokkos::HostSpace(),jre_d);
+  Kokkos::fence();
+  MPI_Allreduce(MPI_IN_PLACE,jre_h.data(),jre_h.size(),MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  auto sub = Kokkos::subview(jre_deposit, 0, 0, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, iCD);
+  Kokkos::deep_copy(sub, jre_h);
+  Kokkos::deep_copy(jre_d, jre_h);
+  Kokkos::fence();
+
+  auto f = pkg->Param<EM_Field>("Field");
+  auto jre_data = Kokkos::subview(f.data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, static_cast<size_t>(fid::Jre), 0);
+  Kokkos::deep_copy(jre_data, jre_d);
+  Kokkos::fence();
+  Kokkos::Array<fid,1> fids = {fid::Jre};
+  f.interpolate(fids, 0);
+  Kokkos::deep_copy(jre_d, 0.0);
+  Kokkos::fence();
+
   return TaskStatus::complete;
 }
 
@@ -390,6 +397,7 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
   const int nPredictorSteps = pkg->Param<int>("nPR");
   const int nCDperMHDstep   = pkg->Param<int>("nCD");
   const int nLAperCD        = pkg->Param<int>("nLA");
+  const Real dtLA_over_tauC  = pkg->Param<Real>("dtLA_over_tauC");
 
   const Real tau_c = pkg->Param<Real>("tau_c");
 
@@ -397,15 +405,14 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
   auto dep = none;
 
   Real dtCD = tm.dt / tau_c / nCDperMHDstep;
-  Real dtLA = dtCD / nLAperCD;
 
-  dep = tl->AddTask(dep, Interpolate, pmesh, p_mhd_config, tm.ncycle);
+  dep = tl->AddTask(dep, Interpolate, pmesh, p_mhd_config);
 
   for (int iPR = 0; iPR < nPredictorSteps + 1; ++iPR) {
     for (int iCD = 0; iCD < nCDperMHDstep; ++iCD) {
       for (int iLA = 0; iLA < nLAperCD; ++iLA) {
-        Real t0 = iLA * dtLA + iCD * dtCD;
-        dep = tl->AddTask(dep, PushParticles, pmesh, t0, dtLA);
+        Real t0 = iLA * dtLA_over_tauC + iCD * dtCD;
+        dep = tl->AddTask(dep, PushParticles, pmesh, t0, dtLA_over_tauC);
 
         if (EnableLargeAngleCollisions == 1) {
           // these are per block tasklists
@@ -415,20 +422,21 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
 	          auto &pmb = blocks[i];
             auto &tl = async_region[i];
             auto check_scatter = tl.AddTask(none, CheckScatter, pmb.get());
-            auto add_secondaries = tl.AddTask(check_scatter, AddSecondaries, pmb.get(), tm.dt);
+            auto add_secondaries = tl.AddTask(check_scatter, AddSecondaries, pmb.get(), dtLA_over_tauC);
             auto cleanup = tl.AddTask(add_secondaries, CleanupParticles, pmb.get());
           }
           tl = &tc.AddRegion(1)[0];
           dep = none;
         }
       }
-      dep = tl->AddTask(dep, CollectCurrent);
+      dep = tl->AddTask(dep, CollectCurrent, pmesh, iCD, dtCD);
     }
     dep = tl->AddTask(dep, MHDStep, p_mhd_config);
     if (iPR < nPredictorSteps) {
       dep = tl->AddTask(dep, ResetState); // Puts particles back to the start, resets MHD state back to the start
     }
   }
+
   return tc;
 }
 

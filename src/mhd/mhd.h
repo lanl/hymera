@@ -16,7 +16,6 @@
 
 #include "mfd_config.h"
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,11 +23,14 @@ extern "C" {
 int mhd_PetscInit(int argc, char ** argv);
 int mhd_initialize(User* mhd_config);
 int mhd_step(User* mhd_config);
-int mhd_getF(User* mhd_config, int code, double* gf2);
+
+
+int mhd_getF(User* mhd_config, field_id fid, view3d_t v);
 int mhd_resetState(User* mhd_config);
 int mhd_destroy(User* mhd_config);
 int mhd_savesolution(User* mhd_config, const char* filename);
 int mhd_loadsolution(User* mhd_config, const char* filename);
+
 
 #ifdef __cplusplus
 }

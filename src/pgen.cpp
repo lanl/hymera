@@ -217,6 +217,7 @@ void GenerateParticleSquare(parthenon::MeshBlock *pmb, parthenon::ParameterInput
 }
 
 void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
+  int marker = 0;
   auto &data = pmb->meshblock_data.Get();
 
   // pull out information/global params from package
@@ -255,11 +256,6 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   const Real &minx_j = pmb->coords.Xf<2>(jb.s);
   const Real &minx_k = pmb->coords.Xf<3>(kb.s);
 
-
-  // Create an accessor to particles, allocate particles
-  // Dirty fix for darwin GH
-
-  if (parthenon::Globals::my_rank != 0) N = 0;
   auto newParticlesContext = swarm->AddEmptyParticles(N);
 
   // Make a SwarmPack via types to get positions
@@ -295,20 +291,18 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   }
 
   std::fclose(fs);
-  Kokkos::View<Real******> psi_hermite_data("psi",
-      f.hermite_data.extent(0),
-      f.hermite_data.extent(1),
-      f.hermite_data.extent(2) + 1,
-      f.hermite_data.extent(3),
-      f.hermite_data.extent(6),
-      f.hermite_data.extent(7));
-  computeFlux<2>(f.hermite_data, psi_hermite_data, f.hR, f.hZ);
+//  Kokkos::View<Real******> psi_hermite_data("psi",
+//      f.hermite_data.extent(0),
+//      f.hermite_data.extent(1),
+//      f.hermite_data.extent(2) + 1,
+//      f.hermite_data.extent(3),
+//      f.hermite_data.extent(6),
+//      f.hermite_data.extent(7));
+//  computeFlux<2>(f.hermite_data, psi_hermite_data, f.hR, f.hZ);
   const auto c_aw0 = pkg->Param<Real>("c_aw0");
   const auto ct_a = pkg->Param<Real>("ct_a");
   const auto alpha0 = pkg->Param<Real>("alpha0");
   GuidingCenterEquations<EM_Field, false, false> gce(f, c_aw0, ct_a, alpha0);
-
-  std::cout << "Generating particles!\n";
 
   // loop over new particles created
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
@@ -379,10 +373,10 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
         if (randNum < abs(curlB[1])) break;
       }
 
-      Real my_phi, my_mu;
-      Real psi;
-      f.evalPsi(psi, X, t, psi_hermite_data);
-      gce.computeConservedQuantities(X, my_phi, my_mu, t, psi);
+      Real my_phi = 0.0, my_mu = 0.0;
+      Real psi = 0.0;
+//      f.evalPsi(R, Z, t, psi_hermite_data, psi);
+ //     gce.computeConservedQuantities(X, my_phi, my_mu, t, psi);
       KOKKOS_ASSERT(status == SUCCESS);
 
       pack_swarm(b, Kinetic::p(), n)   = X[0];

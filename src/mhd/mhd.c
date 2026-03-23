@@ -43,8 +43,13 @@ const char help[] = "Time-dependent magnetic diffusion PDE in 3d cylindrical coo
 #include <fenv.h>
 
 #include "default_petsc_options.h"
-#include "mhd.h"
 #include "geometry.h"
+#include "mhd.h"
+
+void view4d_zero(view4d_t v);
+void view3d_zero(view3d_t v);
+
+void subview_exclude_d1(view4d_t v4, view3d_t v);
 
 int mhd_PetscInit(int argc, char ** argv, User** user) {
   // feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
@@ -69,7 +74,6 @@ int mhd_initialize(User* user) {
   PetscErrorCode ierr = 0;
   SNES snes;
   PetscReal time, ftime;
-  TSAdapt adapt;
 
   PetscBool matrix_free = PETSC_FALSE, matrix_free_FDprec = PETSC_FALSE, user_defined_pc = PETSC_FALSE;
   KSP * subksp, * subsubksp, * subsubsubksp;
@@ -193,13 +197,13 @@ int mhd_initialize(User* user) {
     TSSetType(user->ts, TSCN); /* Crank-Nicholson method */
     break;
   case 4:
-    TSGetAdapt(user->ts, & adapt);
-    TSAdaptSetType(adapt, TSADAPTNONE);
-    TSSetType(user->ts, TSARKIMEX); /* Additive Runge-Kutta IMEX method */
-    TSARKIMEXSetFullyImplicit(user->ts, PETSC_TRUE);
-    TSARKIMEXSetType(user->ts, TSARKIMEXL2);
-
-    TSSetEquationType(user->ts,TS_EQ_IMPLICIT);
+//    TSGetAdapt(user->ts, & adapt);
+//    TSAdaptSetType(adapt, TSADAPTNONE);
+//    TSSetType(user->ts, TSARKIMEX); /* Additive Runge-Kutta IMEX method */
+//    TSARKIMEXSetFullyImplicit(user->ts, PETSC_TRUE);
+//    TSARKIMEXSetType(user->ts, TSARKIMEXL2);
+//
+//    TSSetEquationType(user->ts,TS_EQ_IMPLICIT);
     break;
   case 5:
     //TSSetProblemType(user->ts,TS_NONLINEAR);
@@ -671,63 +675,69 @@ int mhd_resetState(User* user) {
   return 0;
 }
 
-int mhd_getEf(User* user) {
+int mhd_getF(User* user, field_id fid, view3d_t v) {
   Vec X;
   TSGetSolution(user->ts, &X);
 
   DM da;
   TSGetDM(user->ts,&da);
-  PetscInt ndofs = (user->Nr)*(user->Nz);
 
-  PetscScalar* ge = (PetscScalar*) malloc(3*sizeof(PetscScalar)*(user->Nr)*(user->Nz)*(user->Nphi));
-  PetscScalar* ge_ER = ge;
-  PetscScalar* ge_EP = ge + (user->Nr)*(user->Nz)*(user->Nphi);
-  PetscScalar* ge_EZ = ge + (user->Nr)*(user->Nz)*(user->Nphi) * 2;
+  size_t NR = user->Nr;
+  size_t Nphi = user->Nphi;
+  size_t NZ = user->Nz;
 
-  PetscScalar* gf_E_2D  = (PetscScalar*) malloc(3*sizeof(PetscScalar)*ndofs);
+  view4d_t v4 = {
+      (PetscScalar*) malloc(sizeof(PetscScalar) * (3 * NR * Nphi * NZ)),
+      NR, Nphi, NZ, 3,
+      3, 3 * NR, 3 * NR * Nphi, 1
+  };
 
-  PetscScalar* gf_ER_2D = gf_E_2D;
-  PetscScalar* gf_EP_2D = gf_E_2D + 1 * ndofs;
-  PetscScalar* gf_EZ_2D = gf_E_2D + 2 * ndofs;
+  view4d_zero(v4);
 
-  FromPetscVecToArray_EfieldCell(user->ts, X, ge_ER, ge_EP, ge_EZ, user);
-  slice2DaddJre(ge_ER, gf_ER_2D, user->Nr, user->Nphi, user->Nz, user->jre + 0 * user->Nr*user->Nz);
-  slice2DaddJre(ge_EP, gf_EP_2D, user->Nr, user->Nphi, user->Nz, user->jre + 1 * user->Nr*user->Nz);
-  slice2DaddJre(ge_EZ, gf_EZ_2D, user->Nr, user->Nphi, user->Nz, user->jre + 2 * user->Nr*user->Nz);
+  // E field and J field have different ordering, field index is the slowest
+  if (fid == fid_E || fid == fid_J) {
+    v4.stride0 = 1;
+    v4.stride1 = NR;
+    v4.stride2 = NR * Nphi;
+    v4.stride3 = NR * Nphi * NZ;
+  }
 
-  PetscPrintf(PETSC_COMM_WORLD, "Computing Ep\n");
-  PetscPrintf(PETSC_COMM_WORLD, "Going to set %d numbers\n", 1 + 2*2 + 6*3 + 24 * (user->Nr * user->Nz - 1) + 1);
-
-  return 0;
-
-}
-
-int mhd_getF(User* user, int code, double* gf2) {
-  Vec X;
-  TSGetSolution(user->ts, &X);
-
-  DM da;
-  TSGetDM(user->ts,&da);
-  PetscInt ndofs = (user->Nr)*(user->Nz);
-
-  PetscScalar* gf3  = (PetscScalar*) malloc(3*sizeof(PetscScalar)*(user->Nr)*(user->Nz)*(user->Nphi));
-  for (int i = 0; i < 3 * ndofs; ++i) gf2[i]  = 0.0;
-
-  PetscPrintf(PETSC_COMM_WORLD, "Computing\n");
-  if (code == 0) // compute B
-    getBArray(user->ts, X, gf3, user, 0);
-  else if (code == 1)
-    getVArray(user->ts, X, gf3, user);
-  else if (code == 2)
-    getBArray(user->ts, X, gf3, user, 1);
+  if (fid == fid_B) // compute B
+    getBArray(user->ts, X, v4.data, user, 0);
+  else if (fid == fid_E) // compute E
+    getEJArray(user->ts, X,
+        v4.data,
+        v4.data + v4.stride3,
+        v4.data + 2 * v4.stride3,
+    user, 0);
+  else if (fid == fid_Jre) {
+    view3d_t jre = user->jre;
+    for (size_t i = 0; i < jre.dim0; ++i)
+    for (size_t j = 0; j < jre.dim1; ++j)
+    for (size_t k = 0; k < jre.dim2; ++k)
+      v.data[i * v.stride0 + j * v.stride1 + k * v.stride2] =
+        jre.data[i * jre.stride0 + j * jre.stride1 + k * jre.stride2];
+    free(v4.data);
+    return 0;
+  }
+  else if (fid == fid_J)
+    getEJArray(user->ts, X,
+        v4.data,
+        v4.data + v4.stride3,
+        v4.data + 2 * v4.stride3,
+    user, 1);
+  else if (fid == fid_V)
+    getVArray(user->ts, X, v4.data, user);
+  else if (fid == fid_GradB)
+    getBArray(user->ts, X, v4.data, user, 1);
   else {
-    PetscPrintf(PETSC_COMM_WORLD, "Wrong field code\n");
+    PetscPrintf(PETSC_COMM_WORLD, "ERROR: Wrong field id\n");
+    free(v4.data);
     return 1;
   }
 
-  PetscPrintf(PETSC_COMM_WORLD, "Slicing\n");
-  slice2D(gf3, gf2, user->Nr, user->Nphi, user->Nz);
-  free(gf3);
+  subview_exclude_d1(v4, v);
+  free(v4.data);
   return 0;
 }
 
@@ -775,10 +785,34 @@ int mhd_loadsolution(User* user, const char* filename) {
   PetscPrintf(PETSC_COMM_WORLD, "Reading X vector from file %s ...\n", filename);
   PetscViewerBinaryOpen(PETSC_COMM_WORLD, filename, FILE_MODE_READ, & viewerX);
   Vec X;
+  TSGetSolution(user->ts, &X);
   VecLoad(X, viewerX);
   TSSetSolution(user->ts, X);
 
   PetscViewerDestroy( & viewerX);
   PetscPrintf(PETSC_COMM_WORLD, "Reading from file %s is over.\n", filename);
 }
+
+void view4d_zero(view4d_t v) {
+  for (size_t i = 0; i < v.dim0 * v.dim1 * v.dim2 * v.dim3; ++i)
+        v.data[i] = 0.0;
+}
+
+void view3d_zero(view3d_t v) {
+  for (size_t i = 0; i < v.dim0 * v.dim1 * v.dim2; ++i)
+        v.data[i] = 0.0;
+}
+
+void subview_exclude_d1(view4d_t v4, view3d_t  v) {
+  for (size_t i = 0; i < v.dim0; ++i)
+    for (size_t j = 0; j < v.dim1; ++j)
+      for (size_t k = 0; k < v.dim2; ++k)
+        v.data[i * v.stride0 + j * v.stride1 + k * v.stride2] =
+        v4.data[i * v4.stride0 + j * v4.stride2 + k * v4.stride3];
+}
+
+
+
+
+
 

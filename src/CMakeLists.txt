@@ -31,7 +31,6 @@ target_include_directories(mhd_core PUBLIC
   )
 
 add_library(infrastructure
-  kinetic/EM_Field.cpp
   kinetic/kinetic.cpp
 )
 

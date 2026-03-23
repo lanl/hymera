@@ -50,10 +50,6 @@ void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityVie
     field.cdg.dZ /
     2.0 / M_PI * time_interval * w;
 
-  Dim3 B, curlB, dBdR, dBdZ, E, dbdt;
-  ERROR_CODE ret = field(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-  KOKKOS_ASSERT(ret == SUCCESS);
-
   int i, j;
   int level = field.cdg.indicator(X, i, j);
 
@@ -62,13 +58,18 @@ void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityVie
 
   if (level < 1) return;
 
+  Dim3 B, curlB, dBdR, dBdZ, E, dbdt;
+  ERROR_CODE ret = field(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+  KOKKOS_ASSERT(ret == SUCCESS);
+
+
   Real BB = norm_(B);
 
   for (int ii = -1; ii < 2; ++ii) {
-      if(i + ii >= 0 and i + ii < jre.extent(0)) {
+      if(i + ii >= 0 and i + ii < field.data.extent(0)) {
           Real wr = S2(abs(Xlocd[0] - static_cast<Real>(ii)));
           for (int jj = -1; jj < 2; ++jj) {
-              if(j + jj >= 0 and j + jj < jre.extent(1)) {
+              if(j + jj >= 0 and j + jj < field.data.extent(1)) {
                   Real wz = S2(abs(Xlocd[1] - static_cast<Real>(jj)));
                   Real weighted_contribution = contribution * wr * wz;
                   for (int kk = 0; kk < 3; ++kk) {
