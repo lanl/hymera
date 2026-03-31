@@ -759,7 +759,7 @@ TaskStatus RandomRemove(Mesh* pm) {
   auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
   auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<Kinetic::weight>("particles");
-  auto pack_swarm_r = desc_swarm_i.GetPack(md.get());
+  auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
 
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
                      DevExecSpace(), 0, pack_swarm_i.GetMaxFlatIndex(),
