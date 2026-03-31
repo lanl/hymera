@@ -180,7 +180,6 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
 }
 
 TaskStatus CheckScatter(MeshBlock* pmb) {
-  return TaskStatus::complete;
 
   auto data = pmb->meshblock_data.Get();
   auto swarm = data->GetSwarmData()->Get("particles");
@@ -227,10 +226,8 @@ TaskStatus CleanupParticles(MeshBlock* pmb) {
 }
 
 TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA) {
-  return TaskStatus::complete;
-
   auto pkg = pmb->packages.Get("Deck");
-  auto gamma_min = *(pkg->Param<std::shared_ptr<Real>>("gamma_min"));
+  auto gamma_min = pkg->Param<Real>("gamma_min");
   auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
   auto data = pmb->meshblock_data.Get();
   auto swarm = data->GetSwarmData()->Get("particles");
@@ -342,6 +339,7 @@ TaskStatus CollectCurrent(Mesh *pm, const int iCD, const Real dtCD) {
   auto NR = pkg->Param<int>("NR");
   auto NZ = pkg->Param<int>("NZ");
   auto eta_a3VaB0 = pkg->Param<Real>("eta_a3VaB0");
+  auto En = pkg->Param<Real>("En");
 
   auto jre_d = pkg->Param<ParArray3D<Real>>("Jre_push_deposit");
   auto jre_deposit = pkg->Param<ParArrayHost<Real>>("Jre_deposit").KokkosView();
@@ -362,12 +360,35 @@ TaskStatus CollectCurrent(Mesh *pm, const int iCD, const Real dtCD) {
   auto f = pkg->Param<EM_Field>("Field");
   auto jre_data = Kokkos::subview(f.data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, static_cast<size_t>(fid::Jre), 0);
   Kokkos::deep_copy(jre_data, jre_d);
+  Kokkos::parallel_for("FillInterpolatedData_plot",
+      Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {NR,NZ,3}),
+      KOKKOS_LAMBDA(const int i, const int j, const int k) {
+        jre_data(i,j,k) *= En;
+      });
   Kokkos::fence();
   Kokkos::Array<fid,1> fids = {fid::Jre};
   f.interpolate(fids, 0);
   Kokkos::deep_copy(jre_d, 0.0);
   Kokkos::fence();
 
+  int num_particles = 0;
+  auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
+  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
+  parthenon::par_reduce(
+      PARTHENON_AUTO_LABEL, 0, pack_swarm_i.GetMaxFlatIndex(),
+      KOKKOS_LAMBDA(const int idx, int &number) {
+        auto [b, n] = pack_swarm_i.GetBlockParticleIndices(idx);
+        const auto markers_d = pack_swarm_i.GetContext(b);
+        if (markers_d.IsActive(n) && !markers_d.IsMarkedForRemoval(n)&&
+            (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE) ) {
+							number+=1;
+				}
+    	},
+      Kokkos::Sum<int>(num_particles));
+
+   if (Globals::my_rank < 2)
+			std::cout << "Number of alive particles = " << num_particles << std::endl;
+   pkg->UpdateParam("num_particles_total", num_particles);
   return TaskStatus::complete;
 }
 
@@ -376,10 +397,11 @@ TaskStatus MHDStep(User* p_mhd_config) {
   return TaskStatus::complete;
 }
 
-TaskStatus ResetState() {
+TaskStatus ResetState(Mesh *pm, User *p_mhd_config) {
+  mhd_resetState(p_mhd_config);
+  RestoreState(pm);
   return TaskStatus::complete;
 }
-
 
 HybridDriver::HybridDriver(ParameterInput *pin, ApplicationInput *app_in, Mesh *pmesh,
     User* p_mhd_config)
@@ -404,7 +426,8 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
   auto * tl = &tc.AddRegion(1)[0];
   auto dep = none;
 
-  Real dtCD = tm.dt / tau_c / nCDperMHDstep;
+  Real dt = tm.dt / tau_c;
+  Real dtCD = dt / nCDperMHDstep;
 
   dep = tl->AddTask(dep, Interpolate, pmesh, p_mhd_config);
 
@@ -431,11 +454,23 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
       }
       dep = tl->AddTask(dep, CollectCurrent, pmesh, iCD, dtCD);
     }
-    dep = tl->AddTask(dep, MHDStep, p_mhd_config);
     if (iPR < nPredictorSteps) {
-      dep = tl->AddTask(dep, ResetState); // Puts particles back to the start, resets MHD state back to the start
+      dep = tl->AddTask(dep, MHDStep, p_mhd_config);
+      dep = tl->AddTask(dep, InterpolateTimeDerivative, pmesh, p_mhd_config, dt);
+      dep = tl->AddTask(dep, ResetState, pmesh, p_mhd_config); // Puts particles back to the start, resets MHD state back to the start
     }
   }
+  dep = tl->AddTask(dep, SaveState, pmesh); // Commits particle states: Protects all alive particles.
+  dep = tl->AddTask(dep, RandomRemove, pmesh); // If there are more alive particles then limit, kill half, doubling the weight
+  TaskRegion &async_region = tc.AddRegion(blocks.size());
+  for (int i = 0; i < blocks.size(); ++i) {
+    // required by this MeshData object)
+	  auto &pmb = blocks[i];
+    auto &tl = async_region[i];
+    auto cleanup = tl.AddTask(none, CleanupParticles, pmb.get());
+  }
+  tl = &tc.AddRegion(1)[0];
+  dep = none;
 
   return tc;
 }

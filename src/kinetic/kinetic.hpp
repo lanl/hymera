@@ -78,8 +78,8 @@ SWARM_VARIABLE(Real, particle, saved_w);
 
 std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_context);
 void ComputeParticleWeights(Mesh* pm);
-void SaveState(Mesh* pm);
-void RestoreState(Mesh* pm);
+TaskStatus SaveState(Mesh* pm);
+TaskStatus RestoreState(Mesh* pm);
 void InitializeDriver(ParthenonManager* man);
 
 void SaveRawFieldData(ParthenonManager * man, const char* filename);
@@ -89,6 +89,8 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
 void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context);
 void WorkBeforeLoop(Mesh * pm, User* mhd_context);
 TaskStatus Interpolate(Mesh *pm, User *mhd_context);
+TaskStatus InterpolateTimeDerivative(Mesh *pm, User *p_mhd_config, const Real dt);
+TaskStatus RandomRemove(Mesh* pm);
 
 
 

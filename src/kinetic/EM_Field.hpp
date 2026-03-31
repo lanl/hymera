@@ -170,7 +170,7 @@ struct EM_Field {
     }
 
     for (int k = 0; k < 3; ++k)
-      E[k] = E_n * (E[k] - J_re[k]);
+      E[k] = E[k] - J_re[k];
 
     for (int k = 0; k < 3; ++k) {
       dbdt[k] = (dBdt[k] - B[k] * BBprime / BB)  / sqrt(BB);

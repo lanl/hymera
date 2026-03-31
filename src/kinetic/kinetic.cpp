@@ -233,6 +233,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("tau_c",  tau_c);
   pkg->AddParam("eta_norm",  eta_norm);
   pkg->AddParam("eta_a3VaB0",  eta_a3VaB0);
+  pkg->AddParam("En",  En);
 
   Real dtLA_over_tauC = pin->GetOrAddReal("Time","dtLA_over_tauC", 1e-5);  ///< current deposit timestep for electric field readjustment [s]
   int nLA = std::ceil((dt_mhd / nCD) / (dtLA_over_tauC * tau_c));
@@ -332,6 +333,9 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   ParArray3D<Real> Jre_push_deposit("jre_push_deposit", NR, NZ, 3);
   Kokkos::deep_copy(Jre_push_deposit, 0.0);
   pkg->AddParam("Jre_push_deposit", Jre_push_deposit);
+  ParArray3D<Real> jre_backup("jre_backup", NR, NZ, 3);
+  Kokkos::deep_copy(jre_backup, 0.0);
+  pkg->AddParam("jre_backup", jre_backup, Params::Mutability::Restart);
 
   int nfields = static_cast<size_t>(fid_Count);
   ParArrayHost<Real> field_data_mhd("MHD_Field_data", NR, NZ, 3, nfields);
@@ -422,6 +426,11 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 //  MPI_Comm_free(&node_comm);
 
   pkg->AddParam("num_particles_per_block", npart);
+// Paticles are counted on Collect current
+  pkg->AddParam("num_particles_total", 0, Params::Mutability::Restart);
+  const int num_particles_max = pin->GetOrAddInteger("ParticleSeed", "MaxParticles", 500000);
+
+  pkg->AddParam("num_particles_max", num_particles_max);
   // Initialize random number generator pool
   int rng_seed = pin->GetOrAddInteger("ParticleSeed", "rng_seed", 1234) + Globals::my_rank;
   RNGPool rng_pool(rng_seed);
@@ -510,6 +519,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   return pkg;
 }
+
 
 void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context) {
   auto pkg = pm->packages.Get("Deck");
@@ -648,7 +658,7 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
 
   if (Globals::my_rank == 0) {
     std::cout << std::format("{:20.14e} {:20.14e} {:20.14e}",
-        I_re * .5, I_re_integral * .5,
+        I_re * .5, I_re_integral * 5.3 * 2.0,
         I_ohmic * 5.3  * 2.0 / pc::mu0) << std::endl;
   }
 }
@@ -693,7 +703,7 @@ auto &GetCoords(std::shared_ptr<MeshBlock> &pmb) { return pmb->coords; }
 auto &GetCoords(MeshBlock *pmb) { return pmb->coords; }
 auto &GetCoords(Mesh *pm) { return pm->block_list[0]->coords; }
 
-void SaveState(Mesh* pm) {
+TaskStatus SaveState(Mesh* pm) {
   auto md = pm->mesh_data.Get();
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
       Kinetic::p, Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight,
@@ -722,19 +732,67 @@ void SaveState(Mesh* pm) {
           pack_swarm_i(b_i, Kinetic::status(), n_i) |= Kinetic::PROTECTED;
         } else {
           const auto swarm = pack_swarm_i.GetContext(b_i);
+          pack_swarm_i(b_i, Kinetic::status(), n_i) &= ~Kinetic::PROTECTED;
           swarm.MarkParticleForRemoval(n_i);
         }
       });
 
   auto pkg = pm->packages.Get("Deck");
 
-//  auto jre = pkg->Param<EM_Field>("Field").getJreDataSubview();
-//  auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
+  auto jre_backup = pkg->Param<ParArray3D<Real>>("jre_backup");
+  auto f = pkg->Param<EM_Field>("Field");
+  auto jre_data = Kokkos::subview(f.data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, static_cast<size_t>(fid::Jre), 0);
 
-//  Kokkos::deep_copy(jre_backup, jre);
+  Kokkos::deep_copy(jre_backup, jre_data);
+	return TaskStatus::complete;
 }
 
-void RestoreState(Mesh* pm) {
+TaskStatus RandomRemove(Mesh* pm) {
+  auto pkg = pm->packages.Get("Deck");
+  auto num_particles = pkg->Param<int>("num_particles_total");
+  auto num_particles_max = pkg->Param<int>("num_particles_max");
+
+	if (num_particles_max > num_particles) return TaskStatus::complete;
+
+  auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
+  auto md = pm->mesh_data.Get();
+  auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
+  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
+  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<Kinetic::weight>("particles");
+  auto pack_swarm_r = desc_swarm_i.GetPack(md.get());
+
+  parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
+                     DevExecSpace(), 0, pack_swarm_i.GetMaxFlatIndex(),
+                     // new_n ranges from 0 to N_new_particles
+                     KOKKOS_LAMBDA(const int idx) {
+        auto [b_i, n_i] = pack_swarm_i.GetBlockParticleIndices(idx);
+        auto [b_r, n_r] = pack_swarm_r.GetBlockParticleIndices(idx);
+        if (pack_swarm_i(b_i, Kinetic::status(), n_i) & Kinetic::ALIVE) {
+          auto rng_gen = rng_pool.get_state();
+          auto isKilled = (rng_gen.urand(2));
+          rng_pool.free_state(rng_gen);
+          // block and particle indices
+
+          if (isKilled == 1) {
+              pack_swarm_i(b_i, Kinetic::status(), n_i) &= ~Kinetic::ALIVE;
+              pack_swarm_i(b_i, Kinetic::status(), n_i) &= ~Kinetic::PROTECTED;
+              const auto swarm = pack_swarm_i.GetContext(b_i);
+              swarm.MarkParticleForRemoval(n_i);
+          } else {
+							pack_swarm_r(b_r, Kinetic::weight(), n_r) *= 2.0;
+					}
+        }
+      });
+
+  auto jre_backup = pkg->Param<ParArray3D<Real>>("jre_backup");
+  auto f = pkg->Param<EM_Field>("Field");
+  auto jre_data = Kokkos::subview(f.data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, static_cast<size_t>(fid::Jre), 0);
+
+  Kokkos::deep_copy(jre_backup, jre_data);
+  return TaskStatus::complete;
+}
+
+TaskStatus RestoreState(Mesh* pm) {
   auto md = pm->mesh_data.Get();
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
       Kinetic::p, Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight,
@@ -769,10 +827,13 @@ void RestoreState(Mesh* pm) {
       });
 
   auto pkg = pm->packages.Get("Deck");
-  // auto jre = pkg->Param<EM_Field>("Field").getJreDataSubview();
-  // auto jre_backup = pkg->Param<Kokkos::View<Real***>>("JreBackup");
 
-  // Kokkos::deep_copy(jre, jre_backup);
+  auto jre_backup = pkg->Param<ParArray3D<Real>>("jre_backup");
+  auto f = pkg->Param<EM_Field>("Field");
+  auto jre_data = Kokkos::subview(f.data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, static_cast<size_t>(fid::Jre), 0);
+
+  Kokkos::deep_copy(jre_data, jre_backup);
+	return TaskStatus::complete;
 }
 
 void ComputeParticleWeights(Mesh* pm) {
@@ -863,6 +924,7 @@ TaskStatus Interpolate(Mesh *pm, User *p_mhd_config) {
   auto V = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::V), 0);
   auto J = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::J), 0);
   auto eta_norm = pkg->Param<Real>("eta_norm");
+  auto En = pkg->Param<Real>("En");
 
   auto NR = pkg->Param<int>("NR");
   auto NZ = pkg->Param<int>("NZ");
@@ -880,18 +942,81 @@ TaskStatus Interpolate(Mesh *pm, User *p_mhd_config) {
         cross_product(B_, V_, E_); // E:= -vxB
         for (int k = 0; k < 3; ++k) {
            E_[k] += eta_norm * J_[k];
-           E(i,j,k) = E_[k];
+           E(i,j,k) = En * E_[k];
         }
       });
   Kokkos::fence();
 
-  std::array<fid, 5> fids = {fid::B, fid::E, fid::J, fid::V, fid::GradB};
+  std::array<fid, 6> fids = {fid::B, fid::E, fid::Jre, fid::J, fid::V, fid::GradB};
   f.interpolate(fids, 0);
   Kokkos::fence();
   f.cleanDiv(fid::B, 0);
   Kokkos::fence();
 
   return TaskStatus::complete;
+}
+
+TaskStatus InterpolateTimeDerivative(Mesh *pm, User *p_mhd_config, const Real dt) {
+// Update time derivative with finite difference
+auto pkg = pm->packages.Get("Deck");
+auto f = pkg->Param<EM_Field>("Field");
+
+using Host = Kokkos::HostSpace;
+
+auto field_data_h = Kokkos::create_mirror_view(f.data);
+
+Kokkos::deep_copy(field_data_h, 0.0);
+
+for (size_t fid = 0; fid < static_cast<size_t>(fid_Count); ++fid) {
+  if (fid == static_cast<size_t>(fid::Jre)) continue;
+  auto sub = Kokkos::subview(field_data_h, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, fid, 1);
+  mhd_getF(p_mhd_config, static_cast<field_id>(fid), wrap_view(sub));
+}
+
+Kokkos::deep_copy(f.data, field_data_h);
+
+auto E = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::E), Kokkos::ALL);
+auto B = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::B), Kokkos::ALL);
+auto V = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::V), Kokkos::ALL);
+auto J = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::J), Kokkos::ALL);
+auto eta_norm = pkg->Param<Real>("eta_norm");
+auto En = pkg->Param<Real>("En");
+
+auto NR = pkg->Param<int>("NR");
+auto NZ = pkg->Param<int>("NZ");
+Kokkos::parallel_for("FillInterpolatedDataDerivatie_plot",
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR,NZ}),
+    KOKKOS_LAMBDA(const int i, const int j) {
+      Dim3 B_, V_, J_, E_;
+      Real R = f.R0 + i * f.dR;
+      for (int k = 0; k < 3; ++k) {
+         B_[k] = B(i,j,k,1) / R;
+         V_[k] = V(i,j,k,1);
+         J_[k] = J(i,j,k,1);
+      }
+      E_ = {};
+      cross_product(B_, V_, E_); // E:= -vxB
+      for (int k = 0; k < 3; ++k) {
+         E_[k] += eta_norm * J_[k];
+         E(i,j,k,1) = En * E_[k];
+      }
+
+      for (int k = 0; k < 3; ++k) {
+         B(i,j,k,1) = (B(i,j,k,1)-B(i,j,k,0)) / dt;
+         V(i,j,k,1) = (V(i,j,k,1)-V(i,j,k,0)) / dt;
+         J(i,j,k,1) = (J(i,j,k,1)-J(i,j,k,0)) / dt;
+         E(i,j,k,1) = (E(i,j,k,1)-E(i,j,k,0)) / dt;
+      }
+    });
+Kokkos::fence();
+
+std::array<fid, 5> fids = {fid::B, fid::E, fid::J, fid::V, fid::GradB};
+f.interpolate(fids, 1);
+Kokkos::fence();
+f.cleanDiv(fid::B, 1);
+Kokkos::fence();
+
+return TaskStatus::complete;
 }
 
 
