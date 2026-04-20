@@ -18,8 +18,8 @@ template <class Field>
 KOKKOS_INLINE_FUNCTION
 Real getParticleCurrent(Dim5& X, Real t, Real w, const Field f) {
   Dim3 B, curlB, dBdR, dBdZ, E, dbdt;
-  ERROR_CODE ret = f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-  KOKKOS_ASSERT(ret == SUCCESS);
+  ErrorCode ret = f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+  KOKKOS_ASSERT(ret == ErrorCode::Success);
 
   const Dim5::value_type p = X[0];
   const Dim5::value_type xi = X[1];
@@ -59,8 +59,8 @@ void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityVie
   if (level < 1) return;
 
   Dim3 B, curlB, dBdR, dBdZ, E, dbdt;
-  ERROR_CODE ret = field(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-  KOKKOS_ASSERT(ret == SUCCESS);
+  ErrorCode ret = field(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+  KOKKOS_ASSERT(ret == ErrorCode::Success);
 
 
   Real BB = norm_(B);
