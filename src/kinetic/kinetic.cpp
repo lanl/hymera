@@ -138,7 +138,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real eta_a3VaB0 = etaplasma / pow(a,3) / E0; // converts eta J to V_A B_0
 
   Kokkos::DualView<Real***, Kokkos::LayoutRight> jre("Jre_mhd", NR, NZ, 3);
-  Kokkos::deep_copy(jre.d_view, 0.0);
+  Kokkos::deep_copy(jre.view_device(), 0.0);
   jre.modify_device();
   jre.sync_host();
 
@@ -210,7 +210,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     mhd_context->n_record =0;
     mhd_context->n_record_Steady_jRE = 0;
 
-    mhd_context -> jre = wrap_view(jre.h_view);
+    mhd_context -> jre = wrap_view(jre.view_host());
 
     mhd_initialize(mhd_context);
 
@@ -348,11 +348,12 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
 
   /// Set runaway current as 10% of the current
+  auto jre_host = jre.view_host();
   for (int i = 0; i < jre.extent(0); ++i)
   for (int j = 0; j < jre.extent(1); ++j)
   for (int k = 0; k < jre.extent(2); ++k)
     if (indicator_h(i,j) > 0)
-      jre.h_view(i,j,k) = 1.e-3 * eta_norm * kv(0, 0, 0, i, j, k, static_cast<size_t>(fid::J));
+      jre_host(i,j,k) = 1.e-3 * eta_norm * kv(0, 0, 0, i, j, k, static_cast<size_t>(fid::J));
   jre.modify_host();
   jre.sync_device();
 
