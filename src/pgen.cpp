@@ -346,8 +346,8 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
       Dim3 B = {}, dBdR = {}, dBdZ = {}, curlB = {}, E = {}, dbdt = {};
       Dim3 B_center = {}, curlB_center = {};
-      ERROR_CODE status = f(X, t, B_center, curlB_center, dBdR, dBdZ, E, dbdt);
-      KOKKOS_ASSERT(status == SUCCESS);
+      ErrorCode status = f(X, t, B_center, curlB_center, dBdR, dBdZ, E, dbdt);
+      KOKKOS_ASSERT(status == ErrorCode::Success);
 
       // Generate particles:
       // Generate within level according to curl
@@ -370,12 +370,12 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
         if (level != 1)
           continue;
         status = f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+        KOKKOS_ASSERT(status == ErrorCode::Success);
         if (randNum < abs(curlB[1])) break;
       }
 
       Real my_phi = 0.0, my_mu = 0.0;
       Real psi = 0.0;
-      KOKKOS_ASSERT(status == SUCCESS);
 
       pack_swarm(b, Kinetic::p(), n)   = X[0];
       pack_swarm(b, Kinetic::xi(), n)  = X[1];
