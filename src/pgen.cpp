@@ -375,8 +375,6 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
       Real my_phi = 0.0, my_mu = 0.0;
       Real psi = 0.0;
-//      f.evalPsi(R, Z, t, psi_hermite_data, psi);
- //     gce.computeConservedQuantities(X, my_phi, my_mu, t, psi);
       KOKKOS_ASSERT(status == SUCCESS);
 
       pack_swarm(b, Kinetic::p(), n)   = X[0];
@@ -391,5 +389,143 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
       pack_swarm(b, Kinetic::weight(), n) = 1.0;
       pack_status(b, Kinetic::status(), n) = Kinetic::ALIVE | Kinetic::PROTECTED;
       });
+
+}
+
+void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
+  int marker = 0;
+  auto &data = pmb->meshblock_data.Get();
+
+  // pull out information/global params from package
+  auto pkg = pmb->packages.Get("Deck");
+  auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
+  int N = pkg->Param<int>("num_particles_per_block");
+  const Real pmin  = pkg->Param<Real>("pmin");
+  const Real pmax  = pkg->Param<Real>("pmax");
+  const Real ximin = pkg->Param<Real>("ximin");
+  const Real ximax = pkg->Param<Real>("ximax");
+  const Real Rmin  = pkg->Param<Real>("Rmin");
+  const Real Rmax  = pkg->Param<Real>("Rmax");
+  const Real Zmin  = pkg->Param<Real>("Zmin");
+  const Real Zmax  = pkg->Param<Real>("Zmax");
+  const Real Rc  = pkg->Param<Real>("Rc");
+  const Real Zc  = pkg->Param<Real>("Zc");
+
+
+  // Pull out swarm object
+  auto swarm = data->GetSwarmData()->Get("particles");
+
+  // Meshblock geometry
+  const IndexRange &ib = pmb->cellbounds.GetBoundsI(IndexDomain::interior);
+  const IndexRange &jb = pmb->cellbounds.GetBoundsJ(IndexDomain::interior);
+  const IndexRange &kb = pmb->cellbounds.GetBoundsK(IndexDomain::interior);
+  const int &nx_i = pmb->cellbounds.ncellsi(IndexDomain::interior);
+  const int &nx_j = pmb->cellbounds.ncellsj(IndexDomain::interior);
+  const int &nx_k = pmb->cellbounds.ncellsk(IndexDomain::interior);
+  const Real &dx_i = pmb->coords.Dxf<1>(ib.s);
+  const Real &dx_j = pmb->coords.Dxf<2>(jb.s);
+  const Real &dx_k = pmb->coords.Dxf<3>(kb.s);
+  const Real &minx_i = pmb->coords.Xf<1>(ib.s);
+  const Real &minx_j = pmb->coords.Xf<2>(jb.s);
+  const Real &minx_k = pmb->coords.Xf<3>(kb.s);
+
+  auto newParticlesContext = swarm->AddEmptyParticles(N);
+
+  // Make a SwarmPack via types to get positions
+  static auto desc_swarm =
+    parthenon::MakeSwarmPackDescriptor<
+    swarm_position::x,
+    swarm_position::y,
+    swarm_position::z,
+    Kinetic::p,
+    Kinetic::xi,
+    Kinetic::R,
+    Kinetic::phi,
+    Kinetic::Z,
+    Kinetic::weight,
+    Kinetic::p_phi,
+    Kinetic::mu>("particles");
+  static auto desc_markers =
+    parthenon::MakeSwarmPackDescriptor<
+    Kinetic::status
+      >("particles");
+
+  auto pack_swarm = desc_swarm.GetPack(data.get());
+  auto pack_status = desc_markers.GetPack(data.get());
+
+
+
+//  Kokkos::View<Real******> psi_hermite_data("psi",
+//      f.hermite_data.extent(0),
+//      f.hermite_data.extent(1),
+//      f.hermite_data.extent(2) + 1,
+//      f.hermite_data.extent(3),
+//      f.hermite_data.extent(6),
+//      f.hermite_data.extent(7));
+//  computeFlux<2>(f.hermite_data, psi_hermite_data, f.hR, f.hZ);
+
+  // loop over new particles created
+  parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
+      DevExecSpace(), 0,
+      newParticlesContext.GetNewParticlesMaxIndex(),
+      // new_n ranges from 0 to N_new_particles
+      KOKKOS_LAMBDA(const int new_n) {
+
+      // this is the particle index inside the swarm
+      const int n = newParticlesContext.GetNewParticleIndex(new_n);
+
+      // Normally b would be free-floating and set by pack.GetBlockparticleIndices
+      // but since we're on a single meshblock for this loop, it's just 0
+      // because block index = 0
+      const int b = 0;
+      //auto [b, n] = pack_swarm.GetBlockparticleIndices(idx);
+
+      // Find the cell index in 1D
+      int ind = n % (nx_i * nx_j * nx_k);
+
+      int x_i = ind % nx_i;
+      ind /= nx_i;
+      int x_j = ind % nx_j;
+      ind /= nx_j; int x_k = ind;
+
+      pack_swarm(b, swarm_position::x(), n) = minx_i + (x_i+0.5) * dx_i;
+      pack_swarm(b, swarm_position::y(), n) = minx_j + (x_j+0.5) * dx_j;
+      pack_swarm(b, swarm_position::z(), n) = minx_k + (x_k+0.5) * dx_k;
+      pack_swarm(b, Kinetic::R(), n) = Rc;
+      pack_swarm(b, Kinetic::Z(), n) = Zc;
+      // randomly sample particle positions
+
+      Dim5 X;
+
+      auto rng_gen = rng_pool.get_state();
+
+      X[0] = rng_gen.drand(pmin, pmax);
+      X[1] = rng_gen.drand(ximin, ximax);
+
+      Real r = minx_i + (x_i+0.5) * dx_i;
+      Real theta = rng_gen.drand(0.0, 2*M_PI);
+
+      X[2] = Rc + r * Kokkos::cos(theta);
+      X[4] = r * Kokkos::sin(theta);
+
+      rng_pool.free_state(rng_gen);
+
+      Real my_phi = 0.0, my_mu = 0.0;
+      Real psi = 0.0;
+
+      KOKKOS_ASSERT(status == SUCCESS);
+
+      pack_swarm(b, Kinetic::p(), n)   = X[0];
+      pack_swarm(b, Kinetic::xi(), n)  = X[1];
+      pack_swarm(b, Kinetic::R(), n)   = X[2];
+      pack_swarm(b, Kinetic::phi(), n) = X[3];
+      pack_swarm(b, Kinetic::Z(), n)   = X[4];
+      pack_swarm(b, Kinetic::p_phi(), n) = my_phi;
+      pack_swarm(b, Kinetic::mu(), n)   = my_mu;
+
+      // set weights to 1
+      pack_swarm(b, Kinetic::weight(), n) = 1.0;
+      pack_status(b, Kinetic::status(), n) = Kinetic::ALIVE | Kinetic::PROTECTED;
+   });
 
 }
