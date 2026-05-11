@@ -36,7 +36,20 @@
 *.exe
 *.out
 *.app
+bin/*
 
 # debug information files
 *.dwo
 build/*
+
+# Run dirs
+run/*
+
+# Outputs
+*hdf
+*dat
+*dat.info
+
+# Cache
+__pycache__
+.cache

@@ -1,0 +1,118 @@
+# ========================================================================================
+#  (C) (or copyright) 2024. Triad National Security, LLC. All rights reserved.
+#
+#  This program was produced under U.S. Government contract 89233218CNA000001 for Los
+#  Alamos National Laboratory (LANL), which is operated by Triad National Security, LLC
+#  for the U.S. Department of Energy/National Nuclear Security Administration. All rights
+#  in the program are reserved by Triad National Security, LLC, and the U.S. Department
+#  of Energy/National Nuclear Security Administration. The Government is granted for
+#  itself and others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
+#  license in this material to reproduce, prepare derivative works, distribute copies to
+#  the public, perform publicly and display publicly, and to permit others to do so.
+# ========================================================================================
+
+<parthenon/job>
+problem_id = fig11a
+
+<parthenon/mesh>
+nx1 = 256
+x1min = 0.0
+x1max = 1.0
+ix1_bc = periodic
+ox1_bc = periodic
+
+nx2 = 1
+x2min = -2.0
+x2max = 2.0
+ix2_bc = periodic
+ox2_bc = periodic
+
+nx3 = 1
+x3min = -0.5
+x3max = 0.5
+ix3_bc = periodic
+ox3_bc = periodic
+
+# How many meshblocks to use in a premade default kernel.
+# A value of <1 means use the whole mesh.
+pack_size = -1
+
+<parthenon/meshblock>
+nx1 = 32
+nx2 = 1
+nx3 = 1
+
+<MHD_Config>
+input_folder=../inputs/mhd
+ic_binary_path=X_2.petscbin
+ic_binary_load=0
+
+<Geometry>
+input_file=../inputs/AxisSymmetricGeometry.dat
+
+<parthenon/time>
+dt_force = 0.000165483
+tlim = 0.5
+<Time>
+nCD = 1
+dtLA_over_tauC = 1e-5
+
+<ParticleSeed>
+num_particles_per_block = 1024
+MaxParticles = 20000
+rng_seed = 1234
+pmin = 10.0
+pmax = 20.0
+ximin = -0.95
+ximax = -0.85
+
+<Simulation>
+EnableLargeAngleCollisions=1
+EnableSmallAngleCollisions=1
+EnableComputeConservedQuantities=0
+atol=1e-10
+rtol=1e-9
+
+<Plasma>
+Rc = 3.0
+Zc = 0.0
+Coulog0 = 10.0
+Zeff = 1.0
+fI = 1.0
+Z0 = 18.
+ZI = 1.
+fI = 1.0
+
+<GuidingCenterEquations>
+ct_a = 5.e5
+c_aw0 = 1.608027383346224e-5
+alpha0 = 0.05
+<Collisions>
+c_vTe = 357.142857
+k  = 5.0
+aI = 0.3285296762792767
+II = 4.295499e-4
+<Reference>
+B0 = 53.
+a = 2.0
+
+<AnalyticField>
+q0 = 2.1
+q2 = 2.0
+E_0 = 2.0
+
+<parthenon/output8>
+file_type = rst
+dt = 5.165483
+
+<parthenon/output2>
+file_type = hdf5
+write_xdmf = false # Determines whether xdmf annotations are output
+# nonexistent variables/swarms are ignored
+swarms = particles  # Particle swarms
+particles_variables = x, y, z, particle.p, particle.xi, particle.R, particle.phi, particle.Z, particle.weight, particle.will_scatter, particle.secondary_index, particle.status
+
+dt = 0.000165483
+file_number_width = 6 # default: 5
+use_final_label = true # default: true
+

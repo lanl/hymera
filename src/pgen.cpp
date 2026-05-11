@@ -22,102 +22,6 @@ using namespace parthenon::package::prelude;
 #include "kinetic/CurrentDensity.hpp"
 #include "util/common.hpp"
 
-void GenerateParticleRing(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
-
-  auto pkg = pmb->packages.Get("Deck");
-
-  const Real pmin  = pkg->Param<Real>("pmin");
-  const Real pmax  = pkg->Param<Real>("pmax");
-
-  const Real ximin = pkg->Param<Real>("ximin");
-  const Real ximax = pkg->Param<Real>("ximax");
-
-  const Real Rc = pkg->Param<Real>("Rcenter");
-  const Real Zc = pkg->Param<Real>("Zcenter");
-  const Real r_0 = pkg->Param<Real>("r_0");
-
-  auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
-  const int N = pkg->Param<int>("num_particles_per_block");
-
-  // Pull out swarm object
-  auto &data = pmb->meshblock_data.Get();
-  auto swarm = data->GetSwarmData()->Get("particles");
-
-  // Meshblock geometry
-  const IndexRange &ib = pmb->cellbounds.GetBoundsI(IndexDomain::interior);
-  const IndexRange &jb = pmb->cellbounds.GetBoundsJ(IndexDomain::interior);
-  const IndexRange &kb = pmb->cellbounds.GetBoundsK(IndexDomain::interior);
-  const int &nx_i = pmb->cellbounds.ncellsi(IndexDomain::interior);
-  const int &nx_j = pmb->cellbounds.ncellsj(IndexDomain::interior);
-  const int &nx_k = pmb->cellbounds.ncellsk(IndexDomain::interior);
-  const Real &dx_i = pmb->coords.Dxf<1>(ib.s);
-  const Real &dx_j = pmb->coords.Dxf<2>(jb.s);
-  const Real &dx_k = pmb->coords.Dxf<3>(kb.s);
-  const Real &minx_i = pmb->coords.Xf<1>(ib.s);
-  const Real &minx_j = pmb->coords.Xf<2>(jb.s);
-  const Real &minx_k = pmb->coords.Xf<3>(kb.s);
-
-  // Create an accessor to particles, allocate particles
-  auto newParticlesContext = swarm->AddEmptyParticles(N);
-
-  // Make a SwarmPack via types to get positions
-  static auto desc_swarm =
-    parthenon::MakeSwarmPackDescriptor<
-    swarm_position::x,
-    swarm_position::y,
-    swarm_position::z,
-    Kinetic::p,
-    Kinetic::xi,
-    Kinetic::R,
-    Kinetic::phi,
-    Kinetic::Z,
-    Kinetic::weight>("particles");
-  static auto desc_markers =
-    parthenon::MakeSwarmPackDescriptor<
-    Kinetic::will_scatter,
-    Kinetic::secondary_index
-      >("particles");
-
-  auto pack_swarm = desc_swarm.GetPack(data.get());
-  auto pack_markers = desc_markers.GetPack(data.get());
-
-  parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
-      DevExecSpace(), 0,
-      newParticlesContext.GetNewParticlesMaxIndex(),
-      // new_n ranges from 0 to N_new_particles
-      KOKKOS_LAMBDA(const int new_n) {
-      const int n = newParticlesContext.GetNewParticleIndex(new_n);
-      const int b = 0;
-      auto rng_gen = rng_pool.get_state();
-      pack_swarm(b, Kinetic::p(), n) = rng_gen.drand(pmin, pmax);
-      pack_swarm(b, Kinetic::xi(), n) = rng_gen.drand(ximin, ximax);
-      pack_swarm(b, Kinetic::phi(), n) = rng_gen.drand(0, 2.0*M_PI);
-      Real theta = rng_gen.drand(-M_PI, M_PI);
-      rng_pool.free_state(rng_gen);
-
-
-      int ind = n % (nx_i * nx_j * nx_k);
-
-      int x_i = ind % nx_i;
-      ind /= nx_i;
-      int x_j = ind % nx_j;
-      ind /= nx_j;
-      int x_k = ind;
-
-      pack_swarm(b, swarm_position::x(), n) = minx_i + (x_i+0.5) * dx_i;
-      pack_swarm(b, swarm_position::y(), n) = minx_j + (x_j+0.5) * dx_j;
-      pack_swarm(b, swarm_position::z(), n) = minx_k + (x_k+0.5) * dx_k;
-
-      pack_swarm(b, Kinetic::R(), n) = Rc + r_0 * cos(theta);
-      pack_swarm(b, Kinetic::Z(), n) = Zc + r_0 * sin(theta);
-      pack_swarm(b, Kinetic::weight(), n) = 1.0;
-      pack_markers(b, Kinetic::will_scatter(), n) = 0;
-      pack_markers(b, Kinetic::secondary_index(), n) = 0;
-
-      }
-  );
-}
-
 void GenerateParticleSquare(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
   auto &data = pmb->meshblock_data.Get();
 
@@ -411,6 +315,8 @@ void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
   const Real Rc  = pkg->Param<Real>("Rc");
   const Real Zc  = pkg->Param<Real>("Zc");
 
+  const Real r_0 = pin->GetOrAddReal("ParticleSeed", "r_0", 0.0);
+
 
   // Pull out swarm object
   auto swarm = data->GetSwarmData()->Get("particles");
@@ -502,11 +408,10 @@ void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
       X[0] = rng_gen.drand(pmin, pmax);
       X[1] = rng_gen.drand(ximin, ximax);
 
-      Real r = minx_i + (x_i+0.5) * dx_i;
       Real theta = rng_gen.drand(0.0, 2*M_PI);
 
-      X[2] = Rc + r * Kokkos::cos(theta);
-      X[4] = r * Kokkos::sin(theta);
+      X[2] = Rc + r_0 * Kokkos::cos(theta);
+      X[4] = r_0 * Kokkos::sin(theta);
 
       rng_pool.free_state(rng_gen);
 

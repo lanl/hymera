@@ -77,9 +77,13 @@ SWARM_VARIABLE(Real, particle, saved_w);
 //       will_scatter, secondary_index, status>(std::stringswarm_name);
 
 std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_context);
+std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin);
 void ComputeParticleWeights(Mesh* pm);
 TaskStatus SaveState(Mesh* pm);
 TaskStatus RestoreState(Mesh* pm);
+
+TaskStatus BackupJre(Mesh* pm);
+TaskStatus RestoreJre(Mesh* pm);
 void InitializeDriver(ParthenonManager* man);
 
 void SaveRawFieldData(ParthenonManager * man, const char* filename);
@@ -88,12 +92,17 @@ void LoadRawFieldData(User * man, const char* filename);
 void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context);
 void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context);
 void WorkBeforeLoop(Mesh * pm, User* mhd_context);
+
 TaskStatus Interpolate(Mesh *pm, User *mhd_context);
 TaskStatus InterpolateTimeDerivative(Mesh *pm, User *p_mhd_config, const Real dt);
 TaskStatus RandomRemove(Mesh* pm);
-
-
-
+TaskStatus PushParticles(Mesh *pm, Real t0, Real dt);
+TaskStatus CheckScatter(MeshBlock* pmb);
+TaskStatus CleanupParticles(MeshBlock* pmb);
+TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA);
+TaskStatus CollectCurrent(Mesh *pm, const int iCD, const Real dtCD);
+TaskStatus MHDStep(User* p_mhd_config);
+TaskStatus ResetState(Mesh *pm, User *p_mhd_config);
 
 } // namespace Kinetic
 

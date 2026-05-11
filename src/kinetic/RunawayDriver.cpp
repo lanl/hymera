@@ -100,8 +100,17 @@ TaskStatus PushParticles(Mesh *pm, SimTime tm) {
         if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n)&&
             (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE) ) {
           Dim5 X;
-          Real t = tstart;
           X[0] = pack_swarm_r(b, Kinetic::p(), n);
+
+          // Skip particles below momentum threshold
+          if (X[0] < p_BC) {
+            pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
+            if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
+              swarm_d.MarkParticleForRemoval(n);
+            return;
+          }
+
+          Real t = tstart;
           X[1] = pack_swarm_r(b, Kinetic::xi(), n);
           X[2] = pack_swarm_r(b, Kinetic::R(), n);
           X[3] = pack_swarm_r(b, Kinetic::phi(), n);

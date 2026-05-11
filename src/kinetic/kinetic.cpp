@@ -120,7 +120,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real k = pin->GetOrAddReal("Collisions", "k", 5.0);
   const Real aI            = pin->GetOrAddReal("Collisions", "aI", 0.3285296762792767);  ///<
   const Real FineStructure = 1. / 137.035999;  // Fine Structure constant
-  const Real II            = pin->GetOrAddReal("Collisions", "II", 219.5 / pc::me / pc::c / pc::c); // Mean exitation energy
+  const Real II            = pin->GetOrAddReal("Collisions", "II", 219.5 / pc::eV / pc::me / pc::c / pc::c); // Mean exitation energy
   Real PSCoefDnRA = 1.0;
   if (PartialScreening)
     PSCoefDnRA    = 1.0 + NeI * fI / (1.0 + ZI * fI);
@@ -601,6 +601,7 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
   const Real aI            = pin->GetOrAddReal("Collisions", "aI", 0.3285296762792767);  ///<
   const Real FineStructure = 1. / 137.035999;  // Fine Structure constant
   const Real II            = pin->GetOrAddReal("Collisions", "II", 219.5 / pc::me / pc::c / pc::c); // Mean exitation energy
+
   Real PSCoefDnRA = 1.0;
   if (PartialScreening)
     PSCoefDnRA    = 1.0 + NeI * fI / (1.0 + ZI * fI);
@@ -1028,13 +1029,31 @@ TaskStatus BackupJre(Mesh* pm) {
 TaskStatus RandomRemove(Mesh* pm) {
   std::cout << "Random remove start" << std::endl;
   auto pkg = pm->packages.Get("Deck");
-  auto num_particles = pkg->Param<int>("num_particles_total");
-  auto num_particles_max = pkg->Param<int>("num_particles_max");
+  int num_particles = 0;
 
+  auto desc_swarm = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
+  auto md = pm->mesh_data.Get();
+  auto pack_swarm = desc_swarm.GetPack(md.get());
+
+  Kokkos::parallel_reduce(
+      PARTHENON_AUTO_LABEL, pack_swarm.GetMaxFlatIndex() + 1,
+      // loop over all particles
+      KOKKOS_LAMBDA(const int idx, int& num) {
+        // block and particle indices
+        auto [b, n] = pack_swarm.GetBlockParticleIndices(idx);
+        const auto swarm_d = pack_swarm.GetContext(b);
+        if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n) && (pack_swarm(b, Kinetic::status(), n) & Kinetic::ALIVE)) {
+          num++;
+        }
+      },
+      num_particles);
+  MPI_Allreduce(MPI_IN_PLACE,&num_particles,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+
+  std::cout << "Number of particles " << num_particles << std::endl;
+  auto num_particles_max = pkg->Param<int>("num_particles_max");
 	if (num_particles_max > num_particles) return TaskStatus::complete;
 
   auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
-  auto md = pm->mesh_data.Get();
   auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
   auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<Kinetic::weight>("particles");
@@ -1444,7 +1463,6 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
 }
 
 TaskStatus CheckScatter(MeshBlock* pmb) {
-  std::cout << "CheckScatter start" << std::endl;
 
   auto data = pmb->meshblock_data.Get();
   auto swarm = data->GetSwarmData()->Get("particles");
@@ -1480,21 +1498,17 @@ TaskStatus CheckScatter(MeshBlock* pmb) {
       });
   Kokkos::fence();
 
-  std::cout << "CheckScatter complete" << std::endl;
 	return TaskStatus::complete;
 }
 
 TaskStatus CleanupParticles(MeshBlock* pmb) {
-  std::cout << "Cleanup start" << std::endl;
   pmb->meshblock_data.Get()
   ->GetSwarmData()->Get("particles")
   ->RemoveMarkedParticles();
-  std::cout << "Cleanup complete" << std::endl;
 	return TaskStatus::complete;
 }
 
 TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA) {
-  std::cout << "Add secondaries start" << std::endl;
   auto pkg = pmb->packages.Get("Deck");
   auto gamma_min = pkg->Param<Real>("gamma_min");
   auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
@@ -1596,7 +1610,6 @@ TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA) {
 
     Kokkos::fence();
   }
-  std::cout << "Add secondaries complete" << std::endl;
 
 	return TaskStatus::complete;
 }

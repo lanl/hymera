@@ -39,7 +39,7 @@ struct AnalyticField {
     B[1] = R_a / R;                 // B_phi
     B[2] = (R - R_a) / q(R, Z) / R; // B_Z
 
-    return SUCCESS;
+    return ErrorCode::Success;
   };
 
   KOKKOS_INLINE_FUNCTION
@@ -68,7 +68,7 @@ struct AnalyticField {
     E[1] = E_0 * R_a / R;
     E[2] = 0.0;
 
-    return SUCCESS;
+    return ErrorCode::Success;
   };
 
   template<typename ViewType>
@@ -98,7 +98,7 @@ struct AnalyticField {
     E[1] = E_0 * R_a / R;
     E[2] = 0.0;
 
-    return SUCCESS;
+    return ErrorCode::Success;
   };
 
 

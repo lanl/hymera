@@ -12,6 +12,7 @@
 //========================================================================================
 #pragma once
 #include "util/common.hpp"
+#include "hFlux/common.hpp"
 
 struct ConfigurationDomainGeometry {
 
@@ -48,4 +49,10 @@ struct ConfigurationDomainGeometry {
   };
 };
 
+struct FreeGeometry {
+  KOKKOS_INLINE_FUNCTION
+  int indicator(const Dim5& X, int&i, int&j) const {
+    return 1;
+  };
+};
 
