@@ -1,18 +1,19 @@
 #!/bin/bash -l
 #SBATCH --qos=normal
+#SBATCH --nodes=4
 #SBATCH --partition=volta-x86
-#SBATCH --job-name=hybrid_array
+#SBATCH --job-name=hybrid
 #SBATCH --time=10:00:00
-#SBATCH --array=0-6
-#SBATCH --output=slurm-%A_%a.out   # for arrays
 
-VALUES=(32 64 128 256 512 1024 2048)
-NN=${VALUES[$SLURM_ARRAY_TASK_ID]}
+source ../../volta_sourceme
 
-source ../volta_sourceme
+export OMP_NUM_THREADS=1
 
-mpirun -n 16 ../bin/hybrid \
+mpirun -n 4 ../../bin/hybrid \
   -i hybrid.input \
-  ParticleSeed/num_particles_per_block=${NN} \
-  parthenon/job/problem_id=hybrid${NN} \
-  > hybrid${NN}
+  parthenon/job/problem_id=hybrid_p \
+  > hybrid_p.out
+
+# mpirun -n 4 ../../bin/hybrid \
+#   -r hybrid.out8.00004.rhdf \
+#   >> hybrid.out

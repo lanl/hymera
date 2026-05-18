@@ -45,7 +45,7 @@ nx3 = 1
 <MHD_Config>
 input_folder=../inputs/mhd
 ic_binary_path=X_16.petscbin
-ic_binary_load=1
+ic_binary_load=0
 
 <Geometry>
 input_file=../inputs/AxisSymmetricGeometry.dat
@@ -72,6 +72,16 @@ EnableSmallAngleCollisions=1
 EnableComputeConservedQuantities=0
 atol=1e-10
 rtol=1e-9
+
+<Plasma>
+ZI = 3.0 # or 2.0
+fI = 0.1
+
+<Reference>
+Te0 = 10.0
+
+<Collisions>
+aI = 0.29197
 
 <parthenon/output8>
 file_type = rst

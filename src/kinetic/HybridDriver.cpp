@@ -66,6 +66,17 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
 
 
   dep = tl->AddTask(dep, Interpolate, pmesh, p_mhd_config);
+  dep = tl->AddTask(dep, SaveState, pmesh); // Commits particle states: Protects all alive particles.
+  dep = tl->AddTask(dep, BackupJre, pmesh); // Commits particle states: Protects all alive particles.
+  dep = tl->AddTask(dep, RandomRemove, pmesh); // If there are more alive particles then limit, kill half, doubling the weight
+  TaskRegion &async_region = tc.AddRegion(blocks.size());
+  for (int i = 0; i < blocks.size(); ++i) {
+    // required by this MeshData object)
+	  auto &pmb = blocks[i];
+    auto &tl = async_region[i];
+    auto cleanup = tl.AddTask(none, CleanupParticles, pmb.get());
+  }
+  tl = &tc.AddRegion(1)[0];
 
   for (int iPR = 0; iPR < nPredictorSteps + 1; ++iPR) {
     for (int iCD = 0; iCD < nCDperMHDstep; ++iCD) {
@@ -94,20 +105,9 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
       dep = tl->AddTask(dep, MHDStep, p_mhd_config);
       dep = tl->AddTask(dep, InterpolateTimeDerivative, pmesh, p_mhd_config, dt);
       dep = tl->AddTask(dep, ResetState, pmesh, p_mhd_config); // Puts particles back to the start, resets MHD state back to the start
-      dep = tl->AddTask(dep, ResetJre, pmesh); // Puts particles back to the start, resets MHD state back to the start
+      dep = tl->AddTask(dep, RestoreJre, pmesh); // Puts particles back to the start, resets MHD state back to the start
     }
   }
-  dep = tl->AddTask(dep, SaveState, pmesh); // Commits particle states: Protects all alive particles.
-  dep = tl->AddTask(dep, BackupJre, pmesh); // Commits particle states: Protects all alive particles.
-  dep = tl->AddTask(dep, RandomRemove, pmesh); // If there are more alive particles then limit, kill half, doubling the weight
-  TaskRegion &async_region = tc.AddRegion(blocks.size());
-  for (int i = 0; i < blocks.size(); ++i) {
-    // required by this MeshData object)
-	  auto &pmb = blocks[i];
-    auto &tl = async_region[i];
-    auto cleanup = tl.AddTask(none, CleanupParticles, pmb.get());
-  }
-  tl = &tc.AddRegion(1)[0];
   dep = none;
 
   return tc;

@@ -82,7 +82,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real vTe = sqrt(2.0*Te0*e / me); ///< Thermal velocity
   const Real Z0 = pin->GetOrAddReal("Plasma", "Z0", 10.0); ///< Atomic number of impurity (Z)
   const Real ZI = pin->GetOrAddReal("Plasma", "ZI", 1.0);  ///< Charge of impurity
-  const Real fI = pin->GetOrAddReal("Plasma", "fI", 100.0);  ///<Fraction of impurity density, normalized to deuterium denstiy (nD0)
+  const Real fI = pin->GetOrAddReal("Plasma", "fI", 1.0);  ///<Fraction of impurity density, normalized to deuterium denstiy (nD0)
   const Real nI = fI*nD0; ///< Impurity density [m^-3]
   const Real n_e0 = nD0 + ZI*nI; ///< Free electron density [m^-3]
   const Real Zeff = pin->GetOrAddReal("Plasma", "Zeff", (ZI*ZI*nI + nD0)/n_e0); // TODO: why ZI is a square?
@@ -110,9 +110,11 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real Zmin                   = pin->GetOrAddReal("Geometry", "zmin",  -2.975);///<  Minimum Z [-]
   const Real Zmax                   = pin->GetOrAddReal("Geometry", "zmax",   2.975); ///< Maximum Z [-]
 
-  const Real gamma_min      = pin->GetOrAddReal("BoundaryConditions", "gamma_min",1.02);
-  const Real p_BC = momentum_(pin->GetOrAddReal("BoundaryConditions", "gamma_BC", 1.02));
-  const Real p_RE = momentum_(pin->GetOrAddReal("BoundaryConditions", "gamma_RE", 1.02));
+  const Real gamma_BC  = pin->GetOrAddReal("BoundaryConditions", "gamma_BC", 1. + 1e-4);   // Assuming E max = 1000
+  const Real gamma_min = pin->GetOrAddReal("BoundaryConditions", "gamma_min", 2. * (gamma_BC - 1.) + 1.0);
+  const Real p_RE      = 0.0;  // will be computed from maximum electric field
+  const Real p_BC      = momentum_(gamma_BC);
+
 
   ///< Runaway parameters
   const Real c_vTe = pin->GetOrAddReal("Collisions", "c_vTe", c / vTe); ///< Guiding center equations coefficient [-]
@@ -120,7 +122,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real k = pin->GetOrAddReal("Collisions", "k", 5.0);
   const Real aI            = pin->GetOrAddReal("Collisions", "aI", 0.3285296762792767);  ///<
   const Real FineStructure = 1. / 137.035999;  // Fine Structure constant
-  const Real II            = pin->GetOrAddReal("Collisions", "II", 219.5 / pc::eV / pc::me / pc::c / pc::c); // Mean exitation energy
+  const Real II            = pin->GetOrAddReal("Collisions", "II", 235.2 / pc::eV / pc::me / pc::c / pc::c); // Mean exitation energy
   Real PSCoefDnRA = 1.0;
   if (PartialScreening)
     PSCoefDnRA    = 1.0 + NeI * fI / (1.0 + ZI * fI);
@@ -262,8 +264,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   }
 
   pkg->AddParam("gamma_min", gamma_min);
-  pkg->AddParam("p_BC", p_BC);
-  pkg->AddParam("p_RE", p_RE);
+  pkg->AddParam("p_BC", p_BC, Params::Mutability::Mutable);
+  pkg->AddParam("p_RE", p_RE, Params::Mutability::Mutable);
 
   pkg->AddParam("hRK", timeStep);
   pkg->AddParam("atol", atol);
@@ -308,11 +310,9 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   Kokkos::deep_copy(f.data, 0.0);
   Kokkos::deep_copy(f.hermite_data, 0.0);
-  Kokkos::fence();
 
   auto field_data_h = Kokkos::create_mirror_view(f.data);
   Kokkos::deep_copy(field_data_h, 0.0);
-  Kokkos::fence();
 
 
   for (size_t fi = 0; fi < static_cast<size_t>(fid::Count); ++fi) {
@@ -320,16 +320,12 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     mhd_getF(mhd_context, static_cast<field_id>(fi), wrap_view(sub));
   }
   Kokkos::deep_copy(f.data, field_data_h);
-  Kokkos::fence();
 
   std::array<fid, 6> fids = {fid::B, fid::E, fid::Jre, fid::J,  fid::V, fid::GradB};
   f.interpolate(fids, 0);
-  Kokkos::fence();
   f.cleanDiv(fid::B, 0);
-  Kokkos::fence();
 
   pkg->AddParam("Field", f);
-
   pkg->AddParam("Jre_mhd", jre);
 
   ParArrayHost<Real> Jre_deposit("jre_deposit", NR, NZ, 3, nCD);
@@ -515,6 +511,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   // Petsc file is where the mhd state is stored, it is separate from Parthenon restart file
   std::string mhd_restart_filename = "";
   pkg->AddParam("mhd_restart_filename", mhd_restart_filename, Params::Mutability::Restart);
+  pkg->AddParam("ComputeInitialWeights", 1, Params::Mutability::Restart);
+
   if (Globals::my_rank == 0) std::cout << "Init finished\n";
 
   return pkg;
@@ -600,7 +598,7 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
   const Real k = pin->GetOrAddReal("Collisions", "k", 5.0);
   const Real aI            = pin->GetOrAddReal("Collisions", "aI", 0.3285296762792767);  ///<
   const Real FineStructure = 1. / 137.035999;  // Fine Structure constant
-  const Real II            = pin->GetOrAddReal("Collisions", "II", 219.5 / pc::me / pc::c / pc::c); // Mean exitation energy
+  const Real II            = pin->GetOrAddReal("Collisions", "II", 219.5 / pc::eV / pc::me / pc::c / pc::c); // Mean exitation energy
 
   Real PSCoefDnRA = 1.0;
   if (PartialScreening)
@@ -858,7 +856,7 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
         }
 
       });
-  Kokkos::fence();
+
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
       swarm_position::x, swarm_position::y, swarm_position::z, Kinetic::p,
       Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight>(
@@ -897,9 +895,6 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
       },
       I_re);
 
-  Kokkos::fence();
-
-  MPI_Allreduce(MPI_IN_PLACE,&I_re,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 
   auto jre_deposit = pkg->Param<ParArrayHost<Real>>("Jre_deposit");
   auto jre_deposit_d = create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(),jre_deposit);
@@ -929,7 +924,8 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
       },
       I_re_integral, I_ohmic);
 
-  Kokkos::fence();
+  Kokkos::fence(); // Needed before MPI reduce
+  MPI_Allreduce(MPI_IN_PLACE,&I_re,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 
   if (Globals::my_rank == 0) {
     std::cout << std::format("{:20.14e} {:20.14e} {:20.14e}",
@@ -1136,6 +1132,7 @@ void ComputeParticleWeights(Mesh* pm) {
 
   auto md = pm->mesh_data.Get();
   auto pkg = pm->packages.Get("Deck");
+  if (pkg->Param<int>("ComputeInitialWeights") == 0) return;
   const auto f = pkg->Param<EM_Field>("Field");
 
   const Real p_RE = pkg->Param<Real>("p_RE");
@@ -1179,9 +1176,11 @@ void ComputeParticleWeights(Mesh* pm) {
         }
       },
       I_re);
-  Kokkos::fence();
 
+
+  Kokkos::fence();
   MPI_Allreduce(MPI_IN_PLACE,&I_re,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+
   Real w = seed_current / I_re;
 
   if (Globals::my_rank == 0)
@@ -1194,6 +1193,8 @@ void ComputeParticleWeights(Mesh* pm) {
         // block and particle indices
         pack_swarm_r(b, Kinetic::weight(), n) = w;
       });
+
+  pkg->UpdateParam("ComputeInitialWeights", 0);
 }
 
 TaskStatus Interpolate(Mesh *pm, User *p_mhd_config) {
@@ -1241,14 +1242,34 @@ TaskStatus Interpolate(Mesh *pm, User *p_mhd_config) {
            E(i,j,k) = En * E_[k];
         }
       });
-  Kokkos::fence();
 
   std::array<fid, 6> fids = {fid::B, fid::E, fid::Jre, fid::J, fid::V, fid::GradB};
   f.interpolate(fids, 0);
-  Kokkos::fence();
   f.cleanDiv(fid::B, 0);
-  Kokkos::fence();
 
+  auto hpd_R = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_R");
+  auto hpd_Z = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_Z");
+  const int NR_plot = hpd_R.size();
+  const int NZ_plot = hpd_Z.size();
+  Real maxE = 0.01;
+  Kokkos::parallel_reduce("max E",
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR_plot,NZ_plot}),
+  KOKKOS_LAMBDA(int i, int j, Real& Epar) {
+    Real R = hpd_R(i);
+    Real Z = hpd_Z(j);
+    Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, dbdt = {};
+    Dim5 X = {10., 0.0, R, 0.0, Z};
+    Real t = 0.0;
+    f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+    Epar = Kokkos::abs(dot_product(B,E) / Kokkos::sqrt(dot_product(B,B)));
+    },
+
+
+    Kokkos::Max<double>(maxE)
+  );
+
+  Kokkos::fence();  // maxE must be final before update
+  pkg->UpdateParam("p_RE", momentum_(1.0 + 0.1 / maxE));
   return TaskStatus::complete;
 }
 
@@ -1304,13 +1325,10 @@ Kokkos::parallel_for("FillInterpolatedDataDerivatie_plot",
          E(i,j,k,1) = (E(i,j,k,1)-E(i,j,k,0)) / dt;
       }
     });
-Kokkos::fence();
 
 std::array<fid, 5> fids = {fid::B, fid::E, fid::J, fid::V, fid::GradB};
 f.interpolate(fids, 1);
-Kokkos::fence();
 f.cleanDiv(fid::B, 1);
-Kokkos::fence();
 
 return TaskStatus::complete;
 }
@@ -1360,8 +1378,6 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
   auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
 
   auto jre = pkg->Param<ParArray3D<Real>>("Jre_push_deposit");
-
-  Kokkos::fence();
 
   const Real tstart = t0;
   const Real tstop =  t0 + dt;
@@ -1456,7 +1472,6 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
             pack_swarm_i(b, Kinetic::will_scatter(), n) = ms(X[0], w, dt, gamma_min, rng_pool);
         }
       });
-  Kokkos::fence();
 
   return TaskStatus::complete;
 
@@ -1496,7 +1511,6 @@ TaskStatus CheckScatter(MeshBlock* pmb) {
           }
         }
       });
-  Kokkos::fence();
 
 	return TaskStatus::complete;
 }
@@ -1538,6 +1552,8 @@ TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA) {
         }
       },
       ntot, nalive);
+
+  // ntot must be final
   Kokkos::fence();
   if (ntot > 0) {
     //std::cout << std::format("Adding {} new particles, total alive {}, ratio {}", ntot, nalive, (Real) (ntot + nalive) / (Real) nalive) << std::endl;
@@ -1607,8 +1623,6 @@ TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA) {
               }
             }
         });
-
-    Kokkos::fence();
   }
 
 	return TaskStatus::complete;
@@ -1631,14 +1645,14 @@ TaskStatus CollectCurrent(Mesh *pm, const int iCD, const Real dtCD) {
       KOKKOS_LAMBDA(const int i, const int j, const int k) {
         jre_d(i,j,k) *= eta_a3VaB0 / dtCD;
       });
+
   Kokkos::fence();
   auto jre_h = create_mirror_view_and_copy(Kokkos::HostSpace(),jre_d);
-  Kokkos::fence();
   MPI_Allreduce(MPI_IN_PLACE,jre_h.data(),jre_h.size(),MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+
   auto sub = Kokkos::subview(jre_deposit, 0, 0, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, iCD);
   Kokkos::deep_copy(sub, jre_h);
   Kokkos::deep_copy(jre_d, jre_h);
-  Kokkos::fence();
 
   auto f = pkg->Param<EM_Field>("Field");
   auto jre_data = Kokkos::subview(f.data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, static_cast<size_t>(fid::Jre), 0);
@@ -1648,11 +1662,31 @@ TaskStatus CollectCurrent(Mesh *pm, const int iCD, const Real dtCD) {
       KOKKOS_LAMBDA(const int i, const int j, const int k) {
         jre_data(i,j,k) *= En;
       });
-  Kokkos::fence();
   Kokkos::Array<fid,1> fids = {fid::Jre};
   f.interpolate(fids, 0);
   Kokkos::deep_copy(jre_d, 0.0);
-  Kokkos::fence();
+
+  auto hpd_R = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_R");
+  auto hpd_Z = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_Z");
+  const int NR_plot = hpd_R.size();
+  const int NZ_plot = hpd_Z.size();
+  Real maxE = .1;
+  Kokkos::parallel_reduce("max E",
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR_plot,NZ_plot}),
+  KOKKOS_LAMBDA(int i, int j, Real& Epar) {
+    Real R = hpd_R(i);
+    Real Z = hpd_Z(j);
+    Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, dbdt = {};
+    Dim5 X = {10., 0., R, 0.0, Z};
+    Real t = 0.0;
+    f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+    Epar = Kokkos::abs(dot_product(B,E) / Kokkos::sqrt(dot_product(B,B)));
+    },
+
+
+    Kokkos::Max<double>(maxE)
+  );
+
 
   int num_particles = 0;
   auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
@@ -1669,9 +1703,12 @@ TaskStatus CollectCurrent(Mesh *pm, const int iCD, const Real dtCD) {
     	},
       Kokkos::Sum<int>(num_particles));
 
-   if (Globals::my_rank < 2)
+  Kokkos::fence();
+  MPI_Allreduce(MPI_IN_PLACE,&num_particles, 1, MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  pkg->UpdateParam("p_RE", momentum_(1.0 + 0.1 / maxE));
+   if (Globals::my_rank == 0)
 			std::cout << "Number of alive particles = " << num_particles << std::endl;
-   pkg->UpdateParam("num_particles_total", num_particles);
+  pkg->UpdateParam("num_particles_total", num_particles);
   return TaskStatus::complete;
 }
 
