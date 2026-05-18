@@ -101,9 +101,9 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
       }
       dep = tl->AddTask(dep, CollectCurrent, pmesh, iCD, dtCD);
     }
+    dep = tl->AddTask(dep, MHDStep, p_mhd_config);
+    dep = tl->AddTask(dep, InterpolateTimeDerivative, pmesh, p_mhd_config, dt);
     if (iPR < nPredictorSteps) {
-      dep = tl->AddTask(dep, MHDStep, p_mhd_config);
-      dep = tl->AddTask(dep, InterpolateTimeDerivative, pmesh, p_mhd_config, dt);
       dep = tl->AddTask(dep, ResetState, pmesh, p_mhd_config); // Puts particles back to the start, resets MHD state back to the start
       dep = tl->AddTask(dep, RestoreJre, pmesh); // Puts particles back to the start, resets MHD state back to the start
     }
