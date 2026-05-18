@@ -43,12 +43,12 @@ nx2 = 32
 nx3 = 1
 
 <MHD_Config>
-input_folder=../inputs/mhd
-ic_binary_path=X_16.petscbin
-ic_binary_load=0
+input_folder=../../inputs/mhd
+ic_binary_path=X_4.petscbin
+ic_binary_load=1
 
 <Geometry>
-input_file=../inputs/AxisSymmetricGeometry.dat
+input_file=../../inputs/AxisSymmetricGeometry.dat
 
 <parthenon/time>
 dt_force = 0.00108
@@ -59,7 +59,8 @@ nPR = 1
 dtLA_over_tauC = 1e-4
 
 <ParticleSeed>
-num_particles_per_block = 1024
+num_particles_per_block = 16
+MaxParticles = 32768
 rng_seed = 1234
 pmin = 10.0
 pmax = 20.0
@@ -79,13 +80,14 @@ fI = 0.1
 
 <Reference>
 Te0 = 10.0
+B0 = 5.3
 
 <Collisions>
 aI = 0.29197
 
 <parthenon/output8>
 file_type = rst
-dt = 0.0108
+dt = 0.00108
 
 <parthenon/output2>
 file_type = hdf5
