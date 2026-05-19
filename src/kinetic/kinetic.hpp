@@ -81,6 +81,7 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin);
 void ComputeParticleWeights(Mesh* pm);
 TaskStatus SaveState(Mesh* pm);
 TaskStatus RestoreState(Mesh* pm);
+TaskStatus MakeOutputs(Outputs* pouts, Mesh* pmesh, ParameterInput* pinput, Real time, int iPR);
 
 TaskStatus BackupJre(Mesh* pm);
 TaskStatus RestoreJre(Mesh* pm);

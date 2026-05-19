@@ -64,10 +64,8 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
   Real dt = tm.dt / tau_c;
   Real dtCD = dt / nCDperMHDstep;
 
-
+  tl = &tc.AddRegion(1)[0];
   dep = tl->AddTask(dep, Interpolate, pmesh, p_mhd_config);
-  dep = tl->AddTask(dep, SaveState, pmesh); // Commits particle states: Protects all alive particles.
-  dep = tl->AddTask(dep, BackupJre, pmesh); // Commits particle states: Protects all alive particles.
   dep = tl->AddTask(dep, RandomRemove, pmesh); // If there are more alive particles then limit, kill half, doubling the weight
   TaskRegion &async_region = tc.AddRegion(blocks.size());
   for (int i = 0; i < blocks.size(); ++i) {
@@ -76,7 +74,9 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
     auto &tl = async_region[i];
     auto cleanup = tl.AddTask(none, CleanupParticles, pmb.get());
   }
-  tl = &tc.AddRegion(1)[0];
+  dep = tl->AddTask(dep, SaveState, pmesh); // Commits particle states: Protects all alive particles.
+  dep = tl->AddTask(dep, BackupJre, pmesh); // Commits particle states: Protects all alive particles.
+
 
   for (int iPR = 0; iPR < nPredictorSteps + 1; ++iPR) {
     for (int iCD = 0; iCD < nCDperMHDstep; ++iCD) {
@@ -100,6 +100,8 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
         }
       }
       dep = tl->AddTask(dep, CollectCurrent, pmesh, iCD, dtCD);
+      Real time =  tm.time / tau_c + (iCD+1) * dtCD;
+      dep = tl->AddTask(dep, MakeOutputs, pouts.get(), pmesh, pinput, time, iPR);
     }
     dep = tl->AddTask(dep, MHDStep, p_mhd_config);
     dep = tl->AddTask(dep, InterpolateTimeDerivative, pmesh, p_mhd_config, dt);

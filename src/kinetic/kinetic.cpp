@@ -512,6 +512,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   std::string mhd_restart_filename = "";
   pkg->AddParam("mhd_restart_filename", mhd_restart_filename, Params::Mutability::Restart);
   pkg->AddParam("ComputeInitialWeights", 1, Params::Mutability::Restart);
+  pkg->AddParam("MyTime", 0.0, Params::Mutability::Restart);
+  pkg->AddParam("PredictorIterationNumber", 0, Params::Mutability::Restart);
 
   if (Globals::my_rank == 0) std::cout << "Init finished\n";
 
@@ -1709,6 +1711,7 @@ TaskStatus CollectCurrent(Mesh *pm, const int iCD, const Real dtCD) {
    if (Globals::my_rank == 0)
 			std::cout << "Number of alive particles = " << num_particles << std::endl;
   pkg->UpdateParam("num_particles_total", num_particles);
+
   return TaskStatus::complete;
 }
 
@@ -1723,5 +1726,14 @@ TaskStatus ResetState(Mesh *pm, User *p_mhd_config) {
   return TaskStatus::complete;
 }
 
+TaskStatus MakeOutputs(Outputs* pouts, Mesh* pmesh, ParameterInput* pinput, Real time, int iPR) {
+  auto md = pmesh->mesh_data.Get();
+  auto pkg = pmesh->packages.Get("Deck");
+  pkg->UpdateParam("MyTime", time);
+  pkg->UpdateParam("PredictorIterationNumber", iPR);
+
+  pouts->MakeOutputs(pmesh, pinput);
+  return TaskStatus::complete;
+}
 
 } // namespace Kinetic
