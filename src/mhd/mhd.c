@@ -59,7 +59,7 @@ int mhd_PetscInit(int * argc, char *** argv, User** user) {
     return 1;
   }
 
-  *user = (User*) malloc(sizeof(User));
+  *user = (User*) calloc(1, sizeof(User));
   return 0;
 }
 
