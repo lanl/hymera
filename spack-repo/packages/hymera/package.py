@@ -22,7 +22,7 @@ class Hymera(CMakePackage):
 
     version("main", branch="hybrid")
 
-    depends_on("parthenon@25.05:")
+    depends_on("parthenon@develop")
     depends_on("hdf5+cxx")
     depends_on("kokkos")
     depends_on("petsc+mumps")
