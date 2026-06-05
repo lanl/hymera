@@ -20,7 +20,7 @@
 extern "C" {
 #endif
 
-int mhd_PetscInit(int argc, char ** argv, User** user);
+int mhd_PetscInit(int *argc, char *** argv, User** user);
 int mhd_initialize(User* mhd_config);
 int mhd_step(User* mhd_config);
 
