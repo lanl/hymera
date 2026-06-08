@@ -27,7 +27,6 @@ PetscErrorCode FormIFunction_Inertia_V(TS ts, PetscReal t, Vec X, Vec Xdot, Vec 
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_Inertia_V",classid,&USER_EVENT);
@@ -966,8 +965,6 @@ PetscErrorCode FormIFunction_Inertia_V(TS ts, PetscReal t, Vec X, Vec Xdot, Vec 
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -978,7 +975,6 @@ PetscErrorCode FormIFunction_Inertia_V_ni(TS ts, PetscReal t, Vec X, Vec Xdot, V
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_Inertia_V_ni",classid,&USER_EVENT);
@@ -1930,8 +1926,6 @@ PetscErrorCode FormIFunction_Inertia_V_ni(TS ts, PetscReal t, Vec X, Vec Xdot, V
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -1942,7 +1936,6 @@ PetscErrorCode FormIFunction_Inertia_viscosity(TS ts, PetscReal t, Vec X, Vec Xd
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_Inertia_viscosity",classid,&USER_EVENT);
@@ -2908,8 +2901,6 @@ PetscErrorCode FormIFunction_Inertia_viscosity(TS ts, PetscReal t, Vec X, Vec Xd
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -2920,7 +2911,6 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_Vperp_viscosity",classid,&USER_EVENT);
@@ -3887,8 +3877,6 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -3899,7 +3887,6 @@ PetscErrorCode FormIFunction_Vperp_viscosity_halo(TS ts, PetscReal t, Vec X, Vec
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_Vperp_viscosity_halo",classid,&USER_EVENT);
@@ -4871,8 +4858,6 @@ PetscErrorCode FormIFunction_Vperp_viscosity_halo(TS ts, PetscReal t, Vec X, Vec
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -4883,7 +4868,6 @@ PetscErrorCode FormIFunction_Vperp_viscosity_halo_isolcell(TS ts, PetscReal t, V
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_Vperp_viscosity_halo_isolcell",classid,&USER_EVENT);
@@ -5855,8 +5839,6 @@ PetscErrorCode FormIFunction_Vperp_viscosity_halo_isolcell(TS ts, PetscReal t, V
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -5867,7 +5849,6 @@ PetscErrorCode FormIFunction_Inertia(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F,
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_Inertia",classid,&USER_EVENT);
@@ -6833,8 +6814,6 @@ PetscErrorCode FormIFunction_Inertia(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F,
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -6845,7 +6824,6 @@ PetscErrorCode FormIFunction2(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void *
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction2",classid,&USER_EVENT);
@@ -7530,8 +7508,6 @@ PetscErrorCode FormIFunction2(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void *
   VecDestroy( & VxBe);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -7542,7 +7518,6 @@ PetscErrorCode FormIFunction(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void * 
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction",classid,&USER_EVENT);
@@ -8209,8 +8184,6 @@ PetscErrorCode FormIFunction(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void * 
   VecDestroy( & VxBe);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -9032,7 +9005,6 @@ PetscErrorCode FormIFunction_Initializepsi(TS ts, PetscReal t, Vec X, Vec Xdot, 
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_Initializepsi",classid,&USER_EVENT);
@@ -9420,8 +9392,6 @@ PetscErrorCode FormIFunction_Initializepsi(TS ts, PetscReal t, Vec X, Vec Xdot, 
 
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return (0);
@@ -9431,7 +9401,6 @@ PetscErrorCode FormIFunction_InitializeEP(TS ts, PetscReal t, Vec X, Vec Xdot, V
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_InitializeEP",classid,&USER_EVENT);
@@ -9978,8 +9947,6 @@ PetscErrorCode FormIFunction_InitializeEP(TS ts, PetscReal t, Vec X, Vec Xdot, V
   VecDestroy( & x);
   VecDestroy( & Fcopy);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -9990,7 +9957,6 @@ PetscErrorCode FormIFunction_InitializeEP_halo(TS ts, PetscReal t, Vec X, Vec Xd
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_InitializeEP_halo",classid,&USER_EVENT);
@@ -10541,8 +10507,6 @@ PetscErrorCode FormIFunction_InitializeEP_halo(TS ts, PetscReal t, Vec X, Vec Xd
   VecDestroy( & x);
   VecDestroy( & Fcopy);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -10553,7 +10517,6 @@ PetscErrorCode FormIFunction_InitializeEPV(TS ts, PetscReal t, Vec X, Vec Xdot, 
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_InitializeEPV",classid,&USER_EVENT);
@@ -11332,8 +11295,6 @@ PetscErrorCode FormIFunction_InitializeEPV(TS ts, PetscReal t, Vec X, Vec Xdot, 
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -11344,7 +11305,6 @@ PetscErrorCode FormIFunction_newequilibrium(TS ts, PetscReal t, Vec X, Vec Xdot,
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_newequilibrium",classid,&USER_EVENT);
@@ -12135,8 +12095,6 @@ PetscErrorCode FormIFunction_newequilibrium(TS ts, PetscReal t, Vec X, Vec Xdot,
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 1.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -12147,7 +12105,6 @@ PetscErrorCode FormIFunction_newequilibrium_Vperp(TS ts, PetscReal t, Vec X, Vec
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_newequilibrium_Vperp",classid,&USER_EVENT);
@@ -12942,8 +12899,6 @@ PetscErrorCode FormIFunction_newequilibrium_Vperp(TS ts, PetscReal t, Vec X, Vec
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -12954,7 +12909,6 @@ PetscErrorCode FormIFunction_DampingV(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormIFunction_DampingV",classid,&USER_EVENT);
@@ -13843,8 +13797,6 @@ PetscErrorCode FormIFunction_DampingV(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F
   VecDestroy( & Fcopy);
   VecDestroy( & x);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
 
@@ -13855,7 +13807,6 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormRHSFunction_BImplicit",classid,&USER_EVENT);
@@ -14195,8 +14146,6 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
     VecView(F, PETSC_VIEWER_STDOUT_WORLD);
   }
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return (0);
@@ -14206,7 +14155,6 @@ PetscErrorCode FormInitialSolution(TS ts, Vec X, void * ptr) {
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormInitialSolution",classid,&USER_EVENT);
@@ -15530,8 +15478,6 @@ PetscErrorCode FormInitialSolution(TS ts, Vec X, void * ptr) {
     VecView(X, PETSC_VIEWER_STDOUT_WORLD);
   }
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return (0);
@@ -15541,7 +15487,6 @@ PetscErrorCode FormExactSolution(PetscReal time, TS ts, Vec * X, void * ptr) {
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormExactSolution",classid,&USER_EVENT);
@@ -16571,8 +16516,6 @@ PetscErrorCode FormExactSolution(PetscReal time, TS ts, Vec * X, void * ptr) {
     VecRestoreSubVector( * X, user -> isV, & Vi_perp);
   }
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return (0);
@@ -17610,7 +17553,6 @@ PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) 
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("Monitor",classid,&USER_EVENT);
@@ -17874,8 +17816,6 @@ PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) 
   VecDestroy( & postprocX);
   DMDestroy( & newda);
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return 0;
@@ -18523,7 +18463,6 @@ PetscErrorCode ReadInitialData(PetscReal ** data, PetscInt * num,
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("ReadInitialData",classid,&USER_EVENT);
@@ -18552,8 +18491,6 @@ PetscErrorCode ReadInitialData(PetscReal ** data, PetscInt * num,
 
   PetscPrintf(PETSC_COMM_WORLD, "============Finished reading in InitialData============\n");
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return(0);
@@ -20270,7 +20207,6 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormInitialSolution_psi",classid,&USER_EVENT);
@@ -21054,8 +20990,6 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
     VecView(X, PETSC_VIEWER_STDOUT_WORLD);
   }
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return (0);
@@ -21065,7 +20999,6 @@ PetscErrorCode FormInitialSolution_psi_fromNphi2(TS ts, Vec X, void * ptr) {
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormInitialSolution_psi_fromNphi2",classid,&USER_EVENT);
@@ -21879,8 +21812,6 @@ PetscErrorCode FormInitialSolution_psi_fromNphi2(TS ts, Vec X, void * ptr) {
     VecView(X, PETSC_VIEWER_STDOUT_WORLD);
   }
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return (0);
@@ -21890,7 +21821,6 @@ PetscErrorCode FormInitialpsi(TS ts, Vec X, void * ptr) {
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FormInitialpsi",classid,&USER_EVENT);
@@ -22720,8 +22650,6 @@ PetscErrorCode FormInitialpsi(TS ts, Vec X, void * ptr) {
     VecView(X, PETSC_VIEWER_STDOUT_WORLD);
   }
 
-  user_event_flops = 0.0;
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return (0);
