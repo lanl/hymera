@@ -11,6 +11,7 @@ class Hymera(CMakePackage):
 
     # FIXME: Add a proper url for your package's homepage here.
     #url = "https://www.example.com/example-1.2.3.tar.gz"
+    git = "https://github.com/lanl/hymera"
 
     maintainers("tukss", "obeznosov-LANL")
 
@@ -19,9 +20,9 @@ class Hymera(CMakePackage):
     # the license, set checked_by to your Github username.
     #license("UNKNOWN", checked_by="github_user1")
 
-    version("main", branch="hybrid_main")
+    version("main", branch="hybrid")
 
-    depends_on("parthenon@25.05:")
+    depends_on("parthenon@develop")
     depends_on("hdf5+cxx")
     depends_on("kokkos")
     depends_on("petsc+mumps")

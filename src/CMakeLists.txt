@@ -53,31 +53,9 @@ set(HYBRID_SRC_LIST
   kinetic/hybrid.cpp
 )
 
-set(AVALANCHE_SRC_LIST
-  kinetic/AvalancheDriver.cpp
-  kinetic/avalanche.cpp
-)
-
-set(AVALANCHE_K_SRC_LIST
-  avalanche_test/AnalyticField.hpp
-  avalanche_test/avalanche.cpp
-  avalanche_test/common.h
-  avalanche_test/dopri.hpp
-  avalanche_test/FlagsAndEnums.h
-  avalanche_test/GuidingCenterEquations.hpp
-  avalanche_test/LargeAngleCollision.hpp
-  avalanche_test/SmallAngleCollision.hpp
-)
 
 add_executable(hybrid ${HYBRID_SRC_LIST})
 target_link_libraries(hybrid PRIVATE particles_core mhd_core infrastructure)
-
-add_executable(avalanche ${AVALANCHE_SRC_LIST})
-target_link_libraries(avalanche PRIVATE particles_core mhd_core infrastructure)
-
-add_executable(avalanche_k ${AVALANCHE_K_SRC_LIST})
-target_link_libraries(avalanche_k PRIVATE  HDF5::HDF5 Parthenon::parthenon hflux::hflux)
-target_compile_features(avalanche_k PUBLIC cxx_std_20)
 
 add_executable(gce kinetic/gce_run.cpp)
 target_link_libraries(gce PRIVATE particles_core)

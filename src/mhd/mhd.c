@@ -51,15 +51,15 @@ void view3d_zero(view3d_t v);
 
 void subview_exclude_d1(view4d_t v4, view3d_t v);
 
-int mhd_PetscInit(int argc, char ** argv, User** user) {
+int mhd_PetscInit(int * argc, char *** argv, User** user) {
   // feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
-  PetscErrorCode ierr = PetscInitialize( & argc, & argv, (char * ) 0, help);
+  PetscErrorCode ierr = PetscInitialize( argc, argv, (char * ) 0, help);
   if (ierr) {
     printf("CRITICAL: PetscInitialize returned error, aborting mhd_initialize\n");
     return 1;
   }
 
-  *user = (User*) malloc(sizeof(User));
+  *user = (User*) calloc(1, sizeof(User));
   return 0;
 }
 
