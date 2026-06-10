@@ -20,10 +20,11 @@ using namespace parthenon::driver::prelude;
 
 int main(int argc, char *argv[]) {
   User * p_mhd_config;
-  mhd_PetscInit(&argc, &argv, &p_mhd_config);
 
   ParthenonManager pman;
   auto manager_status = pman.ParthenonInitEnv(argc, argv);
+
+  mhd_PetscInit(&argc, &argv, &p_mhd_config);
 
   if (manager_status == ParthenonStatus::complete) {
     pman.ParthenonFinalize();
