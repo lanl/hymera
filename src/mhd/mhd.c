@@ -752,7 +752,7 @@ int mhd_destroy(User* user) {
 
     DMGetCoordinateDM(user->coorda, & dmCoorda);
     DMGetCoordinatesLocal(user->coorda, & coordaLocal);
-    DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, user->arrCoord);
+    DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & user->arrCoord);
   }
 
   VecDestroy( & user->X);
