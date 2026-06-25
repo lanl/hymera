@@ -14,7 +14,9 @@
 #ifndef MHD_H_
 #define MHD_H_
 
+#include "fid.h"
 #include "mfd_config.h"
+
 
 #ifdef __cplusplus
 extern "C" {

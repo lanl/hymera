@@ -17,11 +17,12 @@
 #include <memory>
 #include "Kokkos_Random.hpp"
 #include <parthenon/package.hpp>
-// #include <interface/swarm_default_names.hpp>
 
 constexpr bool PartialScreening = true;
 constexpr bool EnergyScattering = true;
 constexpr bool ModifiedCouLog = true;
+constexpr int FIELD_SMOOTHNESS = 2;  // Hermite m
+constexpr int FIELD_FD_STENSIL = 7;  // How many points to use for derivative approximation
 
 #include "mhd/mfd_config.h"
 
@@ -30,6 +31,8 @@ namespace Kinetic {
 
 using namespace parthenon;
 using namespace parthenon::package::prelude;
+
+using FieldData_t = FieldData<FIELD_SMOOTHNESS, FIELD_FD_STENSIL, Kokkos::DefaultExecutionSpace, FieldComponents::Total>;
 
 typedef Kokkos::Random_XorShift64_Pool<> RNGPool;
 
@@ -69,23 +72,11 @@ SWARM_VARIABLE(Real, particle, saved_phi);
 SWARM_VARIABLE(Real, particle, saved_Z);
 SWARM_VARIABLE(Real, particle, saved_w);
 
-// constexpr auto mkParticleDescriptror_r(const std::string swarm_name) = parthenon::MakeSwarmPackDescriptor<
-//       swarm_position::x, swarm_position::y, swarm_position::z,
-//       p, xi, R, phi, Z, weight,
-//       saved_p, saved_xi, saved_R, saved_phi, saved_Z, saved_w>(swarm_name);
-// constexpr auto mkParticleDescriptror_i(const std::string swarm_name) = parthenon::MakeSwarmPackDescriptor<
-//       will_scatter, secondary_index, status>(std::stringswarm_name);
-
 std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_context);
 std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin);
 void ComputeParticleWeights(Mesh* pm);
-TaskStatus SaveState(Mesh* pm);
-TaskStatus RestoreState(Mesh* pm);
-TaskStatus MakeOutputs(Outputs* pouts, Mesh* pmesh, ParameterInput* pinput, Real time, int iPR);
 
-TaskStatus BackupJre(Mesh* pm);
-TaskStatus RestoreJre(Mesh* pm);
-void InitializeDriver(ParthenonManager* man);
+TaskStatus MakeOutputs(Outputs* pouts, Mesh* pmesh, ParameterInput* pinput, Real time, int iPR);
 
 void SaveRawFieldData(ParthenonManager * man, const char* filename);
 void LoadRawFieldData(User * man, const char* filename);
@@ -94,16 +85,14 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
 void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context);
 void WorkBeforeLoop(Mesh * pm, User* mhd_context);
 
-TaskStatus Interpolate(Mesh *pm, User *mhd_context);
-TaskStatus InterpolateTimeDerivative(Mesh *pm, User *p_mhd_config, const Real dt);
-TaskStatus RandomRemove(Mesh* pm);
-TaskStatus PushParticles(Mesh *pm, Real t0, Real dt);
-TaskStatus CheckScatter(MeshBlock* pmb);
-TaskStatus CleanupParticles(MeshBlock* pmb);
-TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA);
-TaskStatus CollectCurrent(Mesh *pm, const int iCD, const Real dtCD);
-TaskStatus MHDStep(User* p_mhd_config);
-TaskStatus ResetState(Mesh *pm, User *p_mhd_config);
+TaskStatus UpdateMomentumBoundary(
+    Mesh* pm,
+    const Real time_0, const Real time_1,
+    const MomentumBoundaryUpdateMode mode);
+
+
+
+
 
 } // namespace Kinetic
 

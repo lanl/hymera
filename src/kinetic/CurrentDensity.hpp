@@ -14,18 +14,19 @@
 #include "util/common.hpp"
 
 // Get current carried by a particle, in dirrection of b_phi
-template <class Field>
+template <class FieldEvaluator>
 KOKKOS_INLINE_FUNCTION
-Real getParticleCurrent(Dim5& X, Real t, Real w, const Field f) {
-  Dim3 B, curlB, dBdR, dBdZ, E, dbdt;
-  ErrorCode ret = f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+Real getParticleCurrent(Dim5& X, Real t, Real w, const FieldEvaluator f) {
   KOKKOS_ASSERT(ret == ErrorCode::Success);
+  const Real p = X[0];
+  const Real xi = X[1];
+  const Real R = X[2];
+  const Real Z = X[4];
 
-  const Dim5::value_type p = X[0];
-  const Dim5::value_type xi = X[1];
-  const Dim5::value_type R = X[2];
-  const Dim3::value_type b_phi = B[1] / norm_(B) ;
+  EvalB B;
+  f.eval(B, R, Z, t);
 
+  const Real b_phi = B.B[1] / B.Bmag;
   return -p * xi / gamma_(p) / R / 2.0 / M_PI * w * b_phi;
 };
 
@@ -37,13 +38,14 @@ Real S2(Real x) {
 }
 
 // Add particle currect contibution wheighted by time interval to a current dencity for averaging
-template <class CurrentDensityView, class Field>
+template <class CurrentDensityView, class FieldEvaluator, class CurrentDensityLocator>
 KOKKOS_INLINE_FUNCTION
-void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityView jre, const Real time_interval, Field& field) {
+void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityView jre, const Real time_interval, const FieldEvaluator field, const CurrentDensityLocator locator) {
 
   const Dim5::value_type p = X[0];
   const Dim5::value_type xi = X[1];
   const Dim5::value_type R = X[2];
+  const Dim5::value_type Z = X[4];
 
   Real contribution = -p * xi / gamma_(p) / R /
     field.cdg.dR /
@@ -51,29 +53,21 @@ void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityVie
     2.0 / M_PI * time_interval * w;
 
   int i, j;
-  int level = field.cdg.indicator(X, i, j);
+  Real xiR, xiZ;
+  locator.locate(R, Z, i, j, xiR, xiZ);
 
-  Dim2 Xlocd = {};
-  field.cdg.getLocalCoordinate(X, i, j, Xlocd);
-
-  if (level < 1) return;
-
-  Dim3 B, curlB, dBdR, dBdZ, E, dbdt;
-  ErrorCode ret = field(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-  KOKKOS_ASSERT(ret == ErrorCode::Success);
-
-
-  Real BB = norm_(B);
+  EvalB B;
+  field.eval(B, R, Z, t);
 
   for (int ii = -1; ii < 2; ++ii) {
       if(i + ii >= 0 and i + ii < field.data.extent(0)) {
-          Real wr = S2(abs(Xlocd[0] - static_cast<Real>(ii)));
+          Real wr = S2(abs(xiR - static_cast<Real>(ii)));
           for (int jj = -1; jj < 2; ++jj) {
               if(j + jj >= 0 and j + jj < field.data.extent(1)) {
-                  Real wz = S2(abs(Xlocd[1] - static_cast<Real>(jj)));
+                  Real wz = S2(abs(xiZ - static_cast<Real>(jj)));
                   Real weighted_contribution = contribution * wr * wz;
                   for (int kk = 0; kk < 3; ++kk) {
-                      Real wcB = weighted_contribution * B[kk] / BB;
+                      Real wcB = weighted_contribution * B[kk] / B.Bmag;
                       Kokkos::atomic_add(&(jre(i,j,kk)), wcB);
                   }
               }

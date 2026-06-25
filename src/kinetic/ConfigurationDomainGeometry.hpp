@@ -12,47 +12,49 @@
 //========================================================================================
 #pragma once
 #include "util/common.hpp"
-#include "hFlux/common.hpp"
+#include "hFlux/StructuredLocator.hpp"
+
+// Conventionally
+// region = -2 outside wall
+// region = -1 inner wall
+// region =  0 metal wall
+// region =  1 inside separatrix
+// region =  2 scrape-off layer
+using Region = int;
 
 struct ConfigurationDomainGeometry {
 
   using IndicatorViewType = Kokkos::View<int**, Kokkos::DefaultExecutionSpace>;
 
-  const Real R0;
-  const Real Z0;
-
-  const Real dR;
-  const Real dZ;
-
-  const typename IndicatorViewType::value_type outside;
+  StructuredLocator indicator_locator;
+  StructuredLocator hermite_locator;
   const IndicatorViewType indicator_view;
 
-  ConfigurationDomainGeometry(Real R0, Real Z0, Real dR, Real dZ, typename IndicatorViewType::value_type outside, IndicatorViewType indicator_view):
-    R0(R0), Z0(Z0), dR(dR), dZ(dZ), outside(outside), indicator_view(indicator_view) {};
+  ConfigurationDomainGeometry(
+      StructuredLocator indicator_locator,
+      IndicatorViewType indicator_view):
+    indicator_locator(indicator_locator),
+    hermite_locator(makeHermiteLocator<7>(indicator_locator)),
+    indicator_view(indicator_view) {};
 
   KOKKOS_INLINE_FUNCTION
-  typename IndicatorViewType::value_type indicator(const Dim5& X, int&i, int&j) const {
-    i = static_cast<int> (floor((X[2] - R0) / dR));
-    j = static_cast<int> (floor((X[4] - Z0) / dZ));
+  void locate_region(Real R, Real Z, int& iR, int &iZ, Region& region) const {
 
-    if ((i < 0) or (i >= indicator_view.extent(0)) or
-        (j < 0) or (j >= indicator_view.extent(1)))
-      return outside;
-    return indicator_view(i, j);
-
-  };
+    indicator_locator.locateCell(R, Z, iR, iZ);
+    region = indicator_view(iR, iZ);
+  }
 
   KOKKOS_INLINE_FUNCTION
-  void getLocalCoordinate(const Dim5& X, int i, int j, Dim2 Xloc) const {
-    Xloc[0] = X[2] / dR - static_cast<Real>(i) - 0.5;
-    Xloc[1] = X[4] / dZ - static_cast<Real>(j) - 0.5;
-  };
+  void locate(Real R, Real Z, int& iR, int &iZ, Real& xiR, Real& xiZ) const {
+
+    hermite_locator.locate(R, Z, iR, iZ, xiR, xiZ);
+  }
 };
 
 struct FreeGeometry {
   KOKKOS_INLINE_FUNCTION
-  int indicator(const Dim5& X, int&i, int&j) const {
-    return 1;
+  void locate_region(Real R, Real Z, int&iR, int&jZ, Region& region) const {
+    region = 1;
   };
 };
 

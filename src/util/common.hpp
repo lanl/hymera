@@ -56,4 +56,8 @@ view3d_t wrap_view(T v) {
     };
 }
 
+using ExecSpace = Kokkos::DefaultExecutionSpace;
+using View3 = <Kokkos::View<double**[3], ExecSpace>;
+using DualView3 = <Kokkos::DualView<double**[3]>;
+
 

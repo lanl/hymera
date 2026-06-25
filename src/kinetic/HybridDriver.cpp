@@ -18,9 +18,7 @@
 #include <limits>
 #include <format>
 
-
 #include <Kokkos_Core.hpp>
-
 
 using namespace parthenon;
 using namespace parthenon::driver::prelude;
@@ -58,59 +56,44 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
   const Real dtLA_over_tauC  = pkg->Param<Real>("dtLA_over_tauC");
   const Real tau_c = pkg->Param<Real>("tau_c");
 
-  auto * tl = &tc.AddRegion(1)[0];
-  auto dep = none;
-
   Real dt = tm.dt / tau_c;
   Real dtCD = dt / nCDperMHDstep;
 
+  auto dep = none;
   tl = &tc.AddRegion(1)[0];
-  dep = tl->AddTask(dep, Interpolate, pmesh, p_mhd_config);
-  dep = tl->AddTask(dep, RandomRemove, pmesh); // If there are more alive particles then limit, kill half, doubling the weight
-  TaskRegion &async_region = tc.AddRegion(blocks.size());
-  for (int i = 0; i < blocks.size(); ++i) {
-    // required by this MeshData object)
-	  auto &pmb = blocks[i];
-    auto &tl = async_region[i];
-    auto cleanup = tl.AddTask(none, CleanupParticles, pmb.get());
-  }
-  dep = tl->AddTask(dep, SaveState, pmesh); // Commits particle states: Protects all alive particles.
-  dep = tl->AddTask(dep, BackupJre, pmesh); // Commits particle states: Protects all alive particles.
 
+  AttachFieldPredictor(tl, dep, pmesh, dt);
 
-  for (int iPR = 0; iPR < nPredictorSteps + 1; ++iPR) {
-    for (int iCD = 0; iCD < nCDperMHDstep; ++iCD) {
-      for (int iLA = 0; iLA < nLAperCD; ++iLA) {
-        Real t0 = iLA * dtLA_over_tauC + iCD * dtCD;
-        dep = tl->AddTask(dep, PushParticles, pmesh, t0, dtLA_over_tauC);
+  for (int iCD = 0; iCD < nCDperMHDstep; ++iCD) {
+    for (int iLA = 0; iLA < nLAperCD; ++iLA) {
+      Real t0 = iLA * dtLA_over_tauC + iCD * dtCD;
+      dep = tl->AddTask(dep, PushParticles, pmesh, t0, dtLA_over_tauC);
 
-        if (EnableLargeAngleCollisions == 1) {
-          // these are per block tasklists
-          TaskRegion &async_region = tc.AddRegion(blocks.size());
-          for (int i = 0; i < blocks.size(); ++i) {
-            // required by this MeshData object)
-	          auto &pmb = blocks[i];
-            auto &tl = async_region[i];
-            auto check_scatter = tl.AddTask(none, CheckScatter, pmb.get());
-            auto add_secondaries = tl.AddTask(check_scatter, AddSecondaries, pmb.get(), dtLA_over_tauC);
-            auto cleanup = tl.AddTask(add_secondaries, CleanupParticles, pmb.get());
-          }
-          tl = &tc.AddRegion(1)[0];
-          dep = none;
+      if (EnableLargeAngleCollisions == 1) {
+        // these are per block tasklists
+        TaskRegion &async_region = tc.AddRegion(blocks.size());
+        for (int i = 0; i < blocks.size(); ++i) {
+          // required by this MeshData object)
+	        auto &pmb = blocks[i];
+          auto &tl = async_region[i];
+          auto check_scatter = tl.AddTask(none, CheckScatter, pmb.get());
+          auto add_secondaries = tl.AddTask(check_scatter, AddSecondaries, pmb.get(), dtLA_over_tauC);
+          auto cleanup = tl.AddTask(add_secndaries, AddSecondaries, pmb.get(), dtLA_over_tauC);
         }
+
+        tl = &tc.AddRegion(1)[0];
+        dep = none;
       }
-      dep = tl->AddTask(dep, CollectCurrent, pmesh, iCD, dtCD);
-      Real time =  tm.time / tau_c + (iCD+1) * dtCD;
-      dep = tl->AddTask(dep, MakeOutputs, pouts.get(), pmesh, pinput, time, iPR);
     }
-    dep = tl->AddTask(dep, MHDStep, p_mhd_config);
-    dep = tl->AddTask(dep, InterpolateTimeDerivative, pmesh, p_mhd_config, dt);
-    if (iPR < nPredictorSteps) {
-      dep = tl->AddTask(dep, ResetState, pmesh, p_mhd_config); // Puts particles back to the start, resets MHD state back to the start
-      dep = tl->AddTask(dep, RestoreJre, pmesh); // Puts particles back to the start, resets MHD state back to the start
-    }
+    dep = tl->AddTask(dep, RandomRemove, pmesh);
+    AttachCurrentCollector(dep, pmesh, dtCD);
+    dep = AddTask(dep, UpdateMomentumBoundary, pmesh);
+
+    Real time =  tm.time / tau_c + (iCD+1) * dtCD;
   }
-  dep = none;
+
+  AttachFieldCorrector(tl, dep, p_mhd_context);
+  tl.AddTask(tl, dep, DefragSwarmsMesh, pmesh);
 
   return tc;
 }

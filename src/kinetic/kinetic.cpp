@@ -1,4 +1,4 @@
-//========================================================================================
+//========================================================================================(
 // (C) (or copyright) 2025. Triad National Security, LLC. All rights reserved.
 //
 // This program was produced under U.S. Government contract 89233218CNA000001 for Los
@@ -9,7 +9,6 @@
 // license in this material to reproduce, prepare derivative works, distribute copies to
 // the public, perform publicly and display publicly, and to permit others to do so.
 //========================================================================================
-
 #include <memory>
 #include <numeric>
 #include <iostream>
@@ -17,8 +16,8 @@
 #include <random>
 #include <typeinfo>  //for 'typeid' to work
 #include <parthenon/package.hpp>
-#include <Kokkos_DualView.hpp>
 #include <hFlux/dopri.hpp>
+#include <hFlux/FieldData.hpp>
 
 using namespace parthenon;
 
@@ -30,14 +29,13 @@ using namespace parthenon;
 #include "kinetic/kinetic.hpp"
 #include "kinetic/ConfigurationDomainGeometry.hpp"
 #include "kinetic/CurrentDensity.hpp"
-#include "kinetic/EM_Field.hpp"
 #include "kinetic/AnalyticField.hpp"
+#include "kinetic/FieldEvaluator.hpp"
 #include "mhd/mhd.h"
 
 using parthenon::constants::SI;
 using parthenon::constants::PhysicalConstants;
 using pc = PhysicalConstants<SI>;
-
 
 namespace Kinetic {
 std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_context) {
@@ -53,7 +51,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real dt_mhd     = pin->GetReal("parthenon/time","dt_force");
   const Real final_time = pin->GetReal("parthenon/time","tlim");
 
-  const int nPR = pin->GetOrAddInteger("Time","nPR", 0);  ///< current deposit timestep for electric field readjustment [s]
+  const int nCorrectorSteps = pin->GetOrAddInteger("Time","nCorrectorSteps", 0);  ///< current deposit timestep for electric field readjustment [s]
   const int nCD = pin->GetOrAddInteger("Time","nCD", 100);  ///< current deposit timestep for electric field readjustment [s]
   Real dtLA_over_tauC = pin->GetOrAddReal("Time","dtLA_over_tauC", 1e-5);  ///< current deposit timestep for electric field readjustment [s]
 
@@ -153,11 +151,9 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const int NR_plot = pin->GetOrAddInteger("Output", "NR_plot", 400);
   const int NZ_plot = pin->GetOrAddInteger("Output", "NZ_plot", 800);
 
-  Kokkos::DualView<Real***, Kokkos::LayoutRight> jre("Jre_mhd", NR, NZ, 3);
-  Kokkos::deep_copy(jre.view_device(), 0.0);
-  jre.modify_device();
-  jre.sync_host();
-
+  Kokkos::DualView<Real***> Jre_mhd("Jre_mhd", NR, NZ, 3);
+  Kokkos::deep_copy(Jre_mhd.view_device(), 0.0);
+  Kokkos::deep_copy(Jre_mhd.view_host(), 0.0);
 
   if (mhd_context != nullptr) {
     /// Initialize MHD context
@@ -226,7 +222,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     mhd_context->n_record =0;
     mhd_context->n_record_Steady_jRE = 0;
 
-    mhd_context -> jre = wrap_view(jre.view_host());
+    mhd_context -> jre = wrap_view(Jre_mhd.view_host());
 
     mhd_initialize(mhd_context);
 
@@ -240,7 +236,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("NR", NR);
   pkg->AddParam("NZ", NZ);
 
-  pkg->AddParam("nPR",  nPR);
+  pkg->AddParam("nCorrectorSteps",  nCorrectorSteps);
   pkg->AddParam("nCD",  nCD);
 
   pkg->AddParam("tau_c",  tau_c);
@@ -289,7 +285,11 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   MollerSource ms(Coulog0, PSCoefDnRA);
   pkg->AddParam("MollerSource", ms);
 
+  // Initialize field data structures and geometry
+  FieldData_t data(NR, NZ, RminCellCenter, ZminCellCenter, dR, dZ);
+  pkg->AddParam("FieldData", data);
 
+  // Initialize geometry
   const std::string configurationdomain_file = pin->GetOrAddString("Geometry", "input_file", "../../inputs/AxisSymmetricGeometry.dat");
 
   ConfigurationDomainGeometry::IndicatorViewType indicator("indicator", NR, NZ);
@@ -300,65 +300,43 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
       ifs >> indicator_h(i,j);
     }
   }
-
   Kokkos::deep_copy(indicator, indicator_h);
-  pkg->AddParam("DomainIndicator", indicator_h);
-
-  ConfigurationDomainGeometry cdg(RminCellCenter, ZminCellCenter, dR, dZ, -3, indicator);
+  ConfigurationDomainGeometry cdg(data.fd_locator, indicator);
   pkg->AddParam("CDG", cdg);
-  EM_Field f(NR, NZ, RminCellCenter, ZminCellCenter, dR, dZ, En, cdg);
 
-  Kokkos::deep_copy(f.data, 0.0);
-  Kokkos::deep_copy(f.hermite_data, 0.0);
+  pkg->AddParam("Jre_mhd", Jre_mhd);
+  pkg->AddParam("Jre_mhd", E_base);
 
-  auto field_data_h = Kokkos::create_mirror_view(f.data);
-  Kokkos::deep_copy(field_data_h, 0.0);
+  CommunicateBJV(data, mhd_context, FieldComponents::B);
+  ComputeBaseElectricField_in_place(data, En, eta_norm, FieldsComponents::B);
+  CommunicateBJV(data, mhd_context, FieldComponents::Bt);
+  ComputeBaseElectricField_in_place(data, En, eta_norm, FieldsComponents::Bt);
 
+  InterpolateTime(data, dtField);
 
-  for (size_t fi = 0; fi < static_cast<size_t>(fid::Count); ++fi) {
-    auto sub = Kokkos::subview(field_data_h, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, fi, 0);
-    mhd_getF(mhd_context, static_cast<field_id>(fi), wrap_view(sub));
-  }
-  Kokkos::deep_copy(f.data, field_data_h);
+  auto data_d = data.data.device_view();
+  data.data.sync_device();
+  Kokkos::parallel_for("Set intial runaway current",
+      Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0}, {NR, NZ}),
+      KOKKOS_LAMBDA(const int i, const int j) {
+        Real mask = indicator(i,j) > 0 > Real(1.0) : Real(0.0);
+        Real scale = mask * current_fraction * eta_norm;
+        data_d(i,j,FieldComponents::E + 0) -= scale * data.data(i, j, FieldComponents::J + 0);
+        data_d(i,j,FieldComponents::E + 1) -= scale * data.data(i, j, FieldComponents::J + 1);
+        data_d(i,j,FieldComponents::E + 2) -= scale * data.data(i, j, FieldComponents::J + 2);
+      });
+  data.data.modify_device();
 
-  std::array<fid, 6> fids = {fid::B, fid::E, fid::Jre, fid::J,  fid::V, fid::GradB};
-  f.interpolate(fids, 0);
-  f.cleanDiv(fid::B, 0);
+  View3 E_base("E_base", NR, NZ);
+  Kokkos::deep_copy(E_base, 0.0);
+  pkg->AddParam("E_base", Jre);
 
-  pkg->AddParam("Field", f);
-  pkg->AddParam("Jre_mhd", jre);
+  View3 Jre("Jre", NR, NZ);
+  Kokkos::deep_copy(Jre, 0.0);
+  pkg->AddParam("Jre", Jre);
 
-  ParArrayHost<Real> Jre_deposit("jre_deposit", NR, NZ, 3, nCD);
-  pkg->AddParam("Jre_deposit", Jre_deposit);
-  ParArray3D<Real> Jre_push_deposit("jre_push_deposit", NR, NZ, 3);
-  Kokkos::deep_copy(Jre_push_deposit, 0.0);
-  pkg->AddParam("Jre_push_deposit", Jre_push_deposit);
-  ParArray3D<Real> jre_backup("jre_backup", NR, NZ, 3);
-  Kokkos::deep_copy(jre_backup, 0.0);
-  pkg->AddParam("jre_backup", jre_backup, Params::Mutability::Restart);
-
-  int nfields = static_cast<size_t>(fid_Count);
-  ParArrayHost<Real> field_data_mhd("MHD_Field_data", NR, NZ, 3, nfields);
-  Kokkos::deep_copy(field_data_mhd, 0.0);
-  auto kv = field_data_mhd.KokkosView();
-  for (size_t fid = 0; fid < static_cast<size_t>(fid_Count); ++fid) {
-    auto sub = Kokkos::subview(kv, 0, 0, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, fid);
-    mhd_getF(mhd_context, static_cast<field_id>(fid), wrap_view(sub));
-  }
-
-
-  /// Set runaway current as 10% of the current
-  auto jre_host = jre.view_host();
-  for (int i = 0; i < jre.extent(0); ++i)
-  for (int j = 0; j < jre.extent(1); ++j)
-  for (int k = 0; k < jre.extent(2); ++k)
-    if (indicator_h(i,j) > 0)
-      jre_host(i,j,k) = 1.e-3 * eta_norm * kv(0, 0, 0, i, j, k, static_cast<size_t>(fid::J));
-  jre.modify_host();
-  jre.sync_device();
-
-  pkg->AddParam("MHD_Field_data", field_data_mhd);
-
+  InterpolateHermiteBJE(data, FieldComponents::B);
+  InterpolateHermiteBJE(data, FieldComponents::Bt);
 
   const Real R0_plot = f.hR0 + 1e-10;
   const Real Z0_plot = f.hZ0 + 1e-10;
@@ -397,33 +375,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("alpha0", alpha0);
 
   int npart =  pin->GetOrAddInteger("ParticleSeed", "num_particles_per_block", 16);
-
-//   MPI_Comm node_comm;
-//   MPI_Comm_split_type(MPI_COMM_WORLD,
-//                       MPI_COMM_TYPE_SHARED,
-//                       0, MPI_INFO_NULL,
-//                       &node_comm);
-//
-//
-//   int local_rank = -1;
-//   MPI_Comm_rank(node_comm, &local_rank);
-//
-//   int gpu_id = Kokkos::device_id();
-//    MPI_Comm gpu_comm;
-//   MPI_Comm_split(node_comm,
-//                  gpu_id,      // color: all ranks with same gpu_id together
-//                  local_rank,  // key: ordering
-//                  &gpu_comm);
-//
-//   int gpu_comm_rank = -1;
-//   MPI_Comm_rank(gpu_comm, &gpu_comm_rank);
-//
-//   if(gpu_comm_rank != 0) npart = 0;
-
-//  MPI_Comm_free(&gpu_comm);
-//  MPI_Comm_free(&node_comm);
-
   pkg->AddParam("num_particles_per_block", npart);
+
 // Paticles are counted on Collect current
   pkg->AddParam("num_particles_total", 0, Params::Mutability::Restart);
   const int num_particles_max = pin->GetOrAddInteger("ParticleSeed", "MaxParticles", 500000);
@@ -439,6 +392,10 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   const Real seed_current = pin->GetOrAddReal("ParticleSeed", "current", 15e3); // 15 kAmps
   pkg->AddParam("seed_current", seed_current * a); // Convert from amps
+
+  const Real seed_current_fraction = pin->GetOrAddReal("ParticleSeed", "current_fraction", seed_current / 15e6); // Used to determine the initial runaway current to adjust the Electric field.
+
+
   const Real gammamin = pin->GetOrAddReal("ParticleSeed", "gammamin", 10.0);
   pkg->AddParam("pmin", momentum_(gammamin));
   const Real gammamax = pin->GetOrAddReal("ParticleSeed", "gammamax", 20.0);
@@ -533,7 +490,7 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
   const Real dt_mhd     = pin->GetReal("parthenon/time","dt_force");
   const Real final_time = pin->GetReal("parthenon/time","tlim");
 
-  const int nPR = pin->GetOrAddInteger("Time","nPR", 0);  ///< current deposit timestep for electric field readjustment [s]
+  const int nCorrectorSteps = pin->GetOrAddInteger("Time","nCorrectorSteps", 0);  ///< current deposit timestep for electric field readjustment [s]
   const int nCD = pin->GetOrAddInteger("Time","nCD", 100);  ///< current deposit timestep for electric field readjustment [s]
   Real dtLA_over_tauC = pin->GetOrAddReal("Time","dtLA_over_tauC", 1e-5);  ///< current deposit timestep for electric field readjustment [s]
 
@@ -635,7 +592,7 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
   auto pkg = std::make_shared<StateDescriptor>("Deck");
 
 
-  pkg->AddParam("nPR",  nPR);
+  pkg->AddParam("nCorrectorSteps",  nCorrectorSteps);
   pkg->AddParam("nCD",  nCD);
 
   pkg->AddParam("tau_c",  tau_c);
@@ -798,11 +755,6 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
 
 void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context) {
   auto pkg = pm->packages.Get("Deck");
-  auto field_data_mhd = pkg->Param<ParArrayHost<Real>>("MHD_Field_data").KokkosView();
-  for (size_t fid = 0; fid < static_cast<size_t>(fid_Count); ++fid) {
-    auto sub = Kokkos::subview(field_data_mhd, 0, 0, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, fid);
-    mhd_getF(mhd_context, static_cast<field_id>(fid), wrap_view(sub));
-  }
 
   auto hpd_R = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_R");
   auto hpd_Z = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_Z");
@@ -818,15 +770,16 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
   const Real xi0 = .5 * (ximax + ximin);
 
 
-
   const int NR_plot = hpd_R.size();
   const int NZ_plot = hpd_Z.size();
 
   const auto c_aw0  = pkg->Param<Real>("c_aw0");
   const auto ct_a   = pkg->Param<Real>("ct_a");
   const auto alpha0 = pkg->Param<Real>("alpha0");
-  auto f = pkg->Param<EM_Field>("Field");
-  GuidingCenterEquations<EM_Field, true, false> gce(f, c_aw0, ct_a, alpha0);
+  auto data = pkg->Param<FieldData_t>("FieldData");
+  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("ConfigurationDomainGeometry");
+  FieldEvaluator f{cdg.locator, data};
+  GuidingCenterEquations<FieldEvaluator, true, false> gce(f, c_aw0, ct_a, alpha0);
 
   // Now plot all Hermite fields
   Kokkos::parallel_for("FillInterpolatedData_plot",
@@ -834,24 +787,21 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
       KOKKOS_LAMBDA(const int i, const int j) {
         Real R = hpd_R(i);
         Real Z = hpd_Z(j);
-        Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, dbdt = {};
         Dim5 X = {p0, xi0, R, 0.0, Z};
         Real t = 0.0;
-        f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
+        EvalGCE ev;
+        f.eval(ev, R, Z, t);
 
         for (int k = 0; k < 3; ++k) {
-          hpd_F(i,j,k,0) = B[k];
-          hpd_F(i,j,k,1) = curlB[k];
-          hpd_F(i,j,k,2) = dBdR[k];
-          hpd_F(i,j,k,3) = dBdZ[k];
-          hpd_F(i,j,k,4) = E[k];
-          hpd_F(i,j,k,5) = dbdt[k];
+          hpd_F(i,j,k,0) = ev.B[k];
+          hpd_F(i,j,k,1) = ev.curlB[k];
+          hpd_F(i,j,k,2) = ev.dBdR[k];
+          hpd_F(i,j,k,3) = ev.dBdZ[k];
+          hpd_F(i,j,k,4) = ev.E[k];
+          hpd_F(i,j,k,5) = ev.dbdt[k];
         }
 
-        auto sub = Kokkos::subview(hpd_eval, 0, 0, 0, i, j, Kokkos::ALL, Kokkos::ALL);
-        f.eval_all(R, Z, t, sub);
         Dim5 dX = {};
-
         gce(0.0, X, dX);
         for (int k = 0; k < 5; ++k) {
           gce_data(i,j,k) = dX[k];
@@ -898,35 +848,51 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
       I_re);
 
 
-  auto jre_deposit = pkg->Param<ParArrayHost<Real>>("Jre_deposit");
-  auto jre_deposit_d = create_mirror_view_and_copy(Kokkos::DefaultExecutionSpace(),jre_deposit);
-  Real I_ohmic = 0.0;
-  Real I_re_integral;
+  auto Jre_mhd = pkg->Param<DualView3>("Jre_mhd");
+
+  Jre_mhd.sync_device();
+  Jre_d = Jre_mhd.device_view();
+
+  Reak R0 = cdg.indicator_locator.R0;
+  Reak Z0 = cdg.indicator_locator.Z0;
+  Reak dR = cdg.indicator_locator.dR;
+  Reak dZ = cdg.indicator_locator.dZ;
+  Reak nR = cdg.indicator_locator.nR;
+  Reak nZ = cdg.indicator_locator.nZ;
+
+  data.data.sync_device();
+  data_d = data.data.device_view();
+
+  Real I_ohmic_fd = 0.0;
+  Real I_ohmic_hermite = 0.0;
+  Real I_re_integral = 0.0;
   Kokkos::parallel_reduce(
       PARTHENON_AUTO_LABEL,
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {f.nR_data, f.nZ_data}),
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {nR, nZ}),
       // loop over all particles
-      KOKKOS_LAMBDA(int i, int j, Real& integral, Real& integral_ohmic) {
-        Real R = f.R0 + i * f.dR;
-        Real Z = f.Z0 + j * f.dZ;
-        Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, dbdt = {};
-        Dim5 X = {0.0, 0.0, R, 0.0, Z};
-        Real t = 0.0;
+      KOKKOS_LAMBDA(int i, int j, Real& integral, Real& integral_ohmic_hermite, Real& integral_ohmic_fd) {
+        Real R = R0 + i * dR;
+        Real Z = Z0 + j * dZ;
 
-        int ii,jj;
-        int level = f.cdg.indicator(X, ii,jj);
+        int ii,jj, region;
+        cdg.locate_region(R, Z, ii,jj, region);
 
-        if (level >= 1) {
-          auto ret = f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-          if (ret == ErrorCode::Success) integral_ohmic += f.dR * f.dZ * curlB[1];
+        if (region > 0) {
+
+          EvalGCE ev;
+          Real t = 0.0;
+
+          auto ret = (ev, R, Z, t);
+
+          Real area = dR * dZ;
+          integral_ohmic_fd += area * data_d(i, j, FieldComponents::J + 1);
+          integral_ohmic_hermite += area * ev.curlB[1];
+          integral += area * Jre_d(i,j,1);
         }
 
-        integral += f.dR * f.dZ * jre_deposit_d(i,j,1,0);
-
       },
-      I_re_integral, I_ohmic);
+      I_re_integral, I_ohmic_hermite, I_ohmic_fd);
 
-  Kokkos::fence(); // Needed before MPI reduce
   MPI_Allreduce(MPI_IN_PLACE,&I_re,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 
   if (Globals::my_rank == 0) {
@@ -1013,16 +979,6 @@ TaskStatus SaveState(Mesh* pm) {
 	return TaskStatus::complete;
 }
 
-TaskStatus BackupJre(Mesh* pm) {
-  auto pkg = pm->packages.Get("Deck");
-
-  auto jre_backup = pkg->Param<ParArray3D<Real>>("jre_backup");
-  auto f = pkg->Param<EM_Field>("Field");
-  auto jre_data = Kokkos::subview(f.data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, static_cast<size_t>(fid::Jre), 0);
-
-  Kokkos::deep_copy(jre_backup, jre_data);
-	return TaskStatus::complete;
-}
 
 TaskStatus RandomRemove(Mesh* pm) {
   std::cout << "Random remove start" << std::endl;
@@ -1135,7 +1091,9 @@ void ComputeParticleWeights(Mesh* pm) {
   auto md = pm->mesh_data.Get();
   auto pkg = pm->packages.Get("Deck");
   if (pkg->Param<int>("ComputeInitialWeights") == 0) return;
-  const auto f = pkg->Param<EM_Field>("Field");
+  auto data = pkg->Param<FieldData_t>("FieldData");
+  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("ConfigurationDomainGeometry");
+  FieldEvaluator f{cdg.hermite_locator, data};
 
   const Real p_RE = pkg->Param<Real>("p_RE");
   const Real seed_current = pkg->Param<Real>("seed_current");
@@ -1179,8 +1137,6 @@ void ComputeParticleWeights(Mesh* pm) {
       },
       I_re);
 
-
-  Kokkos::fence();
   MPI_Allreduce(MPI_IN_PLACE,&I_re,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 
   Real w = seed_current / I_re;
@@ -1197,533 +1153,6 @@ void ComputeParticleWeights(Mesh* pm) {
       });
 
   pkg->UpdateParam("ComputeInitialWeights", 0);
-}
-
-TaskStatus Interpolate(Mesh *pm, User *p_mhd_config) {
-  // Interpolate fields and make derivative zero, for static initial background field
-  auto pkg = pm->packages.Get("Deck");
-  auto f = pkg->Param<EM_Field>("Field");
-
-  using Host = Kokkos::HostSpace;
-
-  auto field_data_h = Kokkos::create_mirror_view(f.data);
-
-  Kokkos::deep_copy(field_data_h, 0.0);
-
-  for (size_t fid = 0; fid < static_cast<size_t>(fid_Count); ++fid) {
-    if (fid == static_cast<size_t>(fid::Jre)) continue;
-    auto sub = Kokkos::subview(field_data_h, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, fid, 0);
-    mhd_getF(p_mhd_config, static_cast<field_id>(fid), wrap_view(sub));
-  }
-
-  Kokkos::deep_copy(f.data, field_data_h);
-
-  auto E = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::E), 0);
-  auto B = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::B), 0);
-  auto V = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::V), 0);
-  auto J = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::J), 0);
-  auto eta_norm = pkg->Param<Real>("eta_norm");
-  auto En = pkg->Param<Real>("En");
-
-  auto NR = pkg->Param<int>("NR");
-  auto NZ = pkg->Param<int>("NZ");
-  Kokkos::parallel_for("FillInterpolatedData_plot",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR,NZ}),
-      KOKKOS_LAMBDA(const int i, const int j) {
-        Dim3 B_, V_, J_, E_;
-        Real R = f.R0 + i * f.dR;
-        for (int k = 0; k < 3; ++k) {
-           B_[k] = B(i,j,k) / R;
-           V_[k] = V(i,j,k);
-           J_[k] = J(i,j,k);
-        }
-        E_ = {};
-        cross_product(B_, V_, E_); // E:= -vxB
-        for (int k = 0; k < 3; ++k) {
-           E_[k] += eta_norm * J_[k];
-           E(i,j,k) = En * E_[k];
-        }
-      });
-
-  std::array<fid, 6> fids = {fid::B, fid::E, fid::Jre, fid::J, fid::V, fid::GradB};
-  f.interpolate(fids, 0);
-  f.cleanDiv(fid::B, 0);
-
-  auto hpd_R = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_R");
-  auto hpd_Z = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_Z");
-  const int NR_plot = hpd_R.size();
-  const int NZ_plot = hpd_Z.size();
-  Real maxE = 0.01;
-  Kokkos::parallel_reduce("max E",
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR_plot,NZ_plot}),
-  KOKKOS_LAMBDA(int i, int j, Real& Epar) {
-    Real R = hpd_R(i);
-    Real Z = hpd_Z(j);
-    Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, dbdt = {};
-    Dim5 X = {10., 0.0, R, 0.0, Z};
-    Real t = 0.0;
-    f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-    Epar = Kokkos::abs(dot_product(B,E) / Kokkos::sqrt(dot_product(B,B)));
-    },
-
-
-    Kokkos::Max<double>(maxE)
-  );
-
-  Kokkos::fence();  // maxE must be final before update
-  pkg->UpdateParam("p_RE", momentum_(1.0 + 0.1 / maxE));
-  return TaskStatus::complete;
-}
-
-TaskStatus InterpolateTimeDerivative(Mesh *pm, User *p_mhd_config, const Real dt) {
-// Update time derivative with finite difference
-auto pkg = pm->packages.Get("Deck");
-auto f = pkg->Param<EM_Field>("Field");
-
-using Host = Kokkos::HostSpace;
-
-auto field_data_h = Kokkos::create_mirror_view(f.data);
-
-Kokkos::deep_copy(field_data_h, 0.0);
-
-for (size_t fid = 0; fid < static_cast<size_t>(fid_Count); ++fid) {
-  if (fid == static_cast<size_t>(fid::Jre)) continue;
-  auto sub = Kokkos::subview(field_data_h, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, fid, 1);
-  mhd_getF(p_mhd_config, static_cast<field_id>(fid), wrap_view(sub));
-}
-
-Kokkos::deep_copy(f.data, field_data_h);
-
-auto E = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::E), Kokkos::ALL);
-auto B = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::B), Kokkos::ALL);
-auto V = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::V), Kokkos::ALL);
-auto J = Kokkos::subview(f.data,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,static_cast<size_t>(fid::J), Kokkos::ALL);
-auto eta_norm = pkg->Param<Real>("eta_norm");
-auto En = pkg->Param<Real>("En");
-
-auto NR = pkg->Param<int>("NR");
-auto NZ = pkg->Param<int>("NZ");
-Kokkos::parallel_for("FillInterpolatedDataDerivatie_plot",
-    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR,NZ}),
-    KOKKOS_LAMBDA(const int i, const int j) {
-      Dim3 B_, V_, J_, E_;
-      Real R = f.R0 + i * f.dR;
-      for (int k = 0; k < 3; ++k) {
-         B_[k] = B(i,j,k,1) / R;
-         V_[k] = V(i,j,k,1);
-         J_[k] = J(i,j,k,1);
-      }
-      E_ = {};
-      cross_product(B_, V_, E_); // E:= -vxB
-      for (int k = 0; k < 3; ++k) {
-         E_[k] += eta_norm * J_[k];
-         E(i,j,k,1) = En * E_[k];
-      }
-
-      for (int k = 0; k < 3; ++k) {
-         B(i,j,k,1) = (B(i,j,k,1)-B(i,j,k,0)) / dt;
-         V(i,j,k,1) = (V(i,j,k,1)-V(i,j,k,0)) / dt;
-         J(i,j,k,1) = (J(i,j,k,1)-J(i,j,k,0)) / dt;
-         E(i,j,k,1) = (E(i,j,k,1)-E(i,j,k,0)) / dt;
-      }
-    });
-
-std::array<fid, 5> fids = {fid::B, fid::E, fid::J, fid::V, fid::GradB};
-f.interpolate(fids, 1);
-f.cleanDiv(fid::B, 1);
-
-return TaskStatus::complete;
-}
-
-TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
-
-  // get mesh data
-  auto md = pm->mesh_data.Get();
-  auto pkg = pm->packages.Get("Deck");
-
-  const auto h = pkg->Param<Real>("hRK");
-  const auto atol = pkg->Param<Real>("atol");
-  const auto rtol = pkg->Param<Real>("rtol");
-  auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
-
-  const auto gamma_min = pkg->Param<Real>("gamma_min");
-  const auto p_BC =      pkg->Param<Real>("p_BC");
-  const auto p_RE =      pkg->Param<Real>("p_RE");
-
-  const auto ms = pkg->Param<MollerSource>("MollerSource");
-  const auto sa = pkg->Param<
-    SmallAngleCollision<PartialScreening, EnergyScattering, ModifiedCouLog>
-  >("SmallAngleCollision");
-
-  const Real dtSA_min = sa.getSmallAngleCollisionTimestep(momentum_(1.002));
-  const Real dtSA_max = dt;
-
-  const auto c_aw0  = pkg->Param<Real>("c_aw0");
-  const auto ct_a   = pkg->Param<Real>("ct_a");
-  const auto alpha0 = pkg->Param<Real>("alpha0");
-
-
-  const auto f = pkg->Param<EM_Field>("Field");
-  GuidingCenterEquations<EM_Field, true, false> gce(f, c_aw0, ct_a, alpha0);
-
-  Kokkos::Timer timer;
-
-  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
-      swarm_position::x, swarm_position::y, swarm_position::z, Kinetic::p,
-      Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight>(
-      "particles");
-  auto desc_swarm_i =
-      parthenon::MakeSwarmPackDescriptor<Kinetic::will_scatter,
-                                         Kinetic::secondary_index,
-                                         Kinetic::status>("particles");
-  auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
-  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
-
-  auto jre = pkg->Param<ParArray3D<Real>>("Jre_push_deposit");
-
-  const Real tstart = t0;
-  const Real tstop =  t0 + dt;
-
-
-  int EnableLargeAngleCollisions = pkg->Param<int>("EnableLargeAngleCollisions");
-  int EnableSmallAngleCollisions = pkg->Param<int>("EnableSmallAngleCollisions");
-
-  parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
-                     DevExecSpace(), 0, pack_swarm_r.GetMaxFlatIndex(),
-                     // new_n ranges from 0 to N_new_particles
-                     KOKKOS_LAMBDA(const int idx) {
-        // block and particle indices
-        auto [b, n] = pack_swarm_r.GetBlockParticleIndices(idx);
-        const auto swarm_d = pack_swarm_r.GetContext(b);
-        const auto markers_d = pack_swarm_i.GetContext(b);
-        if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n)&&
-            (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE) ) {
-          Dim5 X;
-          X[0] = pack_swarm_r(b, Kinetic::p(), n);
-
-          // Skip particles below momentum threshold
-          if (X[0] < p_BC) {
-            pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
-            if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
-              swarm_d.MarkParticleForRemoval(n);
-            return;
-          }
-
-          Real t = tstart;
-          X[1] = pack_swarm_r(b, Kinetic::xi(), n);
-          X[2] = pack_swarm_r(b, Kinetic::R(), n);
-          X[3] = pack_swarm_r(b, Kinetic::phi(), n);
-          X[4] = pack_swarm_r(b, Kinetic::Z(), n);
-          Real w = pack_swarm_r(b, Kinetic::weight(), n);
-          Kokkos::Array<Dim5, 10> work_d;
-
-          bool last_step = false;
-
-          while (last_step == false) {
-            Real dtSA =
-                sa.getSmallAngleCollisionTimestep(X[0], dtSA_min, dtSA_max);
-
-            if (t + dtSA > tstop) {
-              dtSA = tstop - t;
-              if (dtSA < 1e-16) {
-                break;
-              }
-              last_step = true;
-            }
-
-            auto ret = solve_dopri5(gce, X, t, t + dtSA, rtol, atol, h, 1e-9,
-                         std::numeric_limits<int>::max(), work_d);
-            if (ret != ErrorCode::Success) {
-              pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
-              if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
-                swarm_d.MarkParticleForRemoval(n);
-              break;
-            }
-            int ii,jj;
-            int level = f.cdg.indicator(X, ii,jj);
-
-            if (level < 1 || X[0] < p_BC) {
-              pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
-              if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
-                swarm_d.MarkParticleForRemoval(n);
-              if (level < 1)
-                pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_WALL;
-              else
-                pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_MOMENTUM;
-              break;
-            }
-
-            if (X[0] > p_RE) {
-              DepositCurrent(X, t, w, jre, dtSA, f);
-            }
-
-            if (EnableSmallAngleCollisions == 1)
-              sa(X[0], X[1], dtSA, rng_pool);
-            t += dtSA;
-            if (t > tstop)
-              break;
-          }
-
-        	pack_swarm_r(b, Kinetic::p(), n)   = X[0];
-        	pack_swarm_r(b, Kinetic::xi(), n)  = X[1];
-        	pack_swarm_r(b, Kinetic::R(), n)   = X[2];
-        	pack_swarm_r(b, Kinetic::phi(), n) = X[3];
-        	pack_swarm_r(b, Kinetic::Z(), n)   = X[4];
-
-          if (EnableLargeAngleCollisions == 1)
-            pack_swarm_i(b, Kinetic::will_scatter(), n) = ms(X[0], w, dt, gamma_min, rng_pool);
-        }
-      });
-
-  return TaskStatus::complete;
-
-}
-
-TaskStatus CheckScatter(MeshBlock* pmb) {
-
-  auto data = pmb->meshblock_data.Get();
-  auto swarm = data->GetSwarmData()->Get("particles");
-  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
-      swarm_position::x, swarm_position::y, swarm_position::z, Kinetic::p,
-      Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight>(
-      "particles");
-  auto desc_swarm_i =
-      parthenon::MakeSwarmPackDescriptor<Kinetic::will_scatter,
-                                         Kinetic::secondary_index,
-                                         Kinetic::status>("particles");
-  auto pack_swarm_r = desc_swarm_r.GetPack(data.get());
-  auto pack_swarm_i = desc_swarm_i.GetPack(data.get());
-
-  auto swarm_d = swarm->GetDeviceContext();
-
-  Kokkos::parallel_scan(
-      PARTHENON_AUTO_LABEL, pack_swarm_r.GetMaxFlatIndex() + 1,
-      KOKKOS_LAMBDA(const int n, int &running_total, const bool final_pass) {
-        const int b = 0;
-        if (swarm_d.IsActive(n)&& !swarm_d.IsMarkedForRemoval(n) && (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE)) {
-          if (pack_swarm_i(b, Kinetic::will_scatter(), n) == 1) {
-            running_total += 1;
-            if (final_pass) {
-              pack_swarm_i(b, Kinetic::secondary_index(), n) = running_total;
-            }
-          } else {
-            if (final_pass) {
-              pack_swarm_i(b, Kinetic::secondary_index(), n) = 0;
-            }
-          }
-        }
-      });
-
-	return TaskStatus::complete;
-}
-
-TaskStatus CleanupParticles(MeshBlock* pmb) {
-  pmb->meshblock_data.Get()
-  ->GetSwarmData()->Get("particles")
-  ->RemoveMarkedParticles();
-	return TaskStatus::complete;
-}
-
-TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA) {
-  auto pkg = pmb->packages.Get("Deck");
-  auto gamma_min = pkg->Param<Real>("gamma_min");
-  auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
-  auto data = pmb->meshblock_data.Get();
-  auto swarm = data->GetSwarmData()->Get("particles");
-  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
-      swarm_position::x, swarm_position::y, swarm_position::z, Kinetic::p,
-      Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z, Kinetic::weight>(
-      "particles");
-  auto desc_swarm_i =
-      parthenon::MakeSwarmPackDescriptor<Kinetic::will_scatter,
-                                         Kinetic::secondary_index,
-                                         Kinetic::status>("particles");
-  auto pack_swarm_r = desc_swarm_r.GetPack(data.get());
-  auto pack_swarm_i = desc_swarm_i.GetPack(data.get());
-
-  auto swarm_d = swarm->GetDeviceContext();
-  int ntot = 0, nalive = 0;
-  Kokkos::parallel_reduce(
-      PARTHENON_AUTO_LABEL, pack_swarm_r.GetMaxFlatIndex() + 1,
-      KOKKOS_LAMBDA(const int n, int &nnew, int &nnalive) {
-        const int b = 0;
-        if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n)&& (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE)) {
-          nnalive += 1;
-          if (pack_swarm_i(b, Kinetic::will_scatter(), n) == 1)
-            nnew += 1;
-        }
-      },
-      ntot, nalive);
-
-  // ntot must be final
-  Kokkos::fence();
-  if (ntot > 0) {
-    //std::cout << std::format("Adding {} new particles, total alive {}, ratio {}", ntot, nalive, (Real) (ntot + nalive) / (Real) nalive) << std::endl;
-
-    const int oldMaxIndex = pack_swarm_r.GetMaxFlatIndex();
-    auto newParticlesContext = swarm->AddEmptyParticles(ntot);
-    auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
-        swarm_position::x, swarm_position::y, swarm_position::z,
-        Kinetic::p, Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z,
-        Kinetic::weight>("particles");
-    auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<
-        Kinetic::will_scatter, Kinetic::secondary_index, Kinetic::status>("particles");
-    pack_swarm_r = desc_swarm_r.GetPack(data.get());
-    pack_swarm_i = desc_swarm_i.GetPack(data.get());
-
-    swarm_d = swarm->GetDeviceContext();
-
-    parthenon::par_for(
-        DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL, DevExecSpace(), 0,
-        newParticlesContext.GetNewParticlesMaxIndex(),
-        // new_n ranges from 0 to N_new_particles
-        KOKKOS_LAMBDA(const int new_n) {
-          // this is the particle index inside the swarm
-          const int n = newParticlesContext.GetNewParticleIndex(new_n);
-          const int b = 0;
-          pack_swarm_i(b, Kinetic::will_scatter(), n) = 0;
-          pack_swarm_i(b, Kinetic::secondary_index(), n) = 0;
-        });
-
-    parthenon::par_for(
-        DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL, DevExecSpace(), 0,
-        oldMaxIndex,
-        // new_n ranges from 0 to N_new_particles
-        KOKKOS_LAMBDA(const int n_primary) {
-          const int b = 0;
-          // this is the particle index inside the swarm
-          if (swarm_d.IsActive(n_primary)&& !swarm_d.IsMarkedForRemoval(n_primary) &&(pack_swarm_i(b, Kinetic::status(), n_primary) & Kinetic::ALIVE))
-            if (pack_swarm_i(b, Kinetic::will_scatter(), n_primary) == 1) {
-              int new_n =
-                  pack_swarm_i(b, Kinetic::secondary_index(), n_primary) - 1;
-              const int n = newParticlesContext.GetNewParticleIndex(new_n);
-              pack_swarm_r(b, swarm_position::x(), n) =
-                  pack_swarm_r(b, swarm_position::x(), n_primary);
-              pack_swarm_r(b, swarm_position::y(), n) =
-                  pack_swarm_r(b, swarm_position::y(), n_primary);
-              pack_swarm_r(b, swarm_position::z(), n) =
-                  pack_swarm_r(b, swarm_position::z(), n_primary);
-              pack_swarm_r(b, Kinetic::R(), n) =
-                  pack_swarm_r(b, Kinetic::R(), n_primary);
-              pack_swarm_r(b, Kinetic::phi(), n) =
-                  pack_swarm_r(b, Kinetic::phi(), n_primary);
-              pack_swarm_r(b, Kinetic::Z(), n) =
-                  pack_swarm_r(b, Kinetic::Z(), n_primary);
-              Real p = pack_swarm_r(b, Kinetic::p(), n_primary);
-              Real xi = pack_swarm_r(b, Kinetic::xi(), n_primary);
-              Real w = pack_swarm_r(b, Kinetic::weight(), n_primary);
-
-              LargeAngleCollision(p, xi, w, dtLA, gamma_min, rng_pool);
-              if (p > 0.0) {
-                pack_swarm_i(b, Kinetic::status(), n) = Kinetic::ALIVE;
-                pack_swarm_r(b, Kinetic::p(), n) = p;
-                pack_swarm_r(b, Kinetic::xi(), n) = xi;
-                pack_swarm_r(b, Kinetic::weight(), n) = w;
-              } else {
-                pack_swarm_i(b, Kinetic::status(), n) = 0;
-                swarm_d.MarkParticleForRemoval(n);
-              }
-            }
-        });
-  }
-
-	return TaskStatus::complete;
-}
-
-
-TaskStatus CollectCurrent(Mesh *pm, const int iCD, const Real dtCD) {
-  auto md = pm->mesh_data.Get();
-  auto pkg = pm->packages.Get("Deck");
-
-  auto NR = pkg->Param<int>("NR");
-  auto NZ = pkg->Param<int>("NZ");
-  auto eta_a3VaB0 = pkg->Param<Real>("eta_a3VaB0");
-  auto En = pkg->Param<Real>("En");
-
-  auto jre_d = pkg->Param<ParArray3D<Real>>("Jre_push_deposit");
-  auto jre_deposit = pkg->Param<ParArrayHost<Real>>("Jre_deposit").KokkosView();
-  Kokkos::parallel_for("FillInterpolatedData_plot",
-      Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {NR,NZ,3}),
-      KOKKOS_LAMBDA(const int i, const int j, const int k) {
-        jre_d(i,j,k) *= eta_a3VaB0 / dtCD;
-      });
-
-  Kokkos::fence();
-  auto jre_h = create_mirror_view_and_copy(Kokkos::HostSpace(),jre_d);
-  MPI_Allreduce(MPI_IN_PLACE,jre_h.data(),jre_h.size(),MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-
-  auto sub = Kokkos::subview(jre_deposit, 0, 0, 0, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, iCD);
-  Kokkos::deep_copy(sub, jre_h);
-  Kokkos::deep_copy(jre_d, jre_h);
-
-  auto f = pkg->Param<EM_Field>("Field");
-  auto jre_data = Kokkos::subview(f.data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, static_cast<size_t>(fid::Jre), 0);
-  Kokkos::deep_copy(jre_data, jre_d);
-  Kokkos::parallel_for("FillInterpolatedData_plot",
-      Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {NR,NZ,3}),
-      KOKKOS_LAMBDA(const int i, const int j, const int k) {
-        jre_data(i,j,k) *= En;
-      });
-  Kokkos::Array<fid,1> fids = {fid::Jre};
-  f.interpolate(fids, 0);
-  Kokkos::deep_copy(jre_d, 0.0);
-
-  auto hpd_R = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_R");
-  auto hpd_Z = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_Z");
-  const int NR_plot = hpd_R.size();
-  const int NZ_plot = hpd_Z.size();
-  Real maxE = .1;
-  Kokkos::parallel_reduce("max E",
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR_plot,NZ_plot}),
-  KOKKOS_LAMBDA(int i, int j, Real& Epar) {
-    Real R = hpd_R(i);
-    Real Z = hpd_Z(j);
-    Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, dbdt = {};
-    Dim5 X = {10., 0., R, 0.0, Z};
-    Real t = 0.0;
-    f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-    Epar = Kokkos::abs(dot_product(B,E) / Kokkos::sqrt(dot_product(B,B)));
-    },
-
-
-    Kokkos::Max<double>(maxE)
-  );
-
-
-  int num_particles = 0;
-  auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
-  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
-  parthenon::par_reduce(
-      PARTHENON_AUTO_LABEL, 0, pack_swarm_i.GetMaxFlatIndex(),
-      KOKKOS_LAMBDA(const int idx, int &number) {
-        auto [b, n] = pack_swarm_i.GetBlockParticleIndices(idx);
-        const auto markers_d = pack_swarm_i.GetContext(b);
-        if (markers_d.IsActive(n) && !markers_d.IsMarkedForRemoval(n)&&
-            (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE) ) {
-							number+=1;
-				}
-    	},
-      Kokkos::Sum<int>(num_particles));
-
-  Kokkos::fence();
-  MPI_Allreduce(MPI_IN_PLACE,&num_particles, 1, MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-  pkg->UpdateParam("p_RE", momentum_(1.0 + 0.1 / maxE));
-   if (Globals::my_rank == 0)
-			std::cout << "Number of alive particles = " << num_particles << std::endl;
-  pkg->UpdateParam("num_particles_total", num_particles);
-
-  return TaskStatus::complete;
-}
-
-TaskStatus MHDStep(User* p_mhd_config) {
-  mhd_step(p_mhd_config);
-  return TaskStatus::complete;
-}
-
-TaskStatus ResetState(Mesh *pm, User *p_mhd_config) {
-  mhd_resetState(p_mhd_config);
-  RestoreState(pm);
-  return TaskStatus::complete;
 }
 
 TaskStatus MakeOutputs(Outputs* pouts, Mesh* pmesh, ParameterInput* pinput, Real time, int iPR) {

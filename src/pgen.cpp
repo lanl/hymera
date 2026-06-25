@@ -297,6 +297,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 }
 
 void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
+
   int marker = 0;
   auto &data = pmb->meshblock_data.Get();
 

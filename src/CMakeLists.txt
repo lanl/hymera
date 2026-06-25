@@ -32,6 +32,8 @@ target_include_directories(mhd_core PUBLIC
 
 add_library(infrastructure
   kinetic/kinetic.cpp
+  tasks/Interpolate.cpp
+  tasks/MomentumBoundary.cpp
 )
 
 target_link_libraries(infrastructure PUBLIC PkgConfig::PETSC)

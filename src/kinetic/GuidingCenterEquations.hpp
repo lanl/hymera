@@ -82,36 +82,33 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
       return ErrorCode::Success;
     }
 
+    EvalGCE ev;
+    field.eval(ev, R, Z, t);
 
-    Dim3 vB = {}, dBdR = {}, dBdZ = {}, curlB = {}, E = {}, dbdt = {};
+    const Real Bsq = out.Bsq;
+    const Real Bmag = out.Bmag;
 
-    ERROR_CODE status = field(X, t, vB, curlB, dBdR, dBdZ, E, dbdt);
-    if (status != ErrorCode::Success)
-      return status;
-
-
-    Real Bsq = dot_product(vB, vB);
-    Real B = Kokkos::sqrt(Bsq);
     Dim3 b = {};
-    for (int i = 0; i < 3; ++i)
-      b[i] = vB[i] / B;
+    for (int i = 0; i < 3; ++i) {
+      b[i] = out.B[i] / Bmag;
+    }
 
-    Dim3 gradlnB = {dot_product(vB, dBdR) / Bsq, 0.0,
-                    dot_product(vB, dBdZ) / Bsq};
+    Dim3 gradlnB = {dot_product(out.B, dBdR) / Bsq, 0.0,
+                    dot_product(out.B, dBdZ) / Bsq};
 
     Dim3 b_x_gradlnB;
     cross_product(b, gradlnB, b_x_gradlnB);
 
     Dim3 Bstar;
     for (int i = 0; i < 3; ++i) {
-      Bstar[i] = vB[i] - c_aw0 * p * xi * (b_x_gradlnB[i] + curlB[i] / B);
+      Bstar[i] = out.B[i] - c_aw0 * p * xi * (b_x_gradlnB[i] + out.J[i] / Bmag);
       // Modify electric field by p_parallel * dbdt
-      E[i] -= p * xi * dbdt[i];
+      out.E[i] -= p * xi * dbdt[i];
     }
-    if constexpr (EF == false) E = {};
+    if constexpr (EF == false) out.E = {};
 
     Real Bpar = dot_product(b, Bstar);
-    Real B_d_gradlnB = dot_product(vB, gradlnB);
+    Real B_d_gradlnB = dot_product(out.B, gradlnB);
     Real Bstar_d_gradlnB = dot_product(Bstar, gradlnB);
 
     /** \brief Using Curl product rule
@@ -139,7 +136,7 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
     Real b_rad_term = 0.0; // dot_product(b, curlB) * c_aw0 * p / Bsq;
 
     Dim3 E_x_b;
-    cross_product(E, b, E_x_b);
+    cross_product(out.E, b, E_x_b);
 
     Real gradlnB_d_Exb = dot_product(gradlnB, E_x_b);
     Real Bstar_d_E = dot_product(Bstar, E);
@@ -204,19 +201,19 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
                         b_x_gradlnB[i] +
                     c_aw0 / Bpar * E_x_b[i];
     dXdt[3] = 0.0;
+
     return ErrorCode::Success;
   };
 
 
   KOKKOS_INLINE_FUNCTION
-  void computeConservedQuantities(const Dim5 &X, Real &p_phi, Real &mu,
+  void computeConservedQuantities(Real &p_phi, Real &mu,
+                                  const Real R, const Real Z,
                                   const Real &t, const Real Psi) const {
     // Compute magnitude B
-    Dim3 B = {}, curlB = {}, dBdR = {}, dBdZ = {}, E = {}, dbdt = {};
-    field(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-    if constexpr (EF == false) E = {};
-
-    const Real Bmag = Kokkos::sqrt(dot_product(B, B));
+    EvalB ev;
+    ERROR_CODE status = field.eval(ev, R, Z, t);
+    const Real Bmag = ev.Bmag;
 
     // Get variables
     const Real &p = X[0];

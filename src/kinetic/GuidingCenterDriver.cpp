@@ -33,7 +33,6 @@ using namespace parthenon::driver::prelude;
 #include "kinetic/kinetic.hpp"
 #include "kinetic/ConfigurationDomainGeometry.hpp"
 #include "kinetic/CurrentDensity.hpp"
-#include "kinetic/EM_Field.hpp"
 #include "pgen.hpp"
 #include "rk4.hpp"
 
