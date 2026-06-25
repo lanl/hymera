@@ -31,7 +31,7 @@ struct AnalyticField {
   Real dqZ(const Real &R, const Real &Z) const { return 2.0 * q2 * Z; }
 
   KOKKOS_INLINE_FUNCTION
-  ERROR_CODE evalB(Dim3& B, const Dim5 &X) const {
+  void evalB(Dim3& B, const Dim5 &X) const {
     const Dim5::value_type R = X[2];
     const Dim5::value_type Z = X[4];
 
@@ -39,11 +39,10 @@ struct AnalyticField {
     B[1] = R_a / R;                 // B_phi
     B[2] = (R - R_a) / q(R, Z) / R; // B_Z
 
-    return ErrorCode::Success;
   };
 
   KOKKOS_INLINE_FUNCTION
-  ERROR_CODE operator()(const Dim5 &X, const Real &t, Dim3 &B, Dim3 &curlB,
+  void operator()(const Dim5 &X, const Real &t, Dim3 &B, Dim3 &curlB,
                         Dim3 &dBdR, Dim3 &dBdZ, Dim3 &E, Dim3 &dbdt) const {
     const Dim5::value_type R = X[2];
     const Dim5::value_type Z = X[4];
@@ -68,12 +67,11 @@ struct AnalyticField {
     E[1] = E_0 * R_a / R;
     E[2] = 0.0;
 
-    return ErrorCode::Success;
   };
 
   template<typename ViewType>
   KOKKOS_INLINE_FUNCTION
-  ERROR_CODE operator()(const int idx, const ViewType& v, const Real &t, Dim3 &B, Dim3 curlB,
+  void operator()(const int idx, const ViewType& v, const Real &t, Dim3 &B, Dim3 curlB,
                         Dim3 &dBdR, Dim3 &dBdZ, Dim3 &E) const {
     const Real R = v(idx, 2);
     const Real Z = v(idx, 4);
@@ -98,7 +96,6 @@ struct AnalyticField {
     E[1] = E_0 * R_a / R;
     E[2] = 0.0;
 
-    return ErrorCode::Success;
   };
 
 

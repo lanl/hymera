@@ -110,8 +110,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   const Real gamma_BC  = pin->GetOrAddReal("BoundaryConditions", "gamma_BC", 1. + 1e-4);   // Assuming E max = 1000
   const Real gamma_min = pin->GetOrAddReal("BoundaryConditions", "gamma_min", 2. * (gamma_BC - 1.) + 1.0);
-  const Real p_RE      = 0.0;  // will be computed from maximum electric field
   const Real p_BC      = momentum_(gamma_BC);
+  const Real p_RE      = p_BC;  // Updated from maximum electric field during the run.
 
 
   ///< Runaway parameters
@@ -151,7 +151,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const int NR_plot = pin->GetOrAddInteger("Output", "NR_plot", 400);
   const int NZ_plot = pin->GetOrAddInteger("Output", "NZ_plot", 800);
 
-  Kokkos::DualView<Real***> Jre_mhd("Jre_mhd", NR, NZ, 3);
+  DualView3 Jre_mhd("Jre_mhd", NR, NZ, 3);
   Kokkos::deep_copy(Jre_mhd.view_device(), 0.0);
   Kokkos::deep_copy(Jre_mhd.view_host(), 0.0);
 
@@ -304,51 +304,52 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   ConfigurationDomainGeometry cdg(data.fd_locator, indicator);
   pkg->AddParam("CDG", cdg);
 
-  pkg->AddParam("Jre_mhd", Jre_mhd);
-  pkg->AddParam("Jre_mhd", E_base);
-
-  CommunicateBJV(data, mhd_context, FieldComponents::B);
-  ComputeBaseElectricField_in_place(data, En, eta_norm, FieldsComponents::B);
-  CommunicateBJV(data, mhd_context, FieldComponents::Bt);
-  ComputeBaseElectricField_in_place(data, En, eta_norm, FieldsComponents::Bt);
-
-  InterpolateTime(data, dtField);
-
-  auto data_d = data.data.device_view();
-  data.data.sync_device();
-  Kokkos::parallel_for("Set intial runaway current",
-      Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0}, {NR, NZ}),
-      KOKKOS_LAMBDA(const int i, const int j) {
-        Real mask = indicator(i,j) > 0 > Real(1.0) : Real(0.0);
-        Real scale = mask * current_fraction * eta_norm;
-        data_d(i,j,FieldComponents::E + 0) -= scale * data.data(i, j, FieldComponents::J + 0);
-        data_d(i,j,FieldComponents::E + 1) -= scale * data.data(i, j, FieldComponents::J + 1);
-        data_d(i,j,FieldComponents::E + 2) -= scale * data.data(i, j, FieldComponents::J + 2);
-      });
-  data.data.modify_device();
-
   View3 E_base("E_base", NR, NZ);
   Kokkos::deep_copy(E_base, 0.0);
-  pkg->AddParam("E_base", Jre);
+  pkg->AddParam("E_base", E_base);
 
   View3 Jre("Jre", NR, NZ);
   Kokkos::deep_copy(Jre, 0.0);
   pkg->AddParam("Jre", Jre);
 
+  pkg->AddParam("Jre_mhd", Jre_mhd);
+
+  CommunicateBJV(data, mhd_context, FieldComponents::B);
+  ComputeBaseElectricField_in_place(data, En, eta_norm, FieldComponents::B);
+  CommunicateBJV(data, mhd_context, FieldComponents::Bt);
+  ComputeBaseElectricField_in_place(data, En, eta_norm, FieldComponents::Bt);
+
+  InterpolateTime(data, dt_mhd / tau_c);
+
+  const Real seed_current_fraction = pin->GetOrAddReal("ParticleSeed", "current_fraction", 1.0e-3); // Used to determine the initial runaway current to adjust the Electric field.
+
+  auto data_d = data.data.view_device();
+  data.data.device_sync();
+  Kokkos::parallel_for("Set intial runaway current",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR, NZ}),
+      KOKKOS_LAMBDA(const int i, const int j) {
+        Real mask = (indicator(i,j) > 0) ? Real(1.0) : Real(0.0);
+        Real scale = mask * seed_current_fraction * eta_norm;
+        data_d(i,j,FieldComponents::E + 0) -= scale * data_d(i, j, FieldComponents::J + 0);
+        data_d(i,j,FieldComponents::E + 1) -= scale * data_d(i, j, FieldComponents::J + 1);
+        data_d(i,j,FieldComponents::E + 2) -= scale * data_d(i, j, FieldComponents::J + 2);
+      });
+  data.data.device_modify();
+
   InterpolateHermiteBJE(data, FieldComponents::B);
   InterpolateHermiteBJE(data, FieldComponents::Bt);
 
-  const Real R0_plot = f.hR0 + 1e-10;
-  const Real Z0_plot = f.hZ0 + 1e-10;
-  const Real dR_plot = (f.nR_hermite_data * f.hR - 2e-10) / static_cast<Real> (NR_plot);
-  const Real dZ_plot = (f.nZ_hermite_data * f.hZ - 2e-10) / static_cast<Real> (NZ_plot);
+  const Real R0_plot = data.hermite_locator.R0 + 1e-10;
+  const Real Z0_plot = data.hermite_locator.Z0 + 1e-10;
+  const Real dR_plot = (data.hermite_locator.nR * data.hermite_locator.dR - 2e-10) / static_cast<Real> (NR_plot);
+  const Real dZ_plot = (data.hermite_locator.nZ * data.hermite_locator.dZ - 2e-10) / static_cast<Real> (NZ_plot);
 
   ParArray1D<Real> hpd_R("Hermite_Field_Plot_data_R", NR_plot);
   ParArray1D<Real> hpd_Z("Hermite_Field_Plot_data_Z", NZ_plot);
   ParArray3D<Real> gce_data("GCE_data", NR_plot, NZ_plot, 5);
   ParArrayND<Real> hpd_F("Hermite_Field_Plot_data_F", NR_plot, NZ_plot, 3, 6);
   ParArrayND<Real> hpd_eval("Hermite_Field_Plot_data_eval", NR_plot, NZ_plot, 3,
-      static_cast<size_t>(fid::Count));
+      FieldComponents::Total);
 
   Kokkos::parallel_for("FillGrids", NR_plot,
       KOKKOS_LAMBDA(const int n) {
@@ -392,9 +393,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   const Real seed_current = pin->GetOrAddReal("ParticleSeed", "current", 15e3); // 15 kAmps
   pkg->AddParam("seed_current", seed_current * a); // Convert from amps
-
-  const Real seed_current_fraction = pin->GetOrAddReal("ParticleSeed", "current_fraction", seed_current / 15e6); // Used to determine the initial runaway current to adjust the Electric field.
-
 
   const Real gammamin = pin->GetOrAddReal("ParticleSeed", "gammamin", 10.0);
   pkg->AddParam("pmin", momentum_(gammamin));
@@ -777,9 +775,9 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
   const auto ct_a   = pkg->Param<Real>("ct_a");
   const auto alpha0 = pkg->Param<Real>("alpha0");
   auto data = pkg->Param<FieldData_t>("FieldData");
-  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("ConfigurationDomainGeometry");
-  FieldEvaluator f{cdg.locator, data};
-  GuidingCenterEquations<FieldEvaluator, true, false> gce(f, c_aw0, ct_a, alpha0);
+  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("CDG");
+  FieldEvaluator f{cdg.hermite_locator, data.hermite_data.view_device()};
+  GuidingCenterEquations<decltype(f), true, false> gce(f, c_aw0, ct_a, alpha0);
 
   // Now plot all Hermite fields
   Kokkos::parallel_for("FillInterpolatedData_plot",
@@ -794,7 +792,7 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
 
         for (int k = 0; k < 3; ++k) {
           hpd_F(i,j,k,0) = ev.B[k];
-          hpd_F(i,j,k,1) = ev.curlB[k];
+          hpd_F(i,j,k,1) = ev.J[k];
           hpd_F(i,j,k,2) = ev.dBdR[k];
           hpd_F(i,j,k,3) = ev.dBdZ[k];
           hpd_F(i,j,k,4) = ev.E[k];
@@ -851,17 +849,17 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
   auto Jre_mhd = pkg->Param<DualView3>("Jre_mhd");
 
   Jre_mhd.sync_device();
-  Jre_d = Jre_mhd.device_view();
+  auto Jre_d = Jre_mhd.view_device();
 
-  Reak R0 = cdg.indicator_locator.R0;
-  Reak Z0 = cdg.indicator_locator.Z0;
-  Reak dR = cdg.indicator_locator.dR;
-  Reak dZ = cdg.indicator_locator.dZ;
-  Reak nR = cdg.indicator_locator.nR;
-  Reak nZ = cdg.indicator_locator.nZ;
+  Real R0 = cdg.indicator_locator.R0;
+  Real Z0 = cdg.indicator_locator.Z0;
+  Real dR = cdg.indicator_locator.dR;
+  Real dZ = cdg.indicator_locator.dZ;
+  int nR = cdg.indicator_locator.nR;
+  int nZ = cdg.indicator_locator.nZ;
 
-  data.data.sync_device();
-  data_d = data.data.device_view();
+  data.data.device_sync();
+  auto data_d = data.data.view_device();
 
   Real I_ohmic_fd = 0.0;
   Real I_ohmic_hermite = 0.0;
@@ -874,7 +872,8 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
         Real R = R0 + i * dR;
         Real Z = Z0 + j * dZ;
 
-        int ii,jj, region;
+        int ii,jj;
+        Region region;
         cdg.locate_region(R, Z, ii,jj, region);
 
         if (region > 0) {
@@ -882,11 +881,11 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
           EvalGCE ev;
           Real t = 0.0;
 
-          auto ret = (ev, R, Z, t);
+          f.eval(ev, R, Z, t);
 
           Real area = dR * dZ;
           integral_ohmic_fd += area * data_d(i, j, FieldComponents::J + 1);
-          integral_ohmic_hermite += area * ev.curlB[1];
+          integral_ohmic_hermite += area * ev.J[1];
           integral += area * Jre_d(i,j,1);
         }
 
@@ -898,7 +897,7 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
   if (Globals::my_rank == 0) {
     std::cout << std::format("{:20.14e} {:20.14e} {:20.14e}",
         I_re * .5, I_re_integral * 5.3 * 2.0,
-        I_ohmic * 5.3  * 2.0 / pc::mu0) << std::endl;
+        I_ohmic_hermite * 5.3  * 2.0 / pc::mu0) << std::endl;
   }
 }
 
@@ -1079,10 +1078,8 @@ TaskStatus RestoreJre(Mesh* pm) {
   auto pkg = pm->packages.Get("Deck");
 
   auto jre_backup = pkg->Param<ParArray3D<Real>>("jre_backup");
-  auto f = pkg->Param<EM_Field>("Field");
-  auto jre_data = Kokkos::subview(f.data, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, static_cast<size_t>(fid::Jre), 0);
-
-  Kokkos::deep_copy(jre_data, jre_backup);
+  auto jre = pkg->Param<ParArray3D<Real>>("Jre_push_deposit");
+  Kokkos::deep_copy(jre, jre_backup);
 	return TaskStatus::complete;
 }
 
@@ -1092,8 +1089,8 @@ void ComputeParticleWeights(Mesh* pm) {
   auto pkg = pm->packages.Get("Deck");
   if (pkg->Param<int>("ComputeInitialWeights") == 0) return;
   auto data = pkg->Param<FieldData_t>("FieldData");
-  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("ConfigurationDomainGeometry");
-  FieldEvaluator f{cdg.hermite_locator, data};
+  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("CDG");
+  FieldEvaluator f{cdg.hermite_locator, data.hermite_data.view_device()};
 
   const Real p_RE = pkg->Param<Real>("p_RE");
   const Real seed_current = pkg->Param<Real>("seed_current");

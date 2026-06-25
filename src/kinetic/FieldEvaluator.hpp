@@ -1,4 +1,3 @@
-o
 // (C) (or copyright) 2025. Triad National Security, LLC. All rights reserved.
 //
 // This program was produced under U.S. Government contract 89233218CNA000001 for Los
@@ -27,6 +26,8 @@ struct EvalB {
 struct EvalBE {
   Dim3 B = {};
   Dim3 E = {};
+  Real Bmag = {};
+  Real Bsq = {};
 };
 
 
@@ -160,6 +161,7 @@ struct FieldEvaluator {
     out.Bsq = 0.0;
     for (int i = 0; i < 3; ++i) {
       out.B[i] /= R;
+      out.Bsq += out.B[i] * out.B[i];
     }
     out.Bmag = Kokkos::sqrt(out.Bsq);
 	}
@@ -184,6 +186,7 @@ struct FieldEvaluator {
     out.Bsq = 0.0;
     for (int i = 0; i < 3; ++i) {
       out.B[i] /= R;
+      out.Bsq += out.B[i] * out.B[i];
     }
     out.Bmag = Kokkos::sqrt(out.Bsq);
   }
@@ -206,7 +209,7 @@ struct FieldEvaluator {
 
     auto cell = Kokkos::subview(coeffs, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, iR, iZ);
 
-    evalTaylorTimes(out, xiR, xiZ, t, cell);
+    evalTaylorTimed(out, xiR, xiZ, t, cell);
 
     out.Bsq = 0.0;
     Real BBt = 0.0;
@@ -217,14 +220,14 @@ struct FieldEvaluator {
       out.Bsq  += out.B[i] * out.B[i];
       BBt += out.B[i] * out.dbdt[i];
 
-      out.dBdR[i] = (out.dBdR[i] / locator.dR - B[i]) / R;
+      out.dBdR[i] = (out.dBdR[i] / locator.dR - out.B[i]) / R;
       out.dBdZ[i] /= R * locator.dZ;
     }
 
     out.Bmag = Kokkos::sqrt(out.Bsq);
 
     for (int i = 0; i < 3; ++i) {
-      out.dbdt[i] = (out.dbdt[i] - B[i] * BBt / out.Bsq)  / out.Bmag;
+      out.dbdt[i] = (out.dbdt[i] - out.B[i] * BBt / out.Bsq)  / out.Bmag;
     }
   }
 };

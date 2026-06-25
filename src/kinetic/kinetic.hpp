@@ -25,6 +25,7 @@ constexpr int FIELD_SMOOTHNESS = 2;  // Hermite m
 constexpr int FIELD_FD_STENSIL = 7;  // How many points to use for derivative approximation
 
 #include "mhd/mfd_config.h"
+#include "kinetic/FieldComponents.h"
 
 namespace Kinetic {
 

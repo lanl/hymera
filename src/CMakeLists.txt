@@ -32,8 +32,13 @@ target_include_directories(mhd_core PUBLIC
 
 add_library(infrastructure
   kinetic/kinetic.cpp
+  tasks/BackgroundFields.cpp
+  tasks/ComputeElectricField.cpp
   tasks/Interpolate.cpp
   tasks/MomentumBoundary.cpp
+  tasks/Particles.cpp
+  tasks/PerdictorCorrector.cpp
+  tasks/ViewManipulation.cpp
 )
 
 target_link_libraries(infrastructure PUBLIC PkgConfig::PETSC)
@@ -58,8 +63,3 @@ set(HYBRID_SRC_LIST
 
 add_executable(hybrid ${HYBRID_SRC_LIST})
 target_link_libraries(hybrid PRIVATE particles_core mhd_core infrastructure)
-
-add_executable(gce kinetic/gce_run.cpp)
-target_link_libraries(gce PRIVATE particles_core)
-
-

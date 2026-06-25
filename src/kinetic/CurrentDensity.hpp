@@ -17,13 +17,12 @@
 template <class FieldEvaluator>
 KOKKOS_INLINE_FUNCTION
 Real getParticleCurrent(Dim5& X, Real t, Real w, const FieldEvaluator f) {
-  KOKKOS_ASSERT(ret == ErrorCode::Success);
   const Real p = X[0];
   const Real xi = X[1];
   const Real R = X[2];
   const Real Z = X[4];
 
-  EvalB B;
+  Kinetic::EvalB B;
   f.eval(B, R, Z, t);
 
   const Real b_phi = B.B[1] / B.Bmag;
@@ -48,26 +47,26 @@ void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityVie
   const Dim5::value_type Z = X[4];
 
   Real contribution = -p * xi / gamma_(p) / R /
-    field.cdg.dR /
-    field.cdg.dZ /
+    locator.dR /
+    locator.dZ /
     2.0 / M_PI * time_interval * w;
 
   int i, j;
   Real xiR, xiZ;
   locator.locate(R, Z, i, j, xiR, xiZ);
 
-  EvalB B;
+  Kinetic::EvalB B;
   field.eval(B, R, Z, t);
 
   for (int ii = -1; ii < 2; ++ii) {
-      if(i + ii >= 0 and i + ii < field.data.extent(0)) {
-          Real wr = S2(abs(xiR - static_cast<Real>(ii)));
+      if(i + ii >= 0 and i + ii < jre.extent(0)) {
+          Real wr = S2(Kokkos::abs(xiR - static_cast<Real>(ii)));
           for (int jj = -1; jj < 2; ++jj) {
-              if(j + jj >= 0 and j + jj < field.data.extent(1)) {
-                  Real wz = S2(abs(xiZ - static_cast<Real>(jj)));
+              if(j + jj >= 0 and j + jj < jre.extent(1)) {
+                  Real wz = S2(Kokkos::abs(xiZ - static_cast<Real>(jj)));
                   Real weighted_contribution = contribution * wr * wz;
                   for (int kk = 0; kk < 3; ++kk) {
-                      Real wcB = weighted_contribution * B[kk] / B.Bmag;
+                      Real wcB = weighted_contribution * B.B[kk] / B.Bmag;
                       Kokkos::atomic_add(&(jre(i,j,kk)), wcB);
                   }
               }

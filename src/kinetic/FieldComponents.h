@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Kokkos_DualView.hpp>
-#include "common.hpp"
+#include "util/common.hpp"
 
 struct FieldComponents {
   static constexpr int B     = 0,
@@ -10,5 +10,5 @@ struct FieldComponents {
                        Bt    = 9,
                        Jt    = 12,
                        Et    = 15,
-                       Total = 18
+                       Total = 18;
 };

@@ -17,7 +17,6 @@
 #include <iomanip>
 #include <limits>
 #include <format>
-#include <hFlux/dopri.hpp>
 
 
 #include <Kokkos_Core.hpp>
@@ -32,13 +31,33 @@ using namespace parthenon::driver::prelude;
 #include "kinetic/LargeAngleCollision.hpp"
 #include "kinetic/SmallAngleCollision.hpp"
 #include "kinetic/AnalyticField.hpp"
+#include "kinetic/ParticleVerificator.hpp"
 #include "pgen.hpp"
+#include "rk45.hpp"
 
 using parthenon::constants::SI;
 using parthenon::constants::PhysicalConstants;
 using pc = PhysicalConstants<SI>;
 
 namespace Kinetic {
+
+struct AnalyticParticleVerificator {
+  using ResultCode_t = int;
+  static constexpr ResultCode_t Success = ParticleVerifyCodes::Success;
+
+  Real p_BC;
+
+  KOKKOS_INLINE_FUNCTION
+  ResultCode_t verify(const Dim5 &y) const {
+    if (!Kokkos::isfinite(y[0])) {
+      return ParticleVerifyCodes::InvalidState;
+    }
+    if (y[0] < p_BC) {
+      return ParticleVerifyCodes::MomentumCutoff;
+    }
+    return Success;
+  }
+};
 
 TaskStatus PushParticlesAnalytic(Mesh *pm, Real t0, Real dt) {
   // get mesh data
@@ -69,6 +88,7 @@ TaskStatus PushParticlesAnalytic(Mesh *pm, Real t0, Real dt) {
 
   const auto f = pkg->Param<AnalyticField>("Field");
   GuidingCenterEquations<AnalyticField, true, false> gce(f, c_aw0, ct_a, alpha0);
+  AnalyticParticleVerificator ver{p_BC};
 
   Kokkos::Timer timer;
 
@@ -82,7 +102,6 @@ TaskStatus PushParticlesAnalytic(Mesh *pm, Real t0, Real dt) {
   auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
   auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
 
-  Kokkos::fence();
 
   const Real tstart = t0;
   const Real tstop =  t0 + dt;
@@ -134,9 +153,9 @@ TaskStatus PushParticlesAnalytic(Mesh *pm, Real t0, Real dt) {
               last_step = true;
             }
 
-            auto ret = solve_dopri5(gce, X, t, t + dtSA, rtol, atol, h, 1e-9,
+            auto ret = solve_rk45(gce, ver, X, t, t + dtSA, rtol, atol, h, 1e-9,
                          std::numeric_limits<int>::max(), work_d);
-            if (ret != ErrorCode::Success) {
+            if (ret != AnalyticParticleVerificator::Success) {
               pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
               if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
                 swarm_d.MarkParticleForRemoval(n);
@@ -159,7 +178,6 @@ TaskStatus PushParticlesAnalytic(Mesh *pm, Real t0, Real dt) {
             pack_swarm_i(b, Kinetic::will_scatter(), n) = ms(X[0], w, dt, gamma_min, rng_pool);
         }
       });
-  Kokkos::fence();
 
   return TaskStatus::complete;
 

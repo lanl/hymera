@@ -8,7 +8,6 @@
 #include <parthenon_manager.hpp>
 
 #include <Kokkos_Core.hpp>
-#include <EM_Field.hpp>
 #include "HybridDriver.h"
 #include "pgen.hpp"
 #include "kinetic.hpp"

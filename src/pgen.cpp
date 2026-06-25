@@ -16,8 +16,8 @@
 using namespace parthenon::package::prelude;
 
 #include "kinetic/kinetic.hpp"
-#include "kinetic/EM_Field.hpp"
 #include "kinetic/ConfigurationDomainGeometry.hpp"
+#include "kinetic/FieldEvaluator.hpp"
 #include "kinetic/GuidingCenterEquations.hpp"
 #include "kinetic/CurrentDensity.hpp"
 #include "util/common.hpp"
@@ -139,8 +139,9 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   const Real Rc  = pkg->Param<Real>("Rc");
   const Real Zc  = pkg->Param<Real>("Zc");
 
-  const auto f = pkg->Param<EM_Field>("Field");
-  const auto cdg = f.cdg;
+  auto field_data = pkg->Param<Kinetic::FieldData_t>("FieldData");
+  const auto cdg = pkg->Param<ConfigurationDomainGeometry>("CDG");
+  Kinetic::FieldEvaluator f{cdg.hermite_locator, field_data.hermite_data.view_device()};
   const auto seed_current = pkg->Param<Real>("seed_current");
 
   // Pull out swarm object
@@ -186,7 +187,9 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
   auto indicator_h = create_mirror_view_and_copy(Kokkos::HostSpace(), cdg.indicator_view);
   FILE* fs = std::fopen("indicator.txt", "w");
-  std::fprintf(fs, "%le, %le, %le, %le\n", cdg.R0, cdg.Z0, cdg.dR, cdg.dZ);
+  std::fprintf(fs, "%le, %le, %le, %le\n", cdg.indicator_locator.R0,
+               cdg.indicator_locator.Z0, cdg.indicator_locator.dR,
+               cdg.indicator_locator.dZ);
   for (int i = 0; i < indicator_h.extent(0); ++i) {
     for (int j = 0; j < indicator_h.extent(1); ++j) {
       std::fprintf(fs, "%d ", indicator_h(i,j));
@@ -206,7 +209,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   const auto c_aw0 = pkg->Param<Real>("c_aw0");
   const auto ct_a = pkg->Param<Real>("ct_a");
   const auto alpha0 = pkg->Param<Real>("alpha0");
-  GuidingCenterEquations<EM_Field, false, false> gce(f, c_aw0, ct_a, alpha0);
+  GuidingCenterEquations<decltype(f), false, false> gce(f, c_aw0, ct_a, alpha0);
 
   // loop over new particles created
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
@@ -244,14 +247,12 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
       X[2] = Rc;
       X[4] = Zc;
       int i, j;
-      int level = cdg.indicator(X, i, j);
+      Region level;
+      cdg.locate_region(X[2], X[4], i, j, level);
       KOKKOS_ASSERT(level > 0);
 
-
-      Dim3 B = {}, dBdR = {}, dBdZ = {}, curlB = {}, E = {}, dbdt = {};
-      Dim3 B_center = {}, curlB_center = {};
-      ErrorCode status = f(X, t, B_center, curlB_center, dBdR, dBdZ, E, dbdt);
-      KOKKOS_ASSERT(status == ErrorCode::Success);
+      Kinetic::EvalGCE ev_center;
+      f.eval(ev_center, X[2], X[4], t);
 
       // Generate particles:
       // Generate within level according to curl
@@ -260,7 +261,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
         // Real theta = theta_dist(RNGs[thread_id]);
         auto rng_gen = rng_pool.get_state();
 
-        Real randNum = rng_gen.drand(abs(curlB_center[1]));
+        Real randNum = rng_gen.drand(abs(ev_center.J[1]));
         X[0] = rng_gen.drand(pmin, pmax);
         X[1] = rng_gen.drand(ximin, ximax);
         X[2] = rng_gen.drand(Rmin, Rmax);
@@ -269,13 +270,14 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
         rng_pool.free_state(rng_gen);
 
         int i, j;
-        int level = cdg.indicator(X, i, j);
+        Region level;
+        cdg.locate_region(X[2], X[4], i, j, level);
         // Only keep particles within separatrix
         if (level != 1)
           continue;
-        status = f(X, t, B, curlB, dBdR, dBdZ, E, dbdt);
-        KOKKOS_ASSERT(status == ErrorCode::Success);
-        if (randNum < abs(curlB[1])) break;
+        Kinetic::EvalGCE ev;
+        f.eval(ev, X[2], X[4], t);
+        if (randNum < abs(ev.J[1])) break;
       }
 
       Real my_phi = 0.0, my_mu = 0.0;

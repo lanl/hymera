@@ -1,4 +1,6 @@
 #include "Tasks.h"
+#include "kinetic/ParticleVerificator.hpp"
+#include "kinetic/rk45.hpp"
 
 TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
 
@@ -28,8 +30,11 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
   const auto alpha0 = pkg->Param<Real>("alpha0");
 
 
-  const auto f = pkg->Param<EM_Field>("Field");
-  GuidingCenterEquations<EM_Field, true, false> gce(f, c_aw0, ct_a, alpha0);
+  auto data = pkg->Param<Kinetic::FieldData_t>("FieldData");
+  auto cdg = pkg->Param<ConfigurationDomainGeometry>("CDG");
+  Kinetic::FieldEvaluator f{cdg.hermite_locator, data.hermite_data.view_device()};
+  GuidingCenterEquations<decltype(f), true, false> gce(f, c_aw0, ct_a, alpha0);
+  ParticleVerificator ver{cdg, p_BC};
 
   Kokkos::Timer timer;
 
@@ -44,11 +49,10 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
   auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
   auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
 
-  auto jre = pkg->Param<ParArray3D<Real>>("Jre_push_deposit");
+  auto jre = pkg->Param<View3>("Jre");
 
   const Real tstart = t0;
   const Real tstop =  t0 + dt;
-
 
   int EnableLargeAngleCollisions = pkg->Param<int>("EnableLargeAngleCollisions");
   int EnableSmallAngleCollisions = pkg->Param<int>("EnableSmallAngleCollisions");
@@ -64,17 +68,9 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
         if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n)&&
             (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE) ) {
           Dim5 X;
-          X[0] = pack_swarm_r(b, Kinetic::p(), n);
-
-          // Skip particles below momentum threshold
-          if (X[0] < p_BC) {
-            pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
-            if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
-              swarm_d.MarkParticleForRemoval(n);
-            return;
-          }
-
           Real t = tstart;
+
+          X[0] = pack_swarm_r(b, Kinetic::p(), n);
           X[1] = pack_swarm_r(b, Kinetic::xi(), n);
           X[2] = pack_swarm_r(b, Kinetic::R(), n);
           X[3] = pack_swarm_r(b, Kinetic::phi(), n);
@@ -96,34 +92,25 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
               last_step = true;
             }
 
-            auto ret = solve_dopri5(gce, X, t, t + dtSA, rtol, atol, h, 1e-9,
+            auto ret = solve_rk45(gce, ver, X, t, t + dtSA, rtol, atol, h, 1e-9,
                          std::numeric_limits<int>::max(), work_d);
-            if (ret != ErrorCode::Success) {
+            if (ret != ParticleVerificator::Success) {
               pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
-              if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
-                swarm_d.MarkParticleForRemoval(n);
-              break;
-            }
-            int ii,jj;
-            int level = f.cdg.indicator(X, ii,jj);
-
-            if (level < 1 || X[0] < p_BC) {
-              pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
-              if ((pack_swarm_i(b, Kinetic::status(), n) & PROTECTED) == 0)
-                swarm_d.MarkParticleForRemoval(n);
-              if (level < 1)
-                pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_WALL;
-              else
+              if (ret == ParticleVerifyCodes::MomentumCutoff) {
                 pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_MOMENTUM;
+              } else if (ret == ParticleVerifyCodes::WallImpact) {
+                pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_WALL;
+              }
               break;
             }
 
             if (X[0] > p_RE) {
-              DepositCurrent(X, t, w, jre, dtSA, f);
+              DepositCurrent(X, t, w, jre, dtSA, f, cdg.indicator_locator);
+            }
+            if (EnableSmallAngleCollisions == 1) {
+              sa(X[0], X[1], dtSA, rng_pool);
             }
 
-            if (EnableSmallAngleCollisions == 1)
-              sa(X[0], X[1], dtSA, rng_pool);
             t += dtSA;
             if (t > tstop)
               break;
@@ -135,8 +122,10 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
         	pack_swarm_r(b, Kinetic::phi(), n) = X[3];
         	pack_swarm_r(b, Kinetic::Z(), n)   = X[4];
 
-          if (EnableLargeAngleCollisions == 1)
+          if (EnableLargeAngleCollisions == 1 &&
+              (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE)) {
             pack_swarm_i(b, Kinetic::will_scatter(), n) = ms(X[0], w, dt, gamma_min, rng_pool);
+          }
         }
       });
 

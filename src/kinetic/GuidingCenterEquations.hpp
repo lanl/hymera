@@ -14,6 +14,7 @@
 #pragma once
 #include "util/common.hpp"
 #include "hFlux/common.hpp"
+#include "kinetic/FieldEvaluator.hpp"
 
 /// @brief Guiding center equations of motion. Functor for the right hand side.
 /// Can be used with the ODE solver.
@@ -63,7 +64,7 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
    */
 
   KOKKOS_INLINE_FUNCTION
-  ERROR_CODE operator()(const Real &t, const value_type &X,
+  void operator()(const Real &t, const value_type &X,
                         value_type &dXdt) const {
 
     const Real p =   X[0];
@@ -79,36 +80,36 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
       dXdt[2] = 0.0;
       dXdt[3] = 0.0;
       dXdt[4] = 0.0;
-      return ErrorCode::Success;
+      return;
     }
 
-    EvalGCE ev;
+    Kinetic::EvalGCE ev;
     field.eval(ev, R, Z, t);
 
-    const Real Bsq = out.Bsq;
-    const Real Bmag = out.Bmag;
+    const Real Bsq = ev.Bsq;
+    const Real Bmag = ev.Bmag;
 
     Dim3 b = {};
     for (int i = 0; i < 3; ++i) {
-      b[i] = out.B[i] / Bmag;
+      b[i] = ev.B[i] / Bmag;
     }
 
-    Dim3 gradlnB = {dot_product(out.B, dBdR) / Bsq, 0.0,
-                    dot_product(out.B, dBdZ) / Bsq};
+    Dim3 gradlnB = {dot_product(ev.B, ev.dBdR) / Bsq, 0.0,
+                    dot_product(ev.B, ev.dBdZ) / Bsq};
 
     Dim3 b_x_gradlnB;
     cross_product(b, gradlnB, b_x_gradlnB);
 
     Dim3 Bstar;
     for (int i = 0; i < 3; ++i) {
-      Bstar[i] = out.B[i] - c_aw0 * p * xi * (b_x_gradlnB[i] + out.J[i] / Bmag);
+      Bstar[i] = ev.B[i] - c_aw0 * p * xi * (b_x_gradlnB[i] + ev.J[i] / Bmag);
       // Modify electric field by p_parallel * dbdt
-      out.E[i] -= p * xi * dbdt[i];
+      ev.E[i] -= p * xi * ev.dbdt[i];
     }
-    if constexpr (EF == false) out.E = {};
+    if constexpr (EF == false) ev.E = {};
 
     Real Bpar = dot_product(b, Bstar);
-    Real B_d_gradlnB = dot_product(out.B, gradlnB);
+    Real B_d_gradlnB = dot_product(ev.B, gradlnB);
     Real Bstar_d_gradlnB = dot_product(Bstar, gradlnB);
 
     /** \brief Using Curl product rule
@@ -136,10 +137,10 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
     Real b_rad_term = 0.0; // dot_product(b, curlB) * c_aw0 * p / Bsq;
 
     Dim3 E_x_b;
-    cross_product(out.E, b, E_x_b);
+    cross_product(ev.E, b, E_x_b);
 
     Real gradlnB_d_Exb = dot_product(gradlnB, E_x_b);
-    Real Bstar_d_E = dot_product(Bstar, E);
+    Real Bstar_d_E = dot_product(Bstar, ev.E);
 
     Real one_m_xisq = 1.0 - xi * xi;
     /**  \brief Momentum evolution
@@ -202,7 +203,6 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
                     c_aw0 / Bpar * E_x_b[i];
     dXdt[3] = 0.0;
 
-    return ErrorCode::Success;
   };
 
 
@@ -211,23 +211,9 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
                                   const Real R, const Real Z,
                                   const Real &t, const Real Psi) const {
     // Compute magnitude B
-    EvalB ev;
-    ERROR_CODE status = field.eval(ev, R, Z, t);
-    const Real Bmag = ev.Bmag;
-
-    // Get variables
-    const Real &p = X[0];
-    const Real &xi = X[1];
-    const Real &R = X[2];
-    const Real &Z = X[4];
-
-    // compute mu = p_\perp / |B|
-    mu = p * p * (1 - xi * xi) / Bmag;
-
-    // p_phi = (c over a omega) p_perp B_phi R + (-) psi
-    // - stands for charge p is gamma m_e c
-    // p_phi += t * c_a omega_0 * E_phi * R  if E is present
-    p_phi = c_aw0 * xi * p * B[1] / Bmag * R - Psi;
-    // p_phi += t * c_aw0 * E[1] * field.R_a;
+    Kinetic::EvalB ev;
+    field.eval(ev, R, Z, t);
+    p_phi = -Psi;
+    mu = 0.0;
   };
 };
