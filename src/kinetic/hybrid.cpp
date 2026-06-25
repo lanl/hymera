@@ -19,11 +19,12 @@ using namespace parthenon::driver::prelude;
 
 
 int main(int argc, char *argv[]) {
-  User mhd_config;
-  mhd_PetscInit(argc, argv);
+  User * p_mhd_config;
 
   ParthenonManager pman;
   auto manager_status = pman.ParthenonInitEnv(argc, argv);
+
+  mhd_PetscInit(&argc, &argv, &p_mhd_config);
 
   if (manager_status == ParthenonStatus::complete) {
     pman.ParthenonFinalize();
@@ -34,7 +35,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
- User * p_mhd_config = &mhd_config;
   pman.app_input->ProcessPackages = [=](std::unique_ptr<ParameterInput> &pin) {
     Packages_t packages;
     packages.Add(Kinetic::Initialize(pin.get(), p_mhd_config));

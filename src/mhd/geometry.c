@@ -1308,7 +1308,6 @@ PetscErrorCode SaveSolution(TS ts, Vec X, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("SaveSolution",classid,&USER_EVENT);
@@ -1492,7 +1491,6 @@ PetscErrorCode SaveSolution(TS ts, Vec X, void *ptr)
     VecDestroy(&F_phi2);
     VecDestroy(&F_z2);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return(0);
@@ -1502,7 +1500,6 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("SaveCoordinates",classid,&USER_EVENT);
@@ -1916,7 +1913,6 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
     VecDestroy(&F_phi2);
     VecDestroy(&F_z2);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return(0);
@@ -2271,7 +2267,6 @@ PetscErrorCode CellToVertexProjectionScalar(TS ts, Vec C, Vec V, void *ptr)
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("CellToVertexProjectionScalar",classid,&USER_EVENT);
@@ -2356,7 +2351,6 @@ PetscErrorCode CellToVertexProjectionScalar(TS ts, Vec C, Vec V, void *ptr)
     VecAssemblyEnd(V);
     DMRestoreLocalVector(da,&CLocal);
 
-    PetscLogFlops(user_event_flops);
     PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
     return(0);
@@ -2366,7 +2360,6 @@ PetscErrorCode CellToVertexProjectionVector(TS ts, Vec C, Vec V, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("CellToVertexProjectionVector",classid,&USER_EVENT);
@@ -2543,7 +2536,6 @@ PetscErrorCode CellToVertexProjectionVector(TS ts, Vec C, Vec V, void *ptr)
     VecAssemblyEnd(V);
     DMRestoreLocalVector(da,&CLocal);
 
-    PetscLogFlops(user_event_flops);
     PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
     return(0);
@@ -2553,7 +2545,6 @@ PetscErrorCode VertexToCellReconstruction(TS ts, Vec V, Vec C, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("VertexToCellReconstruction",classid,&USER_EVENT);
@@ -2729,7 +2720,6 @@ PetscErrorCode VertexToCellReconstruction(TS ts, Vec V, Vec C, void *ptr)
     VecAssemblyEnd(C);
     DMRestoreLocalVector(da,&VLocal);
 
-    PetscLogFlops(user_event_flops);
     PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
     return(0);
@@ -2739,7 +2729,6 @@ PetscErrorCode VertexToEdgeReconstruction_scalar(TS ts, Vec V, Vec E, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("VertexToEdgeReconstruction_scalar",classid,&USER_EVENT);
@@ -2889,7 +2878,6 @@ PetscErrorCode VertexToEdgeReconstruction_scalar(TS ts, Vec V, Vec E, void *ptr)
     VecAssemblyEnd(E);
     DMRestoreLocalVector(da,&VLocal);
 
-    PetscLogFlops(user_event_flops);
     PetscLogEventEnd(USER_EVENT,0,0,0,0);
     return(0);
 }
@@ -2898,7 +2886,6 @@ PetscErrorCode VertexToEdgeReconstruction(TS ts, Vec V, Vec E, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("VertexToEdgeReconstruction",classid,&USER_EVENT);
@@ -3128,7 +3115,6 @@ PetscErrorCode VertexToEdgeReconstruction(TS ts, Vec V, Vec E, void *ptr)
     VecAssemblyEnd(E);
     DMRestoreLocalVector(da,&VLocal);
 
-    PetscLogFlops(user_event_flops);
     PetscLogEventEnd(USER_EVENT,0,0,0,0);
     return(0);
 }
@@ -3432,7 +3418,6 @@ PetscErrorCode VertexToFaceReconstruction(TS ts, Vec V, Vec F, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("VertexToFaceReconstruction",classid,&USER_EVENT);
@@ -3626,7 +3611,6 @@ PetscErrorCode VertexToFaceReconstruction(TS ts, Vec V, Vec F, void *ptr)
     VecAssemblyEnd(F);
     DMRestoreLocalVector(da,&VLocal);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
     return(0);
 }
@@ -3882,7 +3866,6 @@ PetscErrorCode EdgeToCellReconstruction_r(TS ts, Vec E, Vec C, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("EdgeToCellReconstruction_r",classid,&USER_EVENT);
@@ -3946,7 +3929,6 @@ PetscErrorCode EdgeToCellReconstruction_r(TS ts, Vec E, Vec C, void *ptr)
     VecAssemblyEnd(C);
     DMRestoreLocalVector(da,&ELocal);
 
-    PetscLogFlops(user_event_flops);
     PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
     return(0);
@@ -3956,7 +3938,6 @@ PetscErrorCode EdgeToCellReconstruction_phi(TS ts, Vec E, Vec C, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("EdgeToCellReconstruction_phi",classid,&USER_EVENT);
@@ -4020,7 +4001,6 @@ PetscErrorCode EdgeToCellReconstruction_phi(TS ts, Vec E, Vec C, void *ptr)
     VecAssemblyEnd(C);
     DMRestoreLocalVector(da,&ELocal);
 
-    PetscLogFlops(user_event_flops);
     PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
     return(0);
@@ -4030,7 +4010,6 @@ PetscErrorCode EdgeToCellReconstruction_z(TS ts, Vec E, Vec C, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("EdgeToCellReconstruction_z",classid,&USER_EVENT);
@@ -4094,7 +4073,6 @@ PetscErrorCode EdgeToCellReconstruction_z(TS ts, Vec E, Vec C, void *ptr)
     VecAssemblyEnd(C);
     DMRestoreLocalVector(da,&ELocal);
 
-    PetscLogFlops(user_event_flops);
     PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
     return(0);
@@ -4340,7 +4318,6 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FaceToVertexProjection",classid,&USER_EVENT);
@@ -5238,7 +5215,6 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
     VecAssemblyEnd(V);
     DMRestoreLocalVector(da,&FLocal);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
     return(0);
 }
@@ -6114,7 +6090,6 @@ PetscErrorCode EdgeToVertexProjection_Original(TS ts, Vec E, Vec V, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("EdgeToVertexProjection_Original",classid,&USER_EVENT);
@@ -6506,7 +6481,6 @@ PetscErrorCode EdgeToVertexProjection_Original(TS ts, Vec E, Vec V, void *ptr)
     VecAssemblyEnd(V);
     DMRestoreLocalVector(da,&ELocal);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
     return(0);
 }
@@ -6515,7 +6489,6 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("EdgeToVertexProjection",classid,&USER_EVENT);
@@ -7140,7 +7113,6 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
     VecAssemblyEnd(V);
     DMRestoreLocalVector(da,&ELocal);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
     return(0);
 }
@@ -7949,7 +7921,6 @@ PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("CellToFaceProjection",classid,&USER_EVENT);
@@ -8171,7 +8142,6 @@ PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
     VecAssemblyEnd(F);
     DMRestoreLocalVector(da,&CLocal);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
     return(0);
@@ -8181,7 +8151,6 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("VertexCrossProduct",classid,&USER_EVENT);
@@ -8649,7 +8618,6 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
     DMRestoreLocalVector(da,&ALocal);
     DMRestoreLocalVector(da,&BLocal);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
     return(0);
@@ -8658,7 +8626,6 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
 PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, PetscScalar *ge_EZ, void *ptr, int code) {
     PetscLogEvent  USER_EVENT;
     PetscClassId   classid;
-    PetscLogDouble user_event_flops;
 
     PetscClassIdRegister("class name",&classid);
     PetscLogEventRegister("FromPetscVecToArray_EfieldCell",classid,&USER_EVENT);
@@ -8891,7 +8858,6 @@ PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, 
     VecDestroy(&E_phi2);
     VecDestroy(&E_z2);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return(0);
@@ -8911,7 +8877,6 @@ PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("getVArray",classid,&USER_EVENT);
@@ -9025,7 +8990,6 @@ PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
   DMDestroy( & dmV);
 
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return(0);
@@ -9034,7 +8998,6 @@ PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
 PetscErrorCode getJArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr) {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("getVArray",classid,&USER_EVENT);
@@ -9148,7 +9111,6 @@ PetscErrorCode getJArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr) {
   DMDestroy( & dmV);
 
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return(0);
@@ -9159,7 +9121,6 @@ PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivat
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("UpdateBArray",classid,&USER_EVENT);
@@ -9279,7 +9240,6 @@ PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivat
   PetscCall(DMDestroy( & dmB));
 
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return(0);
@@ -9290,7 +9250,6 @@ PetscErrorCode FromPetscVecToArray(TS ts, Vec X, PetscScalar *gf_BR, PetscScalar
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("FromPetscVecToArray",classid,&USER_EVENT);
@@ -9713,7 +9672,6 @@ PetscErrorCode FromPetscVecToArray(TS ts, Vec X, PetscScalar *gf_BR, PetscScalar
     VecDestroy(&B_phi2);
     VecDestroy(&B_z2);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return(0);
@@ -9723,7 +9681,6 @@ PetscErrorCode CellCoordArrays(TS ts, PetscScalar *vecCR, PetscScalar* vecCZ, vo
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("CellCoordArrays",classid,&USER_EVENT);
@@ -9846,7 +9803,6 @@ PetscErrorCode CellCoordArrays(TS ts, PetscScalar *vecCR, PetscScalar* vecCZ, vo
     VecDestroy(&Cr2);
     VecDestroy(&Cz2);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return(0);
@@ -9856,7 +9812,6 @@ PetscErrorCode ScatterTest(TS ts, void *ptr)
 {
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("ScatterTest",classid,&USER_EVENT);
@@ -10091,7 +10046,6 @@ PetscErrorCode ScatterTest(TS ts, void *ptr)
     VecDestroy(&F_phi2);
     VecDestroy(&F_z2);
 
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return(0);
@@ -10100,7 +10054,6 @@ PetscErrorCode ScatterTest(TS ts, void *ptr)
 int isInDomain(const double * R, const double * Z, void * ptr){
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
-  PetscLogDouble user_event_flops;
 
   PetscClassIdRegister("class name",&classid);
   PetscLogEventRegister("isInDomain",classid,&USER_EVENT);
@@ -10147,7 +10100,6 @@ int isInDomain(const double * R, const double * Z, void * ptr){
   if(value == -3){
     PetscPrintf(PETSC_COMM_WORLD, "cell indices not found for (R,Z) = (%f,%f)\n", *R,*Z);
   }
-  PetscLogFlops(user_event_flops);
   PetscLogEventEnd(USER_EVENT,0,0,0,0);
 
   return value;

@@ -419,8 +419,6 @@ void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
       Real my_phi = 0.0, my_mu = 0.0;
       Real psi = 0.0;
 
-      KOKKOS_ASSERT(status == SUCCESS);
-
       pack_swarm(b, Kinetic::p(), n)   = X[0];
       pack_swarm(b, Kinetic::xi(), n)  = X[1];
       pack_swarm(b, Kinetic::R(), n)   = X[2];

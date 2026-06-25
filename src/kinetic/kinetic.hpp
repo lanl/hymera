@@ -44,18 +44,18 @@ typedef Kokkos::Random_XorShift64_Pool<> RNGPool;
     static std::string name() { return #ns "." #varname; }                               \
   }
 
-SWARM_VARIABLE(Real, particle, p); // momentum
-SWARM_VARIABLE(Real, particle, xi);// pitch
-SWARM_VARIABLE(Real, particle, R);
-SWARM_VARIABLE(Real, particle, phi);
-SWARM_VARIABLE(Real, particle, Z);
-SWARM_VARIABLE(Real, particle, weight);
-SWARM_VARIABLE(Real, particle, p_phi);
-SWARM_VARIABLE(Real, particle, mu);
+PAR_SWARMVAR(Real, particle, p); // momentum
+PAR_SWARMVAR(Real, particle, xi);// pitch
+PAR_SWARMVAR(Real, particle, R);
+PAR_SWARMVAR(Real, particle, phi);
+PAR_SWARMVAR(Real, particle, Z);
+PAR_SWARMVAR(Real, particle, weight);
+PAR_SWARMVAR(Real, particle, p_phi);
+PAR_SWARMVAR(Real, particle, mu);
 
 // For collision book keeping
-SWARM_VARIABLE(int, particle, will_scatter);
-SWARM_VARIABLE(int, particle, secondary_index);
+PAR_SWARMVAR(int, particle, will_scatter);
+PAR_SWARMVAR(int, particle, secondary_index);
 
 // For save/restore particle state (predictor corrector implementation)
 typedef enum STATUS_ENUM {
@@ -64,13 +64,13 @@ typedef enum STATUS_ENUM {
     DEATH_BY_MOMENTUM=4,
     DEATH_BY_WALL=8
 } STATUS;
-SWARM_VARIABLE(int, particle, status);
-SWARM_VARIABLE(Real, particle, saved_p);
-SWARM_VARIABLE(Real, particle, saved_xi);
-SWARM_VARIABLE(Real, particle, saved_R);
-SWARM_VARIABLE(Real, particle, saved_phi);
-SWARM_VARIABLE(Real, particle, saved_Z);
-SWARM_VARIABLE(Real, particle, saved_w);
+PAR_SWARMVAR(int, particle, status);
+PAR_SWARMVAR(Real, particle, saved_p);
+PAR_SWARMVAR(Real, particle, saved_xi);
+PAR_SWARMVAR(Real, particle, saved_R);
+PAR_SWARMVAR(Real, particle, saved_phi);
+PAR_SWARMVAR(Real, particle, saved_Z);
+PAR_SWARMVAR(Real, particle, saved_w);
 
 std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_context);
 std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin);
