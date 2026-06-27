@@ -1,4 +1,6 @@
 #include "Tasks.h"
+
+#include "kinetic/ConfigurationDomainGeometry.hpp"
 #include "kinetic/FieldEvaluator.hpp"
 
 TaskStatus UpdateMomentumBoundary(

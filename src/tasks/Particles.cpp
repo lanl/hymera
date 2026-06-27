@@ -1,5 +1,10 @@
 #include "Tasks.h"
 #include "kinetic/ParticleVerificator.hpp"
+#include "kinetic/LargeAngleCollision.hpp"
+#include "kinetic/SmallAngleCollision.hpp"
+#include "kinetic/FieldEvaluator.hpp"
+#include "kinetic/GuidingCenterEquations.hpp"
+#include "kinetic/CurrentDensity.hpp"
 #include "kinetic/rk45.hpp"
 
 TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {

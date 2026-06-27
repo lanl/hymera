@@ -14,8 +14,8 @@
 #ifndef MHD_H_
 #define MHD_H_
 
-#include "fid.h"
 #include "mfd_config.h"
+#include "fid.h"
 
 
 #ifdef __cplusplus

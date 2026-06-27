@@ -16,6 +16,8 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
 
+#include <hFlux/common.hpp>
+
 #include "mfd_config.h"
 using RNGPool=Kokkos::Random_XorShift64_Pool<>;
 

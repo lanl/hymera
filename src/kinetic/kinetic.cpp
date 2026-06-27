@@ -31,6 +31,7 @@ using namespace parthenon;
 #include "kinetic/CurrentDensity.hpp"
 #include "kinetic/AnalyticField.hpp"
 #include "kinetic/FieldEvaluator.hpp"
+#include "tasks/Tasks.h"
 #include "mhd/mhd.h"
 
 using parthenon::constants::SI;
@@ -324,7 +325,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real seed_current_fraction = pin->GetOrAddReal("ParticleSeed", "current_fraction", 1.0e-3); // Used to determine the initial runaway current to adjust the Electric field.
 
   auto data_d = data.data.view_device();
-  data.data.device_sync();
+  data.data.sync_device();
   Kokkos::parallel_for("Set intial runaway current",
       Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR, NZ}),
       KOKKOS_LAMBDA(const int i, const int j) {
@@ -334,7 +335,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
         data_d(i,j,FieldComponents::E + 1) -= scale * data_d(i, j, FieldComponents::J + 1);
         data_d(i,j,FieldComponents::E + 2) -= scale * data_d(i, j, FieldComponents::J + 2);
       });
-  data.data.device_modify();
+  data.data.modify_device();
 
   InterpolateHermiteBJE(data, FieldComponents::B);
   InterpolateHermiteBJE(data, FieldComponents::Bt);
@@ -858,7 +859,7 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
   int nR = cdg.indicator_locator.nR;
   int nZ = cdg.indicator_locator.nZ;
 
-  data.data.device_sync();
+  data.data.sync_device();
   auto data_d = data.data.view_device();
 
   Real I_ohmic_fd = 0.0;

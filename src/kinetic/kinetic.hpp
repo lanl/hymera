@@ -17,6 +17,7 @@
 #include <memory>
 #include "Kokkos_Random.hpp"
 #include <parthenon/package.hpp>
+#include <hFlux/FieldData.hpp>
 
 constexpr bool PartialScreening = true;
 constexpr bool EnergyScattering = true;
@@ -85,13 +86,6 @@ void LoadRawFieldData(User * man, const char* filename);
 void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context);
 void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context);
 void WorkBeforeLoop(Mesh * pm, User* mhd_context);
-
-TaskStatus UpdateMomentumBoundary(
-    Mesh* pm,
-    const Real time_0, const Real time_1,
-    const MomentumBoundaryUpdateMode mode);
-
-
 
 
 

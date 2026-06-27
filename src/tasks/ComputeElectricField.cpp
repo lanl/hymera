@@ -14,6 +14,7 @@ TaskStatus ComputeBaseElectricField(View3 E_base, FieldData_t data_V, const Real
   const int NR = field_d.extent_int(0);
   const int NZ = field_d.extent_int(1);
 
+  data_V.data.sync_device();
   Kokkos::parallel_for(
     "Pack MHD fields",
     Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {NR, NZ}),
@@ -55,6 +56,7 @@ TaskStatus ComputeBaseElectricField_in_place(FieldData_t data_V, const Real En, 
   const int NR = field_d.extent_int(0);
   const int NZ = field_d.extent_int(1);
 
+  data_V.data.sync_device();
   Kokkos::parallel_for(
     "Pack MHD fields",
     Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {NR, NZ}),
@@ -79,7 +81,7 @@ TaskStatus ComputeBaseElectricField_in_place(FieldData_t data_V, const Real En, 
       V_d(i, j, 1) = En * (-VxB1 + eta_norm * J1);
       V_d(i, j, 2) = En * (-VxB2 + eta_norm * J2);
     });
-  data_V.data.device_modify();
+  data_V.data.modify_device();
 
   return TaskStatus::complete;
 }
@@ -99,7 +101,7 @@ TaskStatus ComputeAdjustedElectricField(FieldData_t data, View3 E_base, View3 Jr
       field_d(i,j,FieldComponents::E + 1) = E_base(i,j,1) - En * Jre(i,j,1);
       field_d(i,j,FieldComponents::E + 2) = E_base(i,j,2) - En * Jre(i,j,2);
     });
-  data.data.device_modify();
+  data.data.modify_device();
 
   return TaskStatus::complete;
 }

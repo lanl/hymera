@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Tasks.h"
 
 TaskStatus ScaleView(View3 view, const Real scl);

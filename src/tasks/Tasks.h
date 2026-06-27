@@ -1,9 +1,10 @@
 #pragma once
 #include <parthenon/package.hpp>
 
-#include "kinetic/kinetic.hpp"
+#include "kinetic.hpp"
 #include "util/common.hpp"
-#include "mhd/mfd_config.h"
+
+#include "mfd_config.h"
 using namespace parthenon;
 using namespace parthenon::package::prelude;
 using namespace Kinetic;
