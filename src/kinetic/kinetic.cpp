@@ -980,64 +980,6 @@ TaskStatus SaveState(Mesh* pm) {
 }
 
 
-TaskStatus RandomRemove(Mesh* pm) {
-  std::cout << "Random remove start" << std::endl;
-  auto pkg = pm->packages.Get("Deck");
-  int num_particles = 0;
-
-  auto desc_swarm = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
-  auto md = pm->mesh_data.Get();
-  auto pack_swarm = desc_swarm.GetPack(md.get());
-
-  Kokkos::parallel_reduce(
-      PARTHENON_AUTO_LABEL, pack_swarm.GetMaxFlatIndex() + 1,
-      // loop over all particles
-      KOKKOS_LAMBDA(const int idx, int& num) {
-        // block and particle indices
-        auto [b, n] = pack_swarm.GetBlockParticleIndices(idx);
-        const auto swarm_d = pack_swarm.GetContext(b);
-        if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n) && (pack_swarm(b, Kinetic::status(), n) & Kinetic::ALIVE)) {
-          num++;
-        }
-      },
-      num_particles);
-  MPI_Allreduce(MPI_IN_PLACE,&num_particles,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
-
-  std::cout << "Number of particles " << num_particles << std::endl;
-  auto num_particles_max = pkg->Param<int>("num_particles_max");
-	if (num_particles_max > num_particles) return TaskStatus::complete;
-
-  auto rng_pool = pkg->Param<Kinetic::RNGPool>("rng_pool");
-  auto desc_swarm_i = parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
-  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
-  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<Kinetic::weight>("particles");
-  auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
-
-  parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
-                     DevExecSpace(), 0, pack_swarm_i.GetMaxFlatIndex(),
-                     // new_n ranges from 0 to N_new_particles
-                     KOKKOS_LAMBDA(const int idx) {
-        auto [b_i, n_i] = pack_swarm_i.GetBlockParticleIndices(idx);
-        auto [b_r, n_r] = pack_swarm_r.GetBlockParticleIndices(idx);
-        if (pack_swarm_i(b_i, Kinetic::status(), n_i) & Kinetic::ALIVE) {
-          auto rng_gen = rng_pool.get_state();
-          auto isKilled = (rng_gen.urand(2));
-          rng_pool.free_state(rng_gen);
-          // block and particle indices
-
-          if (isKilled == 1) {
-              pack_swarm_i(b_i, Kinetic::status(), n_i) &= ~Kinetic::ALIVE;
-              pack_swarm_i(b_i, Kinetic::status(), n_i) &= ~Kinetic::PROTECTED;
-              const auto swarm = pack_swarm_i.GetContext(b_i);
-              swarm.MarkParticleForRemoval(n_i);
-          } else {
-							pack_swarm_r(b_r, Kinetic::weight(), n_r) *= 2.0;
-					}
-        }
-      });
-
-  return TaskStatus::complete;
-}
 
 TaskStatus RestoreState(Mesh* pm) {
   auto md = pm->mesh_data.Get();

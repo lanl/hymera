@@ -84,7 +84,7 @@ TaskCollection HybridDriver::MakeTaskCollection(BlockList_t &blocks, SimTime tm)
   }
 
   AttachFieldCorrector(tl, dep, pmesh, p_mhd_config);
-  tl->AddTask(dep, DefragSwarmsMesh, pmesh);
+ // tl->AddTask(dep, DefragSwarmsMesh, pmesh);
 
   return tc;
 }

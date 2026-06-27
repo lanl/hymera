@@ -1,5 +1,4 @@
 #include <hFlux/Interpolator.hpp>
-#include "fid.h"
 #include "mhd.h"
 #include "Tasks.h"
 

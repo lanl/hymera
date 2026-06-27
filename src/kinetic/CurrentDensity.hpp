@@ -12,11 +12,12 @@
 //========================================================================================
 #pragma once
 #include "util/common.hpp"
+#include "FieldEvaluator.hpp"
 
 // Get current carried by a particle, in dirrection of b_phi
-template <class FieldEvaluator>
+template <class Field>
 KOKKOS_INLINE_FUNCTION
-Real getParticleCurrent(Dim5& X, Real t, Real w, const FieldEvaluator f) {
+Real getParticleCurrent(Dim5& X, Real t, Real w, const Field f) {
   const Real p = X[0];
   const Real xi = X[1];
   const Real R = X[2];
@@ -37,9 +38,9 @@ Real S2(Real x) {
 }
 
 // Add particle currect contibution wheighted by time interval to a current dencity for averaging
-template <class CurrentDensityView, class FieldEvaluator, class CurrentDensityLocator>
+template <class CurrentDensityView, class Field, class CurrentDensityLocator>
 KOKKOS_INLINE_FUNCTION
-void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityView jre, const Real time_interval, const FieldEvaluator field, const CurrentDensityLocator locator) {
+void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityView jre, const Real time_interval, const Field field, const CurrentDensityLocator locator) {
 
   const Dim5::value_type p = X[0];
   const Dim5::value_type xi = X[1];

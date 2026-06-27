@@ -54,6 +54,15 @@ typedef struct  {
   size_t stride3;
 } view4d_t;
 
+typedef enum {
+  fid_B = 0,
+  fid_E = 1,
+  fid_Jre = 2,
+  fid_J = 3,
+  fid_V = 4,
+  fid_GradB = 5,
+  fid_Count = 6
+} field_id;
 
 /* Shorter, more convenient names for DMStagStencilLocation entries */
 #define BACK_DOWN_LEFT   DMSTAG_BACK_DOWN_LEFT
