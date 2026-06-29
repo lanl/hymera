@@ -20,6 +20,7 @@ x1min = -2.0
 x1max = 2.0
 ix1_bc = periodic
 ox1_bc = periodic
+task_collection_timeout_in_seconds = 28000
 
 nx2 = 256
 x2min = -2.0
