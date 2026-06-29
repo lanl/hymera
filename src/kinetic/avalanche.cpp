@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
 
   pman.app_input->ProcessPackages = [=](std::unique_ptr<ParameterInput> &pin) {
     Packages_t packages;
-    packages.Add(Kinetic::InitializeAnalytic(pin.get()));
+    packages.Add(Kinetic::Initialize(pin.get()));
     return packages;
   };
   pman.app_input->ProblemGenerator = GenerateParticleRings;

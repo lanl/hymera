@@ -18,6 +18,7 @@
 #include <parthenon/package.hpp>
 #include <hFlux/dopri.hpp>
 #include <hFlux/FieldData.hpp>
+#include <hFlux/Evaluator.hpp>
 
 using namespace parthenon;
 
@@ -87,8 +88,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real Zeff = pin->GetOrAddReal("Plasma", "Zeff", (ZI*ZI*nI + nD0)/n_e0); // TODO: why ZI is a square?
   const Real NeI = Z0 - ZI; ///< Number of bound electrons
   const Real Coulog0 = pin->GetOrAddReal("Plasma", "Coulog0", 14.9 - 0.5*log(n_e0/1.0e20) + log(Te0/1.e3));
-  const Real Rc = pin->GetOrAddReal("Plasma", "Rc", 3.1158966549999998e+00); ///< Initial guess for magnetic axis, R [-], length normalized
-  const Real Zc = pin->GetOrAddReal("Plasma", "Zc", 3.7114360000000002e-01); ///< Initial guess for magnetic axis, Z [-], length normalized
+  Real Rc = pin->GetOrAddReal("Plasma", "Rc", 3.1158966549999998e+00); ///< Initial guess for magnetic axis, R [-], length normalized
+  Real Zc = pin->GetOrAddReal("Plasma", "Zc", 3.7114360000000002e-01); ///< Initial guess for magnetic axis, Z [-], length normalized
 
 
   const Real L11 = 0.58 * 32.0 / (3.0 * M_PI);
@@ -340,6 +341,37 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   InterpolateHermiteBJE(data, FieldComponents::B);
   InterpolateHermiteBJE(data, FieldComponents::Bt);
 
+  Interpolator<FIELD_SMOOTHNESS, FIELD_FD_STENSIL> itrp;
+  itrp.computeFlux(data.hermite_locator,
+      data.hermite_data.view_device(),
+      data.psi_data.view_device());
+  data.psi_data.modify_device();  // Mark psi data as modified
+
+  int accent = 1;
+  Real Psi_min;
+  data.hermite_data.sync_host();
+  data.psi_data.sync_host();
+
+  findMagneticAxis(Rc, Zc,
+              data.hermite_data.view_host(),
+              data.psi_data.view_host(),
+              Evaluator{data.hermite_locator},
+              accent,
+              Psi_min);
+
+  std::cout << std::format("New Mag. Axis center (R,Z) = {:g}, {:g}\n Psi_min = {:g}", Rc, Zc, Psi_min) << std::endl;
+  pkg->AddParam("Rc", Rc, Params::Mutability::Restart);
+  pkg->AddParam("Zc", Zc, Params::Mutability::Restart);
+
+  data.psi_data.sync_device();
+  Kokkos::parallel_for("Normalize psi",
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {data.hermite_locator.nR,data.hermite_locator.nZ}),
+  KOKKOS_LAMBDA(int i, int j){
+    data.psi_data.view_device()(0,0,i,j) -= Psi_min;
+  });
+  data.psi_data.modify_device();
+
+
   const Real R0_plot = data.hermite_locator.R0 + 1e-10;
   const Real Z0_plot = data.hermite_locator.Z0 + 1e-10;
   const Real dR_plot = (data.hermite_locator.nR * data.hermite_locator.dR - 2e-10) / static_cast<Real> (NR_plot);
@@ -388,9 +420,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   int rng_seed = pin->GetOrAddInteger("ParticleSeed", "rng_seed", 1234) + Globals::my_rank;
   RNGPool rng_pool(rng_seed);
   pkg->AddParam("rng_pool", rng_pool);
-
-  pkg->AddParam("Rc", Rc);
-  pkg->AddParam("Zc", Zc);
 
   const Real seed_current = pin->GetOrAddReal("ParticleSeed", "current", 15e3); // 15 kAmps
   pkg->AddParam("seed_current", seed_current * a); // Convert from amps
@@ -673,8 +702,6 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
   RNGPool rng_pool(rng_seed);
   pkg->AddParam("rng_pool", rng_pool);
 
-  pkg->AddParam("Rc", Rc);
-  pkg->AddParam("Zc", Zc);
 
   const Real seed_current = pin->GetOrAddReal("ParticleSeed", "current", 15e3); // 15 kAmps
   pkg->AddParam("seed_current", seed_current * a); // Convert from amps
@@ -1098,10 +1125,10 @@ void ComputeParticleWeights(Mesh* pm) {
 TaskStatus MakeOutputs(Outputs* pouts, Mesh* pmesh, ParameterInput* pinput, Real time, int iPR) {
   auto md = pmesh->mesh_data.Get();
   auto pkg = pmesh->packages.Get("Deck");
-  pkg->UpdateParam("MyTime", time);
-  pkg->UpdateParam("PredictorIterationNumber", iPR);
-
-  pouts->MakeOutputs(pmesh, pinput);
+//  pkg->UpdateParam("MyTime", time);
+//  pkg->UpdateParam("PredictorIterationNumber", iPR);
+//
+//  pouts->MakeOutputs(pmesh, pinput);
   return TaskStatus::complete;
 }
 

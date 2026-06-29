@@ -213,36 +213,32 @@ TaskCollection AvalancheDriver::MakeTaskCollection(BlockList_t &blocks, SimTime 
   for (int iCD = 0; iCD < nCDperMHDstep; ++iCD) {
     for (int iLA = 0; iLA < nLAperCD; ++iLA) {
       Real t0 = iLA * dtLA + iCD * dtCD;
-      dep = tl->AddTask(dep, PushParticlesAnalytic, pmesh, t0, dtLA);
+      dep = tl->AddTask(dep, PushParticles, pmesh, t0, dtLA);
 
-      if (EnableLargeAngleCollisions == 1) {
-        // these are per block tasklists
-        TaskRegion &async_region = tc.AddRegion(blocks.size());
-        for (int i = 0; i < blocks.size(); ++i) {
-          // required by this MeshData object)
-	        auto &pmb = blocks[i];
-          auto &tl = async_region[i];
-          auto check_scatter = tl.AddTask(none, CheckScatter, pmb.get());
-          auto add_secondaries = tl.AddTask(check_scatter, AddSecondaries, pmb.get(), dtLA);
-          auto cleanup = tl.AddTask(add_secondaries, CleanupParticles, pmb.get());
-        }
-        tl = &tc.AddRegion(1)[0];
-        dep = none;
+      TaskRegion &async_region = tc.AddRegion(blocks.size());
+      for (int i = 0; i < blocks.size(); ++i) {
+        // required by this MeshData object)
+	      auto &pmb = blocks[i];
+        auto &tl = async_region[i];
+        auto check_scatter = tl.AddTask(none, CheckScatter, pmb.get());
+        auto add_secondaries = tl.AddTask(check_scatter, AddSecondaries, pmb.get(), dtLA);
+        auto cleanup = tl.AddTask(add_secondaries, CleanupParticles, pmb.get());
       }
+      tl = &tc.AddRegion(1)[0];
+      dep = none;
     }
   //  dep = tl->AddTask(dep, CollectCurrent, pmesh, iCD, dtCD);
   }
 
-  dep = tl->AddTask(dep, SaveState, pmesh); // Commits particle states: Protects all alive particles.
-    dep = tl->AddTask(dep, RandomRemove, pmesh); // If there are more alive particles then limit, kill half, doubling the weight
-    TaskRegion &async_region = tc.AddRegion(blocks.size());
-    for (int i = 0; i < blocks.size(); ++i) {
-      // required by this MeshData object)
-  	  auto &pmb = blocks[i];
-      auto &tl = async_region[i];
-      auto cleanup = tl.AddTask(none, CleanupParticles, pmb.get());
-    }
-    tl = &tc.AddRegion(1)[0];
+  dep = tl->AddTask(dep, RandomRemove, pmesh); // If there are more alive particles then limit, kill half, doubling the weight
+  TaskRegion &async_region = tc.AddRegion(blocks.size());
+  for (int i = 0; i < blocks.size(); ++i) {
+    // required by this MeshData object)
+    auto &pmb = blocks[i];
+    auto &tl = async_region[i];
+    auto cleanup = tl.AddTask(none, CleanupParticles, pmb.get());
+  }
+  tl = &tc.AddRegion(1)[0];
 
   return tc;
 }

@@ -13,6 +13,8 @@
 
 #include <parthenon/package.hpp>
 #include <utils/error_checking.hpp>
+
+using namespace parthenon;
 using namespace parthenon::package::prelude;
 
 #include "kinetic/kinetic.hpp"
@@ -142,7 +144,17 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   auto field_data = pkg->Param<Kinetic::FieldData_t>("FieldData");
   const auto cdg = pkg->Param<ConfigurationDomainGeometry>("CDG");
   Kinetic::FieldEvaluator f{cdg.hermite_locator, field_data.hermite_data.view_device()};
+  Kinetic::FieldEvaluator f_h{cdg.hermite_locator, field_data.hermite_data.view_host()};
   const auto seed_current = pkg->Param<Real>("seed_current");
+
+  field_data.hermite_data.sync_host();
+  field_data.hermite_data.sync_device();
+
+  Kinetic::EvalGCE ev_center;
+  f_h.eval(ev_center, Rc, Zc, 0.0);
+  Real Jc = ev_center.J[1];
+
+  std::cout << std::format("Current on magnetic axis center {:g}\n", Jc);
 
   // Pull out swarm object
   auto swarm = data->GetSwarmData()->Get("particles");
@@ -185,31 +197,21 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   auto pack_swarm = desc_swarm.GetPack(data.get());
   auto pack_status = desc_markers.GetPack(data.get());
 
-  auto indicator_h = create_mirror_view_and_copy(Kokkos::HostSpace(), cdg.indicator_view);
-  FILE* fs = std::fopen("indicator.txt", "w");
-  std::fprintf(fs, "%le, %le, %le, %le\n", cdg.indicator_locator.R0,
-               cdg.indicator_locator.Z0, cdg.indicator_locator.dR,
-               cdg.indicator_locator.dZ);
-  for (int i = 0; i < indicator_h.extent(0); ++i) {
-    for (int j = 0; j < indicator_h.extent(1); ++j) {
-      std::fprintf(fs, "%d ", indicator_h(i,j));
-    }
-    std::fprintf(fs, "\n");
-  }
+  const int my_rank = Globals::my_rank;
 
-  std::fclose(fs);
-//  Kokkos::View<Real******> psi_hermite_data("psi",
-//      f.hermite_data.extent(0),
-//      f.hermite_data.extent(1),
-//      f.hermite_data.extent(2) + 1,
-//      f.hermite_data.extent(3),
-//      f.hermite_data.extent(6),
-//      f.hermite_data.extent(7));
-//  computeFlux<2>(f.hermite_data, psi_hermite_data, f.hR, f.hZ);
-  const auto c_aw0 = pkg->Param<Real>("c_aw0");
-  const auto ct_a = pkg->Param<Real>("ct_a");
-  const auto alpha0 = pkg->Param<Real>("alpha0");
-  GuidingCenterEquations<decltype(f), false, false> gce(f, c_aw0, ct_a, alpha0);
+  std::cout << "nR" << cdg.indicator_locator.nR << std::endl
+            << "nZ" << cdg.indicator_locator.nZ << std::endl
+            << "dR" << cdg.indicator_locator.dR << std::endl
+            << "dZ" << cdg.indicator_locator.dZ << std::endl
+            << "R0" << cdg.indicator_locator.R0 << std::endl
+            << "Z0" << cdg.indicator_locator.Z0 << std::endl;
+
+  int ir, iz;
+  cdg.indicator_locator.locateCell(3.0, 0.0, ir, iz);
+  std::cout << "F-Location of 3.0 0.0" << ir << " " << iz << std::endl;
+  cdg.hermite_locator.locateCell(3.0, 0.0, ir, iz);
+  std::cout << "H-Location of 3.0 0.0" << ir << " " << iz << std::endl;
+
 
   // loop over new particles created
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
@@ -244,24 +246,16 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
       Dim5 X;
       Real t = 0.0;
-      X[2] = Rc;
-      X[4] = Zc;
-      int i, j;
-      Region level;
-      cdg.locate_region(X[2], X[4], i, j, level);
-      KOKKOS_ASSERT(level > 0);
-
-      Kinetic::EvalGCE ev_center;
-      f.eval(ev_center, X[2], X[4], t);
 
       // Generate particles:
       // Generate within level according to curl
+
 
       for (;;) {
         // Real theta = theta_dist(RNGs[thread_id]);
         auto rng_gen = rng_pool.get_state();
 
-        Real randNum = rng_gen.drand(abs(ev_center.J[1]));
+        Real randNum = rng_gen.drand(abs(Jc));
         X[0] = rng_gen.drand(pmin, pmax);
         X[1] = rng_gen.drand(ximin, ximax);
         X[2] = rng_gen.drand(Rmin, Rmax);
@@ -270,6 +264,11 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
         rng_pool.free_state(rng_gen);
 
         int i, j;
+        Real xiR, xiZ;
+        cdg.locate(X[2], X[4], i, j, xiR, xiZ);
+        if (i < 0 || i >= cdg.hermite_locator.nR || j < 0 || j >= cdg.hermite_locator.nZ)
+          continue;
+
         Region level;
         cdg.locate_region(X[2], X[4], i, j, level);
         // Only keep particles within separatrix
@@ -299,6 +298,8 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 }
 
 void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
+
+  std::cout << "Started particle generation" << std::endl;
 
   int marker = 0;
   auto &data = pmb->meshblock_data.Get();
@@ -433,4 +434,6 @@ void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
       pack_swarm(b, Kinetic::weight(), n) = 1.0;
       pack_status(b, Kinetic::status(), n) = Kinetic::ALIVE | Kinetic::PROTECTED;
    });
+
+  std::cout << "Finished particle generation" << std::endl;
 }
