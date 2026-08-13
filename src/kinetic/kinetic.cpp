@@ -152,6 +152,9 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   // Create plotting mesh for interpolated fields
   const int NR_plot = pin->GetOrAddInteger("Output", "NR_plot", 400);
   const int NZ_plot = pin->GetOrAddInteger("Output", "NZ_plot", 800);
+  const int Nt_plot = pin->GetOrAddInteger("Output", "Nt_plot", 10);
+
+  const int E_0 = pin->GetOrAddInteger("AnalyticField", "E_0", 40.0);
 
   DualView3 Jre_mhd("Jre_mhd", NR, NZ, 3);
   Kokkos::deep_copy(Jre_mhd.view_device(), 0.0);
@@ -234,6 +237,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   }
 
   auto pkg = std::make_shared<StateDescriptor>("Deck");
+
+  pkg->AddParam("E_0", E_0);
 
   pkg->AddParam("NR", NR);
   pkg->AddParam("NZ", NZ);
@@ -376,28 +381,32 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real Z0_plot = data.hermite_locator.Z0 + 1e-10;
   const Real dR_plot = (data.hermite_locator.nR * data.hermite_locator.dR - 2e-10) / static_cast<Real> (NR_plot);
   const Real dZ_plot = (data.hermite_locator.nZ * data.hermite_locator.dZ - 2e-10) / static_cast<Real> (NZ_plot);
+  const Real dt_plot = dt_mhd / tau_c / static_cast<Real> (Nt_plot-1);
 
   ParArray1D<Real> hpd_R("Hermite_Field_Plot_data_R", NR_plot);
+  ParArray1D<Real> hpd_t("Hermite_Field_Plot_data_t", Nt_plot);
   ParArray1D<Real> hpd_Z("Hermite_Field_Plot_data_Z", NZ_plot);
-  ParArray3D<Real> gce_data("GCE_data", NR_plot, NZ_plot, 5);
-  ParArrayND<Real> hpd_F("Hermite_Field_Plot_data_F", NR_plot, NZ_plot, 3, 6);
-  ParArrayND<Real> hpd_eval("Hermite_Field_Plot_data_eval", NR_plot, NZ_plot, 3,
-      FieldComponents::Total);
+//  ParArrayND<Real> gce_data("GCE_data", NR_plot, NZ_plot, Nt_plot, 5);
+  ParArrayND<Real> hpd_F("Hermite_Field_Plot_data_F", NR_plot, NZ_plot, Nt_plot, 3, 7);
 
-  Kokkos::parallel_for("FillGrids", NR_plot,
+  Kokkos::parallel_for("FillGrids_R", NR_plot,
       KOKKOS_LAMBDA(const int n) {
         hpd_R(n) = R0_plot + n * dR_plot;
       });
-  Kokkos::parallel_for("FillGrids", NZ_plot,
+  Kokkos::parallel_for("FillGrids_Z", NZ_plot,
       KOKKOS_LAMBDA(const int n) {
         hpd_Z(n) = Z0_plot + n * dZ_plot;
+      });
+  Kokkos::parallel_for("FillGrids_t", Nt_plot,
+      KOKKOS_LAMBDA(const int n) {
+        hpd_t(n) = n * dt_plot;
       });
 
   pkg->AddParam("Hermite_Field_Plot_data_R", hpd_R);
   pkg->AddParam("Hermite_Field_Plot_data_Z", hpd_Z);
+  pkg->AddParam("Hermite_Field_Plot_data_t", hpd_t);
   pkg->AddParam("Hermite_Field_Plot_data_F", hpd_F);
-  pkg->AddParam("Hermite_Field_Plot_data_eval", hpd_eval);
-  pkg->AddParam("GCE_data", gce_data);
+ // pkg->AddParam("GCE_data", gce_data);
 
   const Real wce0 = pc::qe * B0 / pc::me; // Electron gyrofrequency
   const Real c_aw0 =  pin->GetOrAddReal("GuidingCenterEquations", "c_aw0", pc::c/a/wce0);
@@ -451,34 +460,40 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     }
   }
 
-  Metadata swarm_metadata({Metadata::Provides, Metadata::None, Metadata::Restart});
-  pkg->AddSwarm("particles", swarm_metadata);
 
-  Metadata real_swarmvalue_metadata({Metadata::Real, Metadata::Restart});
-  pkg->AddSwarmValue(Kinetic::p::name(), "particles", real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::xi::name(), "particles", real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::R::name(), "particles", real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::phi::name(), "particles",
-                     real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::Z::name(), "particles", real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::weight::name(), "particles",
-                     real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::saved_p::name(), "particles",
-                     real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::saved_xi::name(), "particles", real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::saved_R::name(), "particles", real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::saved_phi::name(), "particles", real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::saved_Z::name(), "particles", real_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::saved_w::name(), "particles", real_swarmvalue_metadata);
+  if (npart > 0) {
+    Metadata swarm_metadata({Metadata::Provides, Metadata::None, Metadata::Restart});
+    pkg->AddSwarm("particles", swarm_metadata);
+
+    Metadata real_swarmvalue_metadata({Metadata::Real, Metadata::Restart});
+    pkg->AddSwarmValue(Kinetic::p::name(), "particles", real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::xi::name(), "particles", real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::R::name(), "particles", real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::phi::name(), "particles",
+                       real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::Z::name(), "particles", real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::weight::name(), "particles",
+                       real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::saved_p::name(), "particles",
+                       real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::saved_xi::name(), "particles", real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::saved_R::name(), "particles", real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::saved_phi::name(), "particles", real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::saved_Z::name(), "particles", real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::saved_w::name(), "particles", real_swarmvalue_metadata);
+
+    Metadata int_swarmvalue_metadata({Metadata::Integer, Metadata::Restart});
+    pkg->AddSwarmValue(Kinetic::will_scatter::name(), "particles",
+                       int_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::secondary_index::name(), "particles",
+                       int_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::status::name(), "particles",
+                       int_swarmvalue_metadata);
+	  pkg->AddSwarmValue(p_phi::name(), "particles",real_swarmvalue_metadata);
+    pkg->AddSwarmValue(mu::name(), "particles",real_swarmvalue_metadata);
+  }
 
 
-  Metadata int_swarmvalue_metadata({Metadata::Integer, Metadata::Restart});
-  pkg->AddSwarmValue(Kinetic::will_scatter::name(), "particles",
-                     int_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::secondary_index::name(), "particles",
-                     int_swarmvalue_metadata);
-  pkg->AddSwarmValue(Kinetic::status::name(), "particles",
-                     int_swarmvalue_metadata);
 
   int EnableLargeAngleCollisions = pin->GetOrAddInteger("Simulation", "EnableLargeAngleCollisions", 1);
   int EnableSmallAngleCollisions = pin->GetOrAddInteger("Simulation", "EnableSmallAngleCollisions", 1);
@@ -488,8 +503,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("EnableSmallAngleCollisions",      EnableSmallAngleCollisions);
   pkg->AddParam("EnableComputeConservedQuantities",EnableComputeConservedQuantities);
 
-	pkg->AddSwarmValue(p_phi::name(), "particles",real_swarmvalue_metadata);
-  pkg->AddSwarmValue(mu::name(), "particles",real_swarmvalue_metadata);
 
   // This filename is updated with OutputParameters.file_number and file_basename before each restart.
   // It is required to remember the Petsc file name associated with Parthenon restart.
@@ -779,14 +792,88 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
 }
 
 
-void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context) {
+void PlotFieldsTime(Mesh *pm, ParameterInput * pin, SimTime const & tm, User* mhd_context) {
   auto pkg = pm->packages.Get("Deck");
 
   auto hpd_R = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_R");
   auto hpd_Z = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_Z");
+  auto hpd_t = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_t");
   auto hpd_F = pkg->Param<ParArrayND<Real>>("Hermite_Field_Plot_data_F");
-  auto hpd_eval = pkg->Param<ParArrayND<Real>>("Hermite_Field_Plot_data_eval").KokkosView();
-  auto gce_data = pkg->Param<ParArray3D<Real>>("GCE_data");
+  auto data = pkg->Param<FieldData_t>("FieldData");
+  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("CDG");
+
+  const int NR_plot = hpd_R.size();
+  const int NZ_plot = hpd_Z.size();
+  const int Nt_plot = hpd_t.size();
+
+  Interpolator<FIELD_SMOOTHNESS, FIELD_FD_STENSIL> itrp;
+  itrp.computeFlux(data.hermite_locator,
+      data.hermite_data.view_device(),
+      data.psi_data.view_device());
+  data.psi_data.modify_device();  // Mark psi data as modified
+
+  int accent = 1;
+  Real Psi_min;
+  data.hermite_data.sync_host();
+  data.psi_data.sync_host();
+
+  auto Rc = pkg->Param<Real>("Rc");
+  auto Zc = pkg->Param<Real>("Zc");
+  Evaluator psi_ev{data.hermite_locator};
+  findMagneticAxis(Rc, Zc,
+              data.hermite_data.view_host(),
+              data.psi_data.view_host(),
+              psi_ev,
+              accent,
+              Psi_min);
+
+  std::cout << std::format("New Mag. Axis center (R,Z) = {:g}, {:g}\n Psi_min = {:g}", Rc, Zc, Psi_min) << std::endl;
+
+  data.psi_data.sync_device();
+  Kokkos::parallel_for("Normalize psi",
+  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {data.hermite_locator.nR,data.hermite_locator.nZ}),
+  KOKKOS_LAMBDA(int i, int j){
+    data.psi_data.view_device()(0,0,i,j) -= Psi_min;
+  });
+  data.psi_data.modify_device();
+
+  FieldEvaluator f{cdg.hermite_locator, data.hermite_data.view_device()};
+
+
+  Kokkos::parallel_for("FillInterpolatedData_plot",
+      Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {NR_plot,NZ_plot,Nt_plot}),
+      KOKKOS_LAMBDA(const int i, const int j, const int s) {
+        Real R = hpd_R(i);
+        Real Z = hpd_Z(j);
+        Real t = hpd_t(s);
+        EvalGCE ev;
+
+        f.eval(ev, R, Z, t);
+
+        for (int k = 0; k < 3; ++k) {
+          hpd_F(i,j,s,k,0) = ev.B[k];
+          hpd_F(i,j,s,k,1) = ev.J[k];
+          hpd_F(i,j,s,k,2) = ev.dBdR[k];
+          hpd_F(i,j,s,k,3) = ev.dBdZ[k];
+          hpd_F(i,j,s,k,4) = ev.E[k];
+          hpd_F(i,j,s,k,5) = ev.dbdt[k];
+        }
+
+        Real Psi = 0.0;
+        psi_ev.evalPsi(Psi, R, Z, data.psi_data.view_device());
+        hpd_F(i,j,s,0,6) = Psi;
+        hpd_F(i,j,s,1,6) = ev.Bsq;
+        hpd_F(i,j,s,2,6) = ev.Bmag;
+      });
+}
+
+void PlotGCETime(Mesh *pm, ParameterInput * pin, SimTime const & tm, User* mhd_context) {
+  auto pkg = pm->packages.Get("Deck");
+
+  auto hpd_R = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_R");
+  auto hpd_Z = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_Z");
+  auto hpd_t = pkg->Param<ParArray1D<Real>>("Hermite_Field_Plot_data_t");
+
   const auto pmin  = pkg->Param<Real>("pmin");
   const auto pmax  = pkg->Param<Real>("pmax");
   const auto ximin = pkg->Param<Real>("ximin");
@@ -795,11 +882,9 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
   const Real p0 = .5 * (pmax + pmin);
   const Real xi0 = .5 * (ximax + ximin);
 
+//  auto gce_data = pkg->Param<ParArrayND<Real>>("GCE_data");
 
-  const int NR_plot = hpd_R.size();
-  const int NZ_plot = hpd_Z.size();
-
-  const auto c_aw0  = pkg->Param<Real>("c_aw0");
+/*  const auto c_aw0  = pkg->Param<Real>("c_aw0");
   const auto ct_a   = pkg->Param<Real>("ct_a");
   const auto alpha0 = pkg->Param<Real>("alpha0");
   auto data = pkg->Param<FieldData_t>("FieldData");
@@ -807,33 +892,36 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
   FieldEvaluator f{cdg.hermite_locator, data.hermite_data.view_device()};
   GuidingCenterEquations<decltype(f), true, false> gce(f, c_aw0, ct_a, alpha0);
 
-  // Now plot all Hermite fields
+  const int NR_plot = hpd_R.size();
+  const int NZ_plot = hpd_Z.size();
+  const int Nt_plot = hpd_t.size();
+
   Kokkos::parallel_for("FillInterpolatedData_plot",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR_plot,NZ_plot}),
-      KOKKOS_LAMBDA(const int i, const int j) {
+      Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0,0,0}, {NR_plot,NZ_plot,Nt_plot}),
+      KOKKOS_LAMBDA(const int i, const int j, const int s) {
         Real R = hpd_R(i);
         Real Z = hpd_Z(j);
+        Real t = hpd_t(s);
         Dim5 X = {p0, xi0, R, 0.0, Z};
-        Real t = 0.0;
         EvalGCE ev;
-        f.eval(ev, R, Z, t);
-
-        for (int k = 0; k < 3; ++k) {
-          hpd_F(i,j,k,0) = ev.B[k];
-          hpd_F(i,j,k,1) = ev.J[k];
-          hpd_F(i,j,k,2) = ev.dBdR[k];
-          hpd_F(i,j,k,3) = ev.dBdZ[k];
-          hpd_F(i,j,k,4) = ev.E[k];
-          hpd_F(i,j,k,5) = ev.dbdt[k];
-        }
 
         Dim5 dX = {};
         gce(0.0, X, dX);
         for (int k = 0; k < 5; ++k) {
-          gce_data(i,j,k) = dX[k];
+          gce_data(i,j,s,k) = dX[k];
         }
-
       });
+      */
+}
+
+
+
+void PlotCurrents(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context) {
+  auto pkg = pm->packages.Get("Deck");
+
+  auto data = pkg->Param<FieldData_t>("FieldData");
+  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("CDG");
+  FieldEvaluator f{cdg.hermite_locator, data.hermite_data.view_device()};
 
   auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
       swarm_position::x, swarm_position::y, swarm_position::z, Kinetic::p,
@@ -929,6 +1017,13 @@ void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User*
   }
 }
 
+void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context) {
+  PlotFieldsTime(pm, pin, tm, mhd_context);
+  PlotGCETime(pm, pin, tm, mhd_context);
+  PlotCurrents(pm, pin, tm, mhd_context);
+}
+
+
 void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context) {
   auto signal = SignalHandler::CheckSignalFlags();
   std::string ext = pin->GetOrAddString("MHD_Config", "file_extention", "dat");
@@ -963,6 +1058,39 @@ void WorkBeforeLoop(Mesh * pm, User* mhd_context) {
 
     mhd_loadsolution(mhd_context, filename.c_str());
   }
+}
+
+void HijackEField(Mesh * pm) {
+  auto pkg = pm->packages.Get("Deck");
+
+  auto data = pkg->Param<FieldData_t>("FieldData");
+  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("CDG");
+
+  const Real E_0 = pkg->Param<Real>("E_0");
+  const Real R_a = 3.0;
+
+  const int NR = cdg.indicator_locator.nR;
+  const int NZ = cdg.indicator_locator.nZ;
+
+  auto data_d = data.data.view_device();
+  data.data.sync_device();
+  Kokkos::parallel_for("Set intial runaway current",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR, NZ}),
+      KOKKOS_LAMBDA(const int i, const int j) {
+
+        Real R = cdg.indicator_locator.R0 + i * cdg.indicator_locator.dR;
+
+        data_d(i,j,FieldComponents::E + 0) = 0.0;
+        data_d(i,j,FieldComponents::E + 1) = E_0 * R_a  / R;
+        data_d(i,j,FieldComponents::E + 2) = 0.0;
+        data_d(i,j,FieldComponents::Et + 0) = 0.0;
+        data_d(i,j,FieldComponents::Et + 1) = 0.0;
+        data_d(i,j,FieldComponents::Et + 2) = 0.0;
+      });
+  data.data.modify_device();
+
+  InterpolateHermiteE(data, FieldComponents::E);
+  InterpolateHermiteE(data, FieldComponents::Et);
 }
 
 auto &GetCoords(std::shared_ptr<MeshBlock> &pmb) { return pmb->coords; }

@@ -84,8 +84,12 @@ void SaveRawFieldData(ParthenonManager * man, const char* filename);
 void LoadRawFieldData(User * man, const char* filename);
 
 void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context);
+void PlotFieldsTime(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context);
+void PlotGCETime(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context);
+void PlotCurrents(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context);
 void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context);
 void WorkBeforeLoop(Mesh * pm, User* mhd_context);
+void HijackEField(Mesh * pm);
 
 
 

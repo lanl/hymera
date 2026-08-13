@@ -20,7 +20,6 @@ using namespace parthenon::package::prelude;
 #include "kinetic/kinetic.hpp"
 #include "kinetic/ConfigurationDomainGeometry.hpp"
 #include "kinetic/FieldEvaluator.hpp"
-#include "kinetic/GuidingCenterEquations.hpp"
 #include "kinetic/CurrentDensity.hpp"
 #include "util/common.hpp"
 
@@ -123,7 +122,6 @@ void GenerateParticleSquare(parthenon::MeshBlock *pmb, parthenon::ParameterInput
 }
 
 void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
-  int marker = 0;
   auto &data = pmb->meshblock_data.Get();
 
   // pull out information/global params from package
@@ -197,7 +195,6 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   auto pack_swarm = desc_swarm.GetPack(data.get());
   auto pack_status = desc_markers.GetPack(data.get());
 
-  const int my_rank = Globals::my_rank;
 
   std::cout << "nR" << cdg.indicator_locator.nR << std::endl
             << "nZ" << cdg.indicator_locator.nZ << std::endl
@@ -280,7 +277,6 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
       }
 
       Real my_phi = 0.0, my_mu = 0.0;
-      Real psi = 0.0;
 
       pack_swarm(b, Kinetic::p(), n)   = X[0];
       pack_swarm(b, Kinetic::xi(), n)  = X[1];
@@ -301,7 +297,6 @@ void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
 
   std::cout << "Started particle generation" << std::endl;
 
-  int marker = 0;
   auto &data = pmb->meshblock_data.Get();
 
   // pull out information/global params from package
@@ -420,7 +415,6 @@ void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
       rng_pool.free_state(rng_gen);
 
       Real my_phi = 0.0, my_mu = 0.0;
-      Real psi = 0.0;
 
       pack_swarm(b, Kinetic::p(), n)   = X[0];
       pack_swarm(b, Kinetic::xi(), n)  = X[1];

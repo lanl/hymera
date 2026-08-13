@@ -1,4 +1,4 @@
-#========================================================================================
+# jjjjjjjjjjjjjjjjjjjjj=======================================================================================
 #  (C) (or copyright) 2025. Triad National Security, LLC. All rights reserved.
 #
 #  This program was produced under U.S. Government contract 89233218CNA000001 for Los
@@ -37,7 +37,7 @@ add_library(infrastructure
   tasks/Interpolate.cpp
   tasks/MomentumBoundary.cpp
   tasks/Particles.cpp
-  tasks/PerdictorCorrector.cpp
+  tasks/PredictorCorrector.cpp
   tasks/ViewManipulation.cpp
 )
 
@@ -55,11 +55,24 @@ add_library(particles_core
 )
 target_link_libraries(particles_core PUBLIC infrastructure)
 
+set(MHD_SRC_LIST
+  mhd/MHDDriver.cpp
+  mhd/mhd.cpp
+)
+
 set(HYBRID_SRC_LIST
   kinetic/HybridDriver.cpp
   kinetic/hybrid.cpp
 )
 
+set(AVALANCHE_SRC_LIST
+  kinetic/AvalancheDriver.cpp
+  kinetic/avalanche.cpp
+)
 
+add_executable(mhd ${MHD_SRC_LIST})
+target_link_libraries(mhd PRIVATE mhd_core infrastructure)
 add_executable(hybrid ${HYBRID_SRC_LIST})
 target_link_libraries(hybrid PRIVATE particles_core mhd_core infrastructure)
+add_executable(avalanche ${AVALANCHE_SRC_LIST})
+target_link_libraries(avalanche PRIVATE particles_core mhd_core infrastructure)

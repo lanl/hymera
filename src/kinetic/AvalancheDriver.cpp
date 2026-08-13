@@ -32,6 +32,7 @@ using namespace parthenon::driver::prelude;
 #include "kinetic/SmallAngleCollision.hpp"
 #include "kinetic/AnalyticField.hpp"
 #include "kinetic/ParticleVerificator.hpp"
+#include "tasks/Tasks.h"
 #include "pgen.hpp"
 #include "rk45.hpp"
 
@@ -58,7 +59,7 @@ struct AnalyticParticleVerificator {
     return Success;
   }
 };
-
+/*
 TaskStatus PushParticlesAnalytic(Mesh *pm, Real t0, Real dt) {
   // get mesh data
   auto md = pm->mesh_data.Get();
@@ -182,6 +183,7 @@ TaskStatus PushParticlesAnalytic(Mesh *pm, Real t0, Real dt) {
   return TaskStatus::complete;
 
 }
+*/
 
 AvalancheDriver::AvalancheDriver(ParameterInput *pin, ApplicationInput *app_in, Mesh *pmesh)
       : EvolutionDriver(pin, app_in, pmesh) {

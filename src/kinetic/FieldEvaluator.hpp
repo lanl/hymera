@@ -42,7 +42,6 @@ struct EvalGCE {
   Real Bmag;
 };
 
-
 // TODO: wrap in concept ... requires ... clause to shorten the code
 
 template<class CoeffView>
