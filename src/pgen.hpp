@@ -17,8 +17,7 @@
 #include <parthenon/package.hpp>
 
 void GenerateParticleSquare(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin);
-void GenerateParticleRing(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin);
 void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin);
-void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin);
+void GenerateParticlePoint(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin);
 
 #endif // _PGEN_HPP_

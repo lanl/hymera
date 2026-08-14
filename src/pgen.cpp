@@ -293,7 +293,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
 
 }
 
-void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
+void GenerateParticlePoint(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
 
   std::cout << "Started particle generation" << std::endl;
 
@@ -313,6 +313,8 @@ void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
   const Real Zmax  = pkg->Param<Real>("Zmax");
   const Real Rc  = pkg->Param<Real>("Rc");
   const Real Zc  = pkg->Param<Real>("Zc");
+  const Real Rseed  = pkg->Param<Real>("Rseed");
+  const Real Zseed  = pkg->Param<Real>("Zseed");
 
   const Real r_0 = pin->GetOrAddReal("ParticleSeed", "r_0", 0.0);
 
@@ -347,9 +349,7 @@ void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
     Kinetic::R,
     Kinetic::phi,
     Kinetic::Z,
-    Kinetic::weight,
-    Kinetic::p_phi,
-    Kinetic::mu>("particles");
+    Kinetic::weight>("particles");
   static auto desc_markers =
     parthenon::MakeSwarmPackDescriptor<
     Kinetic::status
@@ -358,18 +358,6 @@ void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
   auto pack_swarm = desc_swarm.GetPack(data.get());
   auto pack_status = desc_markers.GetPack(data.get());
 
-
-
-//  Kokkos::View<Real******> psi_hermite_data("psi",
-//      f.hermite_data.extent(0),
-//      f.hermite_data.extent(1),
-//      f.hermite_data.extent(2) + 1,
-//      f.hermite_data.extent(3),
-//      f.hermite_data.extent(6),
-//      f.hermite_data.extent(7));
-//  computeFlux<2>(f.hermite_data, psi_hermite_data, f.hR, f.hZ);
-
-  // loop over new particles created
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
       DevExecSpace(), 0,
       newParticlesContext.GetNewParticlesMaxIndex(),
@@ -403,31 +391,21 @@ void GenerateParticleRings(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
       Dim5 X;
 
       auto rng_gen = rng_pool.get_state();
-
       X[0] = rng_gen.drand(pmin, pmax);
       X[1] = rng_gen.drand(ximin, ximax);
-
-      Real theta = rng_gen.drand(0.0, 2*M_PI);
-
-      X[2] = Rc + r_0 * Kokkos::cos(theta);
-      X[4] = r_0 * Kokkos::sin(theta);
-
       rng_pool.free_state(rng_gen);
 
-      Real my_phi = 0.0, my_mu = 0.0;
+      X[2] = Rseed;
+      X[4] = Zseed;
 
       pack_swarm(b, Kinetic::p(), n)   = X[0];
       pack_swarm(b, Kinetic::xi(), n)  = X[1];
       pack_swarm(b, Kinetic::R(), n)   = X[2];
       pack_swarm(b, Kinetic::phi(), n) = X[3];
       pack_swarm(b, Kinetic::Z(), n)   = X[4];
-      pack_swarm(b, Kinetic::p_phi(), n) = my_phi;
-      pack_swarm(b, Kinetic::mu(), n)   = my_mu;
 
       // set weights to 1
       pack_swarm(b, Kinetic::weight(), n) = 1.0;
       pack_status(b, Kinetic::status(), n) = Kinetic::ALIVE | Kinetic::PROTECTED;
    });
-
-  std::cout << "Finished particle generation" << std::endl;
 }

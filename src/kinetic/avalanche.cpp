@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
     packages.Add(Kinetic::Initialize(pin.get(), p_mhd_config));
     return packages;
   };
-  pman.app_input->ProblemGenerator = GenerateParticleRings;
+  pman.app_input->ProblemGenerator = GenerateParticlePoint;
 
   pman.app_input->UserWorkBeforeLoop = [=](Mesh * pm, ParameterInput * pin, SimTime const & tm) {
     Kinetic::WorkBeforeLoop(pm, p_mhd_config);

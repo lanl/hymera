@@ -329,6 +329,8 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   InterpolateTime(data, dt_mhd / tau_c);
 
   const Real seed_current_fraction = pin->GetOrAddReal("ParticleSeed", "current_fraction", 1.0e-3); // Used to determine the initial runaway current to adjust the Electric field.
+  const Real Rseed = pin->GetOrAddReal("ParticleSeed", "Rseed", Rc);  // Used in pgen if pparticles are generated at single point
+  const Real Zseed = pin->GetOrAddReal("ParticleSeed", "Zseed", Zc);
 
   auto data_d = data.data.view_device();
   data.data.sync_device();
