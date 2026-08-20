@@ -154,7 +154,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const int NZ_plot = pin->GetOrAddInteger("Output", "NZ_plot", 800);
   const int Nt_plot = pin->GetOrAddInteger("Output", "Nt_plot", 10);
 
-  const int E_0 = pin->GetOrAddInteger("AnalyticField", "E_0", 40.0);
+  const Real E_0 = pin->GetOrAddInteger("AnalyticField", "E_0", 40.0);
 
   DualView3 Jre_mhd("Jre_mhd", NR, NZ, 3);
   Kokkos::deep_copy(Jre_mhd.view_device(), 0.0);
@@ -329,8 +329,6 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   InterpolateTime(data, dt_mhd / tau_c);
 
   const Real seed_current_fraction = pin->GetOrAddReal("ParticleSeed", "current_fraction", 1.0e-3); // Used to determine the initial runaway current to adjust the Electric field.
-  const Real Rseed = pin->GetOrAddReal("ParticleSeed", "Rseed", Rc);  // Used in pgen if pparticles are generated at single point
-  const Real Zseed = pin->GetOrAddReal("ParticleSeed", "Zseed", Zc);
 
   auto data_d = data.data.view_device();
   data.data.sync_device();
@@ -369,6 +367,11 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   std::cout << std::format("New Mag. Axis center (R,Z) = {:g}, {:g}\n Psi_min = {:g}", Rc, Zc, Psi_min) << std::endl;
   pkg->AddParam("Rc", Rc, Params::Mutability::Restart);
   pkg->AddParam("Zc", Zc, Params::Mutability::Restart);
+
+  const Real Rseed = pin->GetOrAddReal("ParticleSeed", "Rseed", Rc);  // Used in pgen if pparticles are generated at single point
+  const Real Zseed = pin->GetOrAddReal("ParticleSeed", "Zseed", Zc);
+  pkg->AddParam("Rseed", Rseed, Params::Mutability::Restart);
+  pkg->AddParam("Zseed", Zseed, Params::Mutability::Restart);
 
   data.psi_data.sync_device();
   Kokkos::parallel_for("Normalize psi",
@@ -504,6 +507,14 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("EnableLargeAngleCollisions",      EnableLargeAngleCollisions);
   pkg->AddParam("EnableSmallAngleCollisions",      EnableSmallAngleCollisions);
   pkg->AddParam("EnableComputeConservedQuantities",EnableComputeConservedQuantities);
+
+  // Log file for the weight-averaged conservation diagnostic (p_phi, mu).
+  const std::string conservation_log =
+      pin->GetOrAddString("Simulation", "conservation_log", "conservation.dat");
+  pkg->AddParam("conservation_log", conservation_log);
+  if (EnableComputeConservedQuantities == 1 && Globals::my_rank == 0) {
+    std::ofstream(conservation_log);  // truncate at start of run
+  }
 
 
   // This filename is updated with OutputParameters.file_number and file_basename before each restart.
@@ -786,6 +797,13 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
   pkg->AddParam("EnableSmallAngleCollisions",      EnableSmallAngleCollisions);
   pkg->AddParam("EnableComputeConservedQuantities",EnableComputeConservedQuantities);
 
+  const std::string conservation_log =
+      pin->GetOrAddString("Simulation", "conservation_log", "conservation.dat");
+  pkg->AddParam("conservation_log", conservation_log);
+  if (EnableComputeConservedQuantities == 1 && Globals::my_rank == 0) {
+    std::ofstream(conservation_log);  // truncate at start of run
+  }
+
 	pkg->AddSwarmValue(p_phi::name(), "particles",real_swarmvalue_metadata);
   pkg->AddSwarmValue(mu::name(), "particles",real_swarmvalue_metadata);
 
@@ -1062,7 +1080,7 @@ void WorkBeforeLoop(Mesh * pm, User* mhd_context) {
   }
 }
 
-void HijackEField(Mesh * pm) {
+TaskStatus HijackEField(Mesh * pm) {
   auto pkg = pm->packages.Get("Deck");
 
   auto data = pkg->Param<FieldData_t>("FieldData");
@@ -1093,6 +1111,8 @@ void HijackEField(Mesh * pm) {
 
   InterpolateHermiteE(data, FieldComponents::E);
   InterpolateHermiteE(data, FieldComponents::Et);
+
+  return TaskStatus::complete;
 }
 
 auto &GetCoords(std::shared_ptr<MeshBlock> &pmb) { return pmb->coords; }

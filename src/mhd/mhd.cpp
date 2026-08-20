@@ -47,9 +47,6 @@ int main(int argc, char *argv[]) {
   pman.app_input->UserWorkBeforeLoop = [=](Mesh * pm, ParameterInput * pin, SimTime const & tm) {
     Kinetic::WorkBeforeLoop(pm, p_mhd_config);
   };
-  pman.app_input->UserWorkBeforeLoop = [=](Mesh * pm, ParameterInput * pin, SimTime const & tm) {
-    Kinetic::WorkBeforeLoop(pm, p_mhd_config);
-  };
 
   pman.app_input->UserWorkBeforeRestartOutput = [=](Mesh * pm, ParameterInput * pin, SimTime const & tm, OutputParameters* op) {
     Kinetic::WorkBeforeRestartOutput(pm, pin, op, p_mhd_config);

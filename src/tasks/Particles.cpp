@@ -1,4 +1,7 @@
 #include "Tasks.h"
+#include <fstream>
+#include <format>
+#include <globals.hpp>
 #include "kinetic/ParticleVerificator.hpp"
 #include "kinetic/LargeAngleCollision.hpp"
 #include "kinetic/SmallAngleCollision.hpp"
@@ -100,12 +103,14 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
             auto ret = solve_rk45(gce, ver, X, t, t + dtSA, rtol, atol, h, 1e-9,
                          std::numeric_limits<int>::max(), work_d);
             if (ret != ParticleVerificator::Success) {
+
               pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
-              if (ret == ParticleVerifyCodes::MomentumCutoff) {
-                pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_MOMENTUM;
-              } else if (ret == ParticleVerifyCodes::WallImpact) {
-                pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_WALL;
-              }
+              swarm_d.MarkParticleForRemoval(n);
+//              if (ret == ParticleVerifyCodes::MomentumCutoff) {
+//                pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_MOMENTUM;
+//              } else if (ret == ParticleVerifyCodes::WallImpact) {
+//                pack_swarm_i(b, Kinetic::status(), n) |= Kinetic::DEATH_BY_WALL;
+//              }
               break;
             }
 
@@ -136,6 +141,91 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
 
   return TaskStatus::complete;
 
+}
+
+// Compute the two guiding-center adiabatic invariants (canonical toroidal
+// momentum p_phi and magnetic moment mu) for every alive particle, store them
+// in the particle.p_phi / particle.mu swarm variables (for per-particle .phdf
+// output) and log a weight-averaged aggregate to a text file for a quick
+// conservation check. Gated by the "EnableComputeConservedQuantities" param.
+TaskStatus ComputeConservedQuantities(Mesh *pm, Real t) {
+
+  auto pkg = pm->packages.Get("Deck");
+  const int EnableComputeConservedQuantities =
+      pkg->Param<int>("EnableComputeConservedQuantities");
+  if (EnableComputeConservedQuantities != 1) return TaskStatus::complete;
+
+  auto md = pm->mesh_data.Get();
+
+  const auto c_aw0  = pkg->Param<Real>("c_aw0");
+  const auto ct_a   = pkg->Param<Real>("ct_a");
+  const auto alpha0 = pkg->Param<Real>("alpha0");
+
+  auto data = pkg->Param<Kinetic::FieldData_t>("FieldData");
+  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("CDG");
+  Kinetic::FieldEvaluator f{cdg.hermite_locator, data.hermite_data.view_device()};
+  GuidingCenterEquations<decltype(f), true, false> gce(f, c_aw0, ct_a, alpha0);
+
+  // Psi (poloidal flux) is stored separately from B/J/E; evaluate it with the
+  // hFlux Taylor evaluator on the psi_data grid (filled during field init).
+  Evaluator psi_ev{data.hermite_locator};
+  auto psi_view = data.psi_data.view_device();
+
+  auto desc_swarm_r = parthenon::MakeSwarmPackDescriptor<
+      Kinetic::p, Kinetic::xi, Kinetic::R, Kinetic::phi, Kinetic::Z,
+      Kinetic::weight, Kinetic::p_phi, Kinetic::mu>("particles");
+  auto desc_swarm_i =
+      parthenon::MakeSwarmPackDescriptor<Kinetic::status>("particles");
+  auto pack_swarm_r = desc_swarm_r.GetPack(md.get());
+  auto pack_swarm_i = desc_swarm_i.GetPack(md.get());
+
+  Real p_phi_total = 0.0;
+  Real mu_total = 0.0;
+  Real w_total = 0.0;
+
+  Kokkos::parallel_reduce(
+      PARTHENON_AUTO_LABEL, pack_swarm_r.GetMaxFlatIndex() + 1,
+      KOKKOS_LAMBDA(const int idx, Real &lp, Real &lmu, Real &lw) {
+        auto [b, n] = pack_swarm_r.GetBlockParticleIndices(idx);
+        const auto swarm_d = pack_swarm_r.GetContext(b);
+        if (swarm_d.IsActive(n) && !swarm_d.IsMarkedForRemoval(n) &&
+            (pack_swarm_i(b, Kinetic::status(), n) & Kinetic::ALIVE)) {
+          const Real p  = pack_swarm_r(b, Kinetic::p(), n);
+          const Real xi = pack_swarm_r(b, Kinetic::xi(), n);
+          const Real R  = pack_swarm_r(b, Kinetic::R(), n);
+          const Real Z  = pack_swarm_r(b, Kinetic::Z(), n);
+          const Real w  = pack_swarm_r(b, Kinetic::weight(), n);
+
+          Real Psi = 0.0;
+          psi_ev.evalPsi(Psi, R, Z, psi_view);
+
+          Real p_phi = 0.0, mu = 0.0;
+          gce.computeConservedQuantities(p_phi, mu, p, xi, R, Z, t, Psi);
+
+          pack_swarm_r(b, Kinetic::p_phi(), n) = p_phi;
+          pack_swarm_r(b, Kinetic::mu(), n)    = mu;
+
+          lp  += w * p_phi;
+          lmu += w * mu;
+          lw  += w;
+        }
+      },
+      p_phi_total, mu_total, w_total);
+  Kokkos::fence();
+
+  MPI_Allreduce(MPI_IN_PLACE, &p_phi_total, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &mu_total,    1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &w_total,     1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+  if (Globals::my_rank == 0) {
+    const Real inv_w = (w_total > 0.0) ? 1.0 / w_total : 0.0;
+    std::ofstream ofs(pkg->Param<std::string>("conservation_log"), std::ios::app);
+    ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e}",
+                       t, p_phi_total * inv_w, mu_total * inv_w, w_total)
+        << std::endl;
+  }
+
+  return TaskStatus::complete;
 }
 
 TaskStatus CheckScatter(MeshBlock* pmb) {

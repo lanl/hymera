@@ -20,7 +20,7 @@ mpirun -n 1 ../../bin/avalanche \
   -i fig11a.input \
   ParticleSeed/num_particles_per_block=1024 \
   ParticleSeed/r_0=${RR} \
-  parthenon/job/problem_id=fig11a_20k_$SLURM_ARRAY_TASK_ID \
+  parthenon/job/problem_id=fig11a_$SLURM_ARRAY_TASK_ID \
   AnalyticField/E_0=${EE} \
   parthenon/time/tlim=${TT} \
   parthenon/output2/dt=${TT}e-2 \

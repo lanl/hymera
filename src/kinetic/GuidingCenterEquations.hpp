@@ -208,12 +208,26 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
 
   KOKKOS_INLINE_FUNCTION
   void computeConservedQuantities(Real &p_phi, Real &mu,
+                                  const Real p, const Real xi,
                                   const Real R, const Real Z,
                                   const Real &t, const Real Psi) const {
-    // Compute magnitude B
-    Kinetic::EvalB ev;
+    // Evaluate B and E at the particle position (EvalBE carries both).
+    Kinetic::EvalBE ev;
     field.eval(ev, R, Z, t);
-    p_phi = -Psi;
-    mu = 0.0;
+    if constexpr (EF == false) ev.E = {};
+
+    const Real Bmag = ev.Bmag;
+
+    // First adiabatic invariant mu = p_perp^2 / |B|.
+    mu = p * p * (1.0 - xi * xi) / Bmag;
+
+    // Canonical toroidal momentum:
+    //   p_phi = c_aw0 * p_parallel * B_phi/|B| * R - Psi
+    // ev.B[1] is B_phi. The '- Psi' is the (normalized) charge*poloidal-flux term.
+    p_phi = c_aw0 * xi * p * ev.B[1] / Bmag * R - Psi;
+
+    // When an accelerating E-field is present, p_phi is not conserved unless we
+    // account for the toroidal impulse. ev.E[1] is E_phi.
+    if constexpr (EF) p_phi += t * c_aw0 * ev.E[1] * R;
   };
 };

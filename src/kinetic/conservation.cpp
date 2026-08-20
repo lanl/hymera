@@ -8,7 +8,7 @@
 #include <parthenon_manager.hpp>
 
 #include <Kokkos_Core.hpp>
-#include "AvalancheDriver.h"
+#include "ConservationDriver.h"
 #include "pgen.hpp"
 #include "kinetic.hpp"
 
@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
 
   pman.ParthenonInitPackagesAndMesh();
 
-  Kinetic::AvalancheDriver driver(pman.pinput.get(), pman.app_input.get(), pman.pmesh.get());
+  Kinetic::ConservationDriver driver(pman.pinput.get(), pman.app_input.get(), pman.pmesh.get());
   driver.Execute();
   pman.ParthenonFinalize();
   return 0;

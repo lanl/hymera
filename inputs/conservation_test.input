@@ -46,6 +46,10 @@ nx3 = 1
 EnableLargeAngleCollisions=0
 EnableSmallAngleCollisions=0
 EnableComputeConservedQuantities=1
+conservation_log=conservation.dat
+
+<GuidingCenterEquations>
+alpha0=0.0            #< disable synchrotron radiation for pure push
 
 <ParticleSeed>
 num_particles_per_block = 512
@@ -75,7 +79,7 @@ file_type = hdf5
 write_xdmf = false # Determines whether xdmf annotations are output
 # nonexistent variables/swarms are ignored
 swarms = particles  # Particle swarms
-particles_variables = x, y, z, particle.p, particle.xi, particle.R, particle.phi, particle.Z, particle.weight, particle.will_scatter, particle.secondary_index
+particles_variables = x, y, z, particle.p, particle.xi, particle.R, particle.phi, particle.Z, particle.weight, particle.will_scatter, particle.secondary_index, particle.p_phi, particle.mu
 
 dt = 0.02
 file_number_width = 6 # default: 5

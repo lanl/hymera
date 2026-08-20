@@ -27,6 +27,7 @@ void AttachCurrentCollector(TaskList* tl, TaskID& dep, Mesh* pm, const Real dtCD
 
 TaskStatus RandomRemove(Mesh* pm);
 TaskStatus PushParticles(Mesh *pm, Real t0, Real dt);
+TaskStatus ComputeConservedQuantities(Mesh *pm, Real t);
 TaskStatus CheckScatter(MeshBlock* pmb);
 TaskStatus CleanupParticles(MeshBlock* pmb);
 TaskStatus AddSecondaries(MeshBlock* pmb, const Real dtLA);

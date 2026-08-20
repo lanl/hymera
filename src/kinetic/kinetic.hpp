@@ -89,7 +89,7 @@ void PlotGCETime(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_
 void PlotCurrents(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context);
 void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters * op, User* mhd_context);
 void WorkBeforeLoop(Mesh * pm, User* mhd_context);
-void HijackEField(Mesh * pm);
+TaskStatus HijackEField(Mesh * pm);
 
 
 

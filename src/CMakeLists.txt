@@ -70,9 +70,16 @@ set(AVALANCHE_SRC_LIST
   kinetic/avalanche.cpp
 )
 
+set(CONSERVATION_SRC_LIST
+  kinetic/ConservationDriver.cpp
+  kinetic/conservation.cpp
+)
+
 add_executable(mhd ${MHD_SRC_LIST})
 target_link_libraries(mhd PRIVATE mhd_core infrastructure)
 add_executable(hybrid ${HYBRID_SRC_LIST})
 target_link_libraries(hybrid PRIVATE particles_core mhd_core infrastructure)
 add_executable(avalanche ${AVALANCHE_SRC_LIST})
 target_link_libraries(avalanche PRIVATE particles_core mhd_core infrastructure)
+add_executable(conservation ${CONSERVATION_SRC_LIST})
+target_link_libraries(conservation PRIVATE particles_core mhd_core infrastructure)
