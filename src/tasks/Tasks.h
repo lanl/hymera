@@ -9,6 +9,12 @@ using namespace parthenon;
 using namespace parthenon::package::prelude;
 using namespace Kinetic;
 
+// ODE integrator selection for the particle push (Simulation/integrator).
+enum IntegratorType { INTEGRATOR_DOPRI5 = 0, INTEGRATOR_RK4 = 1 };
+inline int parseIntegrator(const std::string &s) {
+  return (s == "rk4") ? INTEGRATOR_RK4 : INTEGRATOR_DOPRI5;
+}
+
 TaskStatus AdvanceBackgroundFields(User* p_mhd_config, DualView3 Jre);
 TaskStatus ResetBackgroundFields(User *p_mhd_config);
 TaskStatus ComputeBaseElectricField(View3 E_base, FieldData_t data_V, const Real En, const Real eta_norm, const int component0);

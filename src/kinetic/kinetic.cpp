@@ -34,6 +34,7 @@ using namespace parthenon;
 #include "kinetic/FieldEvaluator.hpp"
 #include "tasks/Tasks.h"
 #include "mhd/mhd.h"
+#include "util/H5io.hpp"
 
 using parthenon::constants::SI;
 using parthenon::constants::PhysicalConstants;
@@ -60,6 +61,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   const Real timeStep = pin->GetOrAddReal("Simulation", "hRK", 1.e-6);    /// Runge kutta time in tau_c [-]
   const Real atol = pin->GetOrAddReal("Simulation", "atol", 1.e-6);      /// Absoulte tolerance for RK [-]
   const Real rtol = pin->GetOrAddReal("Simulation", "rtol", 1.e-5);       /// Realative toleratnce for RK[ [-]
+  const int integrator = parseIntegrator(pin->GetOrAddString("Simulation", "integrator", "dopri5")); /// ODE integrator: dopri5 (adaptive) or rk4 (fixed hRK)
   const std::string filePath = pin->GetOrAddString("Simulation", "file_path", "current.out");
 
   /// Reference parameters
@@ -273,6 +275,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("hRK", timeStep);
   pkg->AddParam("atol", atol);
   pkg->AddParam("rtol", rtol);
+  pkg->AddParam("integrator", integrator);
 
   pkg->AddParam("Rmin", Rmin);
   pkg->AddParam("Rmax", Rmax);
@@ -321,50 +324,57 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   pkg->AddParam("Jre_mhd", Jre_mhd);
 
-  CommunicateBJV(data, mhd_context, FieldComponents::B);
-  ComputeBaseElectricField_in_place(data, En, eta_norm, FieldComponents::B);
-  CommunicateBJV(data, mhd_context, FieldComponents::Bt);
-  ComputeBaseElectricField_in_place(data, En, eta_norm, FieldComponents::Bt);
+  Real Psi_min = 0.0;
+  // Fill the interpolated (Hermite) field grid from the MHD solver. When there
+  // is no MHD context (mhd_context == nullptr, e.g. the `profile` executable),
+  // this block is skipped and the Hermite grid + magnetic axis are instead
+  // loaded from a raw field dump via LoadRawFieldData().
+  if (mhd_context != nullptr) {
+    CommunicateBJV(data, mhd_context, FieldComponents::B);
+    ComputeBaseElectricField_in_place(data, En, eta_norm, FieldComponents::B);
+    CommunicateBJV(data, mhd_context, FieldComponents::Bt);
+    ComputeBaseElectricField_in_place(data, En, eta_norm, FieldComponents::Bt);
 
-  InterpolateTime(data, dt_mhd / tau_c);
+    InterpolateTime(data, dt_mhd / tau_c);
 
-  const Real seed_current_fraction = pin->GetOrAddReal("ParticleSeed", "current_fraction", 1.0e-3); // Used to determine the initial runaway current to adjust the Electric field.
+    const Real seed_current_fraction = pin->GetOrAddReal("ParticleSeed", "current_fraction", 1.0e-3); // Used to determine the initial runaway current to adjust the Electric field.
 
-  auto data_d = data.data.view_device();
-  data.data.sync_device();
-  Kokkos::parallel_for("Set intial runaway current",
-      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR, NZ}),
-      KOKKOS_LAMBDA(const int i, const int j) {
-        Real mask = (indicator(i,j) > 0) ? Real(1.0) : Real(0.0);
-        Real scale = mask * seed_current_fraction * eta_norm;
-        data_d(i,j,FieldComponents::E + 0) -= scale * data_d(i, j, FieldComponents::J + 0);
-        data_d(i,j,FieldComponents::E + 1) -= scale * data_d(i, j, FieldComponents::J + 1);
-        data_d(i,j,FieldComponents::E + 2) -= scale * data_d(i, j, FieldComponents::J + 2);
-      });
-  data.data.modify_device();
+    auto data_d = data.data.view_device();
+    data.data.sync_device();
+    Kokkos::parallel_for("Set intial runaway current",
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {NR, NZ}),
+        KOKKOS_LAMBDA(const int i, const int j) {
+          Real mask = (indicator(i,j) > 0) ? Real(1.0) : Real(0.0);
+          Real scale = mask * seed_current_fraction * eta_norm;
+          data_d(i,j,FieldComponents::E + 0) -= scale * data_d(i, j, FieldComponents::J + 0);
+          data_d(i,j,FieldComponents::E + 1) -= scale * data_d(i, j, FieldComponents::J + 1);
+          data_d(i,j,FieldComponents::E + 2) -= scale * data_d(i, j, FieldComponents::J + 2);
+        });
+    data.data.modify_device();
 
-  InterpolateHermiteBJE(data, FieldComponents::B);
-  InterpolateHermiteBJE(data, FieldComponents::Bt);
+    InterpolateHermiteBJE(data, FieldComponents::B);
+    InterpolateHermiteBJE(data, FieldComponents::Bt);
 
-  Interpolator<FIELD_SMOOTHNESS, FIELD_FD_STENSIL> itrp;
-  itrp.computeFlux(data.hermite_locator,
-      data.hermite_data.view_device(),
-      data.psi_data.view_device());
-  data.psi_data.modify_device();  // Mark psi data as modified
+    Interpolator<FIELD_SMOOTHNESS, FIELD_FD_STENSIL> itrp;
+    itrp.computeFlux(data.hermite_locator,
+        data.hermite_data.view_device(),
+        data.psi_data.view_device());
+    data.psi_data.modify_device();  // Mark psi data as modified
 
-  int accent = 1;
-  Real Psi_min;
-  data.hermite_data.sync_host();
-  data.psi_data.sync_host();
+    int accent = 1;
+    data.hermite_data.sync_host();
+    data.psi_data.sync_host();
 
-  findMagneticAxis(Rc, Zc,
-              data.hermite_data.view_host(),
-              data.psi_data.view_host(),
-              Evaluator{data.hermite_locator},
-              accent,
-              Psi_min);
+    findMagneticAxis(Rc, Zc,
+                data.hermite_data.view_host(),
+                data.psi_data.view_host(),
+                Evaluator{data.hermite_locator},
+                accent,
+                Psi_min);
 
-  std::cout << std::format("New Mag. Axis center (R,Z) = {:g}, {:g}\n Psi_min = {:g}", Rc, Zc, Psi_min) << std::endl;
+    std::cout << std::format("New Mag. Axis center (R,Z) = {:g}, {:g}\n Psi_min = {:g}", Rc, Zc, Psi_min) << std::endl;
+  }
+
   pkg->AddParam("Rc", Rc, Params::Mutability::Restart);
   pkg->AddParam("Zc", Zc, Params::Mutability::Restart);
 
@@ -373,13 +383,15 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   pkg->AddParam("Rseed", Rseed, Params::Mutability::Restart);
   pkg->AddParam("Zseed", Zseed, Params::Mutability::Restart);
 
-  data.psi_data.sync_device();
-  Kokkos::parallel_for("Normalize psi",
-  Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {data.hermite_locator.nR,data.hermite_locator.nZ}),
-  KOKKOS_LAMBDA(int i, int j){
-    data.psi_data.view_device()(0,0,i,j) -= Psi_min;
-  });
-  data.psi_data.modify_device();
+  if (mhd_context != nullptr) {
+    data.psi_data.sync_device();
+    Kokkos::parallel_for("Normalize psi",
+    Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0,0}, {data.hermite_locator.nR,data.hermite_locator.nZ}),
+    KOKKOS_LAMBDA(int i, int j){
+      data.psi_data.view_device()(0,0,i,j) -= Psi_min;
+    });
+    data.psi_data.modify_device();
+  }
 
 
   const Real R0_plot = data.hermite_locator.R0 + 1e-10;
@@ -471,16 +483,13 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     pkg->AddSwarm("particles", swarm_metadata);
 
     Metadata real_swarmvalue_metadata({Metadata::Real, Metadata::Restart});
-    pkg->AddSwarmValue(Kinetic::p::name(), "particles", real_swarmvalue_metadata);
-    pkg->AddSwarmValue(Kinetic::xi::name(), "particles", real_swarmvalue_metadata);
-    pkg->AddSwarmValue(Kinetic::R::name(), "particles", real_swarmvalue_metadata);
-    pkg->AddSwarmValue(Kinetic::phi::name(), "particles",
-                       real_swarmvalue_metadata);
-    pkg->AddSwarmValue(Kinetic::Z::name(), "particles", real_swarmvalue_metadata);
-    pkg->AddSwarmValue(Kinetic::weight::name(), "particles",
-                       real_swarmvalue_metadata);
-    pkg->AddSwarmValue(Kinetic::saved_p::name(), "particles",
-                       real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::p::name(), "particles",      real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::xi::name(), "particles",     real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::R::name(), "particles",      real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::phi::name(), "particles",    real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::Z::name(), "particles",      real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::weight::name(),  "particles", real_swarmvalue_metadata);
+    pkg->AddSwarmValue(Kinetic::saved_p::name(), "particles", real_swarmvalue_metadata);
     pkg->AddSwarmValue(Kinetic::saved_xi::name(), "particles", real_swarmvalue_metadata);
     pkg->AddSwarmValue(Kinetic::saved_R::name(), "particles", real_swarmvalue_metadata);
     pkg->AddSwarmValue(Kinetic::saved_phi::name(), "particles", real_swarmvalue_metadata);
@@ -551,6 +560,7 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
   const Real timeStep = pin->GetOrAddReal("Simulation", "hRK", 1.e-6);    /// Runge kutta time in tau_c [-]
   const Real atol = pin->GetOrAddReal("Simulation", "atol", 1.e-6);      /// Absoulte tolerance for RK [-]
   const Real rtol = pin->GetOrAddReal("Simulation", "rtol", 1.e-5);       /// Realative toleratnce for RK[ [-]
+  const int integrator = parseIntegrator(pin->GetOrAddString("Simulation", "integrator", "dopri5")); /// ODE integrator: dopri5 (adaptive) or rk4 (fixed hRK)
   const std::string filePath = pin->GetOrAddString("Simulation", "file_path", "current.out");
 
   /// Reference parameters
@@ -676,6 +686,7 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
   pkg->AddParam("hRK", timeStep);
   pkg->AddParam("atol", atol);
   pkg->AddParam("rtol", rtol);
+  pkg->AddParam("integrator", integrator);
 
   pkg->AddParam("Rmin", Rmin);
   pkg->AddParam("Rmax", Rmax);
@@ -811,6 +822,109 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
   return pkg;
 }
 
+
+// Dump the raw, pre-interpolated field grid (the Hermite/Taylor coefficient
+// arrays the particle push consumes) plus geometry to a single HDF5 file, so a
+// separate `profile` run can load it and exercise PushParticles without MHD.
+// Views are stored flat (contiguous, layout as-built); producer and consumer
+// share the build so shapes/layout match exactly. Rank 0 writes; the field
+// grid is a full-domain replicated array.
+void SaveRawFieldData(Mesh * pm, const char* filename) {
+  if (Globals::my_rank != 0) return;
+
+  auto pkg = pm->packages.Get("Deck");
+  auto data = pkg->Param<FieldData_t>("FieldData");
+  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("CDG");
+  const Real Rc = pkg->Param<Real>("Rc");
+  const Real Zc = pkg->Param<Real>("Zc");
+
+  data.data.sync_host();
+  data.hermite_data.sync_host();
+  data.psi_data.sync_host();
+
+  auto data_h = data.data.view_host();
+  auto herm_h = data.hermite_data.view_host();
+  auto psi_h  = data.psi_data.view_host();
+
+  auto indicator_h = Kokkos::create_mirror_view(cdg.indicator_view);
+  Kokkos::deep_copy(indicator_h, cdg.indicator_view);
+
+  H5::H5File file(filename, H5F_ACC_TRUNC);
+  H5::Group vgroup = file.createGroup(H5::viewsGroupName);
+  H5::Group sgroup = file.createGroup(H5::scalarsGroupName);
+
+  H5::writeVector(vgroup, "data",         data_h.data(), static_cast<int>(data_h.size()));
+  H5::writeVector(vgroup, "hermite_data", herm_h.data(), static_cast<int>(herm_h.size()));
+  H5::writeVector(vgroup, "psi_data",     psi_h.data(),  static_cast<int>(psi_h.size()));
+  H5::writeVector(vgroup, "indicator",    indicator_h.data(), static_cast<int>(indicator_h.size()));
+
+  int hermite_nR = data.hermite_locator.nR;
+  int hermite_nZ = data.hermite_locator.nZ;
+  int fd_nR = data.fd_locator.nR;
+  int fd_nZ = data.fd_locator.nZ;
+  H5::writeScalar(sgroup, "hermite_nR", hermite_nR);
+  H5::writeScalar(sgroup, "hermite_nZ", hermite_nZ);
+  H5::writeScalar(sgroup, "fd_nR", fd_nR);
+  H5::writeScalar(sgroup, "fd_nZ", fd_nZ);
+  H5::writeScalar(sgroup, "Rc", Rc);
+  H5::writeScalar(sgroup, "Zc", Zc);
+
+  std::cout << std::format("Saved raw field data to {}\n", filename);
+}
+
+// Inverse of SaveRawFieldData: fill the (already-constructed) FieldData grid and
+// CDG indicator from an HDF5 dump, then update the magnetic-axis params. Used by
+// the `profile` executable in place of the MHD field-fill pipeline. All ranks
+// read the same replicated grid.
+void LoadRawFieldData(Mesh * pm, const char* filename) {
+  auto pkg = pm->packages.Get("Deck");
+  auto data = pkg->Param<FieldData_t>("FieldData");
+  auto cdg  = pkg->Param<ConfigurationDomainGeometry>("CDG");
+
+  auto data_h = data.data.view_host();
+  auto herm_h = data.hermite_data.view_host();
+  auto psi_h  = data.psi_data.view_host();
+
+  H5::H5File file(filename, H5F_ACC_RDONLY);
+  H5::Group vgroup = file.openGroup(H5::viewsGroupName);
+
+  // Dimension sanity check against the file.
+  H5::Group sgroup = file.openGroup(H5::scalarsGroupName);
+  int hermite_nR = 0, hermite_nZ = 0;
+  H5::readScalar(sgroup, "hermite_nR", hermite_nR);
+  H5::readScalar(sgroup, "hermite_nZ", hermite_nZ);
+  if (hermite_nR != data.hermite_locator.nR || hermite_nZ != data.hermite_locator.nZ) {
+    throw std::runtime_error(std::format(
+        "LoadRawFieldData: grid mismatch. File hermite ({},{}) vs configured ({},{}). "
+        "Match Numerical/NR,NZ and Geometry/* to the producing run.",
+        hermite_nR, hermite_nZ, data.hermite_locator.nR, data.hermite_locator.nZ));
+  }
+
+  H5::readVector(vgroup, "data",         data_h.data(), static_cast<int>(data_h.size()));
+  H5::readVector(vgroup, "hermite_data", herm_h.data(), static_cast<int>(herm_h.size()));
+  H5::readVector(vgroup, "psi_data",     psi_h.data(),  static_cast<int>(psi_h.size()));
+
+  data.data.modify_host();
+  data.hermite_data.modify_host();
+  data.psi_data.modify_host();
+  data.data.sync_device();
+  data.hermite_data.sync_device();
+  data.psi_data.sync_device();
+
+  auto indicator_h = Kokkos::create_mirror_view(cdg.indicator_view);
+  H5::readVector(vgroup, "indicator", indicator_h.data(), static_cast<int>(indicator_h.size()));
+  Kokkos::deep_copy(cdg.indicator_view, indicator_h);
+
+  Real Rc = 0.0, Zc = 0.0;
+  H5::readScalar(sgroup, "Rc", Rc);
+  H5::readScalar(sgroup, "Zc", Zc);
+  pkg->UpdateParam("Rc", Rc);
+  pkg->UpdateParam("Zc", Zc);
+
+  if (Globals::my_rank == 0)
+    std::cout << std::format("Loaded raw field data from {}: Mag. Axis (R,Z) = {:g}, {:g}\n",
+        filename, Rc, Zc);
+}
 
 void PlotFieldsTime(Mesh *pm, ParameterInput * pin, SimTime const & tm, User* mhd_context) {
   auto pkg = pm->packages.Get("Deck");

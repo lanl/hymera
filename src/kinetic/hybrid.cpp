@@ -53,6 +53,19 @@ int main(int argc, char *argv[]) {
   };
 
   pman.ParthenonInitPackagesAndMesh();
+
+  // The interpolated Hermite field grid is fully populated by Kinetic::Initialize
+  // (MHD init + interpolation), which runs during ParthenonInitPackagesAndMesh --
+  // no driver step is needed. Dump it here for the `profile` executable and exit
+  // before any time integration.
+  if (pman.pinput->GetOrAddInteger("Simulation", "dump_raw_fields", 0) == 1) {
+    const std::string fname = pman.pinput->GetOrAddString("Simulation", "raw_fields_file", "fields.h5");
+    Kinetic::SaveRawFieldData(pman.pmesh.get(), fname.c_str());
+    mhd_destroy(p_mhd_config);
+    pman.ParthenonFinalize();
+    return 0;
+  }
+
   Kinetic::ComputeParticleWeights(pman.pmesh.get());
 
   Kinetic::HybridDriver driver(pman.pinput.get(), pman.app_input.get(), pman.pmesh.get(),

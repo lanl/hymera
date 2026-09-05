@@ -75,6 +75,11 @@ set(CONSERVATION_SRC_LIST
   kinetic/conservation.cpp
 )
 
+set(PROFILE_SRC_LIST
+  kinetic/ProfileDriver.cpp
+  kinetic/profile.cpp
+)
+
 add_executable(mhd ${MHD_SRC_LIST})
 target_link_libraries(mhd PRIVATE mhd_core infrastructure)
 add_executable(hybrid ${HYBRID_SRC_LIST})
@@ -83,3 +88,5 @@ add_executable(avalanche ${AVALANCHE_SRC_LIST})
 target_link_libraries(avalanche PRIVATE particles_core mhd_core infrastructure)
 add_executable(conservation ${CONSERVATION_SRC_LIST})
 target_link_libraries(conservation PRIVATE particles_core mhd_core infrastructure)
+add_executable(profile ${PROFILE_SRC_LIST})
+target_link_libraries(profile PRIVATE particles_core mhd_core infrastructure)

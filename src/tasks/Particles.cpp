@@ -9,8 +9,33 @@
 #include "kinetic/GuidingCenterEquations.hpp"
 #include "kinetic/CurrentDensity.hpp"
 #include "kinetic/rk45.hpp"
+#include "kinetic/rk4.hpp"
 
-TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
+// Number of scratch Dim5 slots each stepper's work array needs. DP45 uses
+// slots 0..9 (rk45.hpp); RK4 uses slots 0..4 (rk4.hpp). Sizing the per-thread
+// stack array to exactly what the chosen stepper touches keeps the GPU
+// local-memory / register footprint minimal (see plan notes on register burden).
+template <int METHOD> struct WorkSize;
+template <> struct WorkSize<INTEGRATOR_DOPRI5> { static constexpr int value = 10; };
+template <> struct WorkSize<INTEGRATOR_RK4>    { static constexpr int value = 5; };
+
+// Advance a single particle's state X from t to t+dtSA with the compile-time
+// selected stepper. Returns the verificator result code.
+template <int METHOD, class GCE, class Ver, class Work>
+KOKKOS_INLINE_FUNCTION typename Ver::ResultCode_t
+StepParticle(const GCE &gce, const Ver &ver, Dim5 &X, const Real t,
+             const Real dtSA, const Real rtol, const Real atol, const Real h,
+             Work &work_d) {
+  if constexpr (METHOD == INTEGRATOR_RK4) {
+    return solve_rk4_fixed(gce, ver, X, t, t + dtSA, h, work_d);
+  } else {
+    return solve_rk45(gce, ver, X, t, t + dtSA, rtol, atol, h, 1e-9,
+                      std::numeric_limits<int>::max(), work_d);
+  }
+}
+
+template <int METHOD>
+static TaskStatus PushParticlesImpl(Mesh *pm, Real t0, Real dt) {
 
   // get mesh data
   auto md = pm->mesh_data.Get();
@@ -30,6 +55,7 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
     SmallAngleCollision<PartialScreening, EnergyScattering, ModifiedCouLog>
   >("SmallAngleCollision");
 
+//  const Real dtSA_min = Kokkos::max(h, sa.getSmallAngleCollisionTimestep(momentum_(1.002)));
   const Real dtSA_min = sa.getSmallAngleCollisionTimestep(momentum_(1.002));
   const Real dtSA_max = dt;
 
@@ -84,7 +110,7 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
           X[3] = pack_swarm_r(b, Kinetic::phi(), n);
           X[4] = pack_swarm_r(b, Kinetic::Z(), n);
           Real w = pack_swarm_r(b, Kinetic::weight(), n);
-          Kokkos::Array<Dim5, 10> work_d;
+          Kokkos::Array<Dim5, WorkSize<METHOD>::value> work_d;
 
           bool last_step = false;
 
@@ -100,8 +126,8 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
               last_step = true;
             }
 
-            auto ret = solve_rk45(gce, ver, X, t, t + dtSA, rtol, atol, h, 1e-9,
-                         std::numeric_limits<int>::max(), work_d);
+            auto ret = StepParticle<METHOD>(gce, ver, X, t, dtSA, rtol, atol, h,
+                                            work_d);
             if (ret != ParticleVerificator::Success) {
 
               pack_swarm_i(b, Kinetic::status(), n) &= ~Kinetic::ALIVE;
@@ -141,6 +167,17 @@ TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
 
   return TaskStatus::complete;
 
+}
+
+// Dispatch to the compile-time specialized push based on the runtime
+// Simulation/integrator param. Branching here (host side) rather than inside the
+// kernel means each stepper compiles to its own kernel with its own minimal work
+// array — the DP45 kernel's register cost is not paid on RK4 runs and vice versa.
+TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {
+  const int integrator = pm->packages.Get("Deck")->Param<int>("integrator");
+  if (integrator == INTEGRATOR_RK4)
+    return PushParticlesImpl<INTEGRATOR_RK4>(pm, t0, dt);
+  return PushParticlesImpl<INTEGRATOR_DOPRI5>(pm, t0, dt);
 }
 
 // Compute the two guiding-center adiabatic invariants (canonical toroidal

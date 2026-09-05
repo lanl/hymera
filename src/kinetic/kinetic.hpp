@@ -80,8 +80,8 @@ void ComputeParticleWeights(Mesh* pm);
 
 TaskStatus MakeOutputs(Outputs* pouts, Mesh* pmesh, ParameterInput* pinput, Real time, int iPR);
 
-void SaveRawFieldData(ParthenonManager * man, const char* filename);
-void LoadRawFieldData(User * man, const char* filename);
+void SaveRawFieldData(Mesh * pm, const char* filename);
+void LoadRawFieldData(Mesh * pm, const char* filename);
 
 void WorkBeforeOutput(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context);
 void PlotFieldsTime(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd_context);

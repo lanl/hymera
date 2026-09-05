@@ -40,11 +40,11 @@ KOKKOS_INLINE_FUNCTION void rk45_step(
     typename System::value_type &yout, typename System::value_type &yerr,
     Kokkos::Array<typename System::value_type, 10> &k) {
   // Coefficients for Dormand–Prince 4(5):
-  static const double c2 = 1.0 / 5.0, c3 = 3.0 / 10.0, c4 = 4.0 / 5.0,
+  constexpr double c2 = 1.0 / 5.0, c3 = 3.0 / 10.0, c4 = 4.0 / 5.0,
                       c5 = 8.0 / 9.0, c6 = 1.0,
                       c7 = 1.0; // same as c6, used for clarity
 
-  static const double a21 = 1.0 / 5.0, a31 = 3.0 / 40.0, a32 = 9.0 / 40.0,
+  constexpr double a21 = 1.0 / 5.0, a31 = 3.0 / 40.0, a32 = 9.0 / 40.0,
                       a41 = 44.0 / 45.0, a42 = -56.0 / 15.0, a43 = 32.0 / 9.0,
                       a51 = 19372.0 / 6561.0, a52 = -25360.0 / 2187.0,
                       a53 = 64448.0 / 6561.0, a54 = -212.0 / 729.0,
@@ -56,12 +56,12 @@ KOKKOS_INLINE_FUNCTION void rk45_step(
 
   // 5th-order weights (b) and embedded 4th-order weights (b*) for error
   // estimate
-  static const double b1 = 35.0 / 384.0, b2 = 0.0, b3 = 500.0 / 1113.0,
+  constexpr double b1 = 35.0 / 384.0, b2 = 0.0, b3 = 500.0 / 1113.0,
                       b4 = 125.0 / 192.0, b5 = -2187.0 / 6784.0,
                       b6 = 11.0 / 84.0,
                       b7 = 0.0; // 5th order
 
-  static const double b1s = 5179.0 / 57600.0, b2s = 0.0, b3s = 7571.0 / 16695.0,
+  constexpr double b1s = 5179.0 / 57600.0, b2s = 0.0, b3s = 7571.0 / 16695.0,
                       b4s = 393.0 / 640.0, b5s = -92097.0 / 339200.0,
                       b6s = 187.0 / 2100.0,
                       b7s = 1.0 / 40.0; // 4th order
@@ -173,7 +173,7 @@ solve_rk45(const System &f,
       // We are close enough or past the end
       break;
     }
-    if (std::fabs(h) < hmin) {
+    if (Kokkos::fabs(h) < hmin) {
       h = hmin;
     }
     if (t + h > tf) {
@@ -187,11 +187,11 @@ solve_rk45(const System &f,
     // 2) Estimate error norm
     double err = 0.0;
     for (int i = 0; i < n; ++i) {
-      double sc = get_atol(i) + get_rtol(i) * std::fabs(ytemp[i]);
+      double sc = get_atol(i) + get_rtol(i) * Kokkos::fabs(ytemp[i]);
       double e = yerr[i] / sc;
       err += e * e;
     }
-    err = std::sqrt(err / n);
+    err = Kokkos::sqrt(err / n);
 
     // 3) Compare with 1.0 to accept/reject
     const double safety = 0.9;
@@ -206,7 +206,7 @@ solve_rk45(const System &f,
 
 
       // Step-size update
-      double factor = safety * std::pow(err + 1.0e-10, -p);
+      double factor = safety * Kokkos::pow(err + 1.0e-10, -p);
       factor = Kokkos::min(5.0, Kokkos::max(0.2, factor)); // clamp
       h *= factor;
       if constexpr (VERBOSE) {
@@ -242,7 +242,7 @@ KOKKOS_INLINE_FUNCTION typename Verificator::ResultCode_t solve_rk45_fixed(
 
   const size_t n = y.size();
   double t = t0;
-  int nmax = static_cast<int>(ceil((tf - t0) / h));
+  int nmax = static_cast<int>(Kokkos::ceil((tf - t0) / h));
   auto &ytemp = work[8];
   auto &yerr = work[9];
 

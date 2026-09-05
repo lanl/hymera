@@ -358,6 +358,9 @@ void GenerateParticlePoint(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
   auto pack_swarm = desc_swarm.GetPack(data.get());
   auto pack_status = desc_markers.GetPack(data.get());
 
+
+  std::cout << std::format("Placing particles at ({},{})", Rseed, Zseed);
+
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
       DevExecSpace(), 0,
       newParticlesContext.GetNewParticlesMaxIndex(),

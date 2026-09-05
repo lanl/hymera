@@ -1,3 +1,4 @@
+#pragma once
 #include <Kokkos_Core.hpp>
 #include <algorithm>
 #include <cmath>
@@ -36,7 +37,7 @@ KOKKOS_INLINE_FUNCTION typename Verificator::ResultCode_t solve_rk4_fixed(
     Kokkos::Array<typename System::value_type, 5> &work) {
     const size_t n = y.size();
     double t = t0;
-    int nstep = static_cast<int>(ceil((tf - t0) / h));
+    int nstep = static_cast<int>(Kokkos::ceil((tf - t0) / h));
     for (int stepCount = 0; stepCount < nstep; ++stepCount) {
         auto st = v.verify(y);
         if (st != Verificator::Success) return st;
