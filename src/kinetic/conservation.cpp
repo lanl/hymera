@@ -17,11 +17,9 @@ using namespace parthenon::driver::prelude;
 
 
 int main(int argc, char *argv[]) {
-  User * p_mhd_config;
 
   ParthenonManager pman;
   auto manager_status = pman.ParthenonInitEnv(argc, argv);
-  mhd_PetscInit(&argc, &argv, &p_mhd_config);
 
   if (manager_status == ParthenonStatus::complete) {
     pman.ParthenonFinalize();
@@ -34,19 +32,14 @@ int main(int argc, char *argv[]) {
 
   pman.app_input->ProcessPackages = [=](std::unique_ptr<ParameterInput> &pin) {
     Packages_t packages;
-    packages.Add(Kinetic::Initialize(pin.get(), p_mhd_config));
+    packages.Add(Kinetic::Initialize(pin.get(), NULL));
     return packages;
   };
   pman.app_input->ProblemGenerator = GenerateParticlePoint;
 
-  pman.app_input->UserMeshWorkBeforeOutput = [=](Mesh * pm, ParameterInput * pin, SimTime const & tm) {
-    if (Globals::my_rank == 0) std::cout << "Writing fields start";
-    Kinetic::PlotFieldsTime(pm, pin, tm, p_mhd_config);
-    if (Globals::my_rank == 0) std::cout << "Writing fields finish";
-  };
-
   pman.app_input->UserWorkBeforeLoop = [=](Mesh * pm, ParameterInput * pin, SimTime const & tm) {
-    Kinetic::WorkBeforeLoop(pm, p_mhd_config);
+    const std::string load_fields = pin->GetOrAddString("Simulation", "load_fields", "fields.h5");
+    Kinetic::LoadRawFieldData(pm, load_fields.c_str());
     Kinetic::HijackEField(pm);
   };
 
