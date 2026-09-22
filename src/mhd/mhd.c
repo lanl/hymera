@@ -40,6 +40,8 @@ const char help[] = "Time-dependent magnetic diffusion PDE in 3d cylindrical coo
 #include <sys/types.h>
 #include <unistd.h>
 #include <petsc/private/dmstagimpl.h>
+#include <petscdmda.h>
+#include <petscviewerhdf5.h>
 #include <fenv.h>
 
 #include "default_petsc_options.h"
@@ -766,6 +768,90 @@ int mhd_destroy(User* user) {
   return 0;
 }
 
+/*
+   Rank-independent restart I/O for the DMStag solution vector.
+
+   A raw VecView/VecLoad on a DMStag global vector writes the data in PETSc
+   parallel ordering (each rank's owned block concatenated in rank order),
+   which depends on the number of MPI ranks and their domain decomposition.
+   Restarting on a different rank count then scatters the entries into the
+   wrong grid locations -> garbage state -> crash. DMStag provides no
+   natural-ordering hook (unlike DMDA).
+
+   Fix: split the stag vector into one single-component DMDA vector per
+   (storage location, component). DMDA's VecView/VecLoad permute to a
+   rank-independent natural ordering automatically, so the on-disk layout is
+   the same regardless of decomposition. On load we push the DMDA values back
+   into the stag global vector over the local owned corners (the split DMDA
+   shares the stag ownership, so indices align 1:1 including the extra
+   boundary points on the last rank).
+*/
+static PetscErrorCode stag_vec_io(User *user, PetscViewer viewer, Vec X, PetscBool load)
+{
+    DM       stagdm;
+    PetscInt dof[4];
+
+    PetscFunctionBeginUser;
+
+    PetscCall(TSGetDM(user->ts, &stagdm));
+    PetscCall(DMStagGetDOF(stagdm, &dof[0], &dof[1], &dof[2], &dof[3]));
+
+    /* Canonical 3D storage locations: vertex, 3 edges, 3 faces, element. */
+    const DMStagStencilLocation locs[8] = {
+        DMSTAG_BACK_DOWN_LEFT,                                 /* vertices  */
+        DMSTAG_BACK_DOWN, DMSTAG_BACK_LEFT, DMSTAG_DOWN_LEFT,  /* edges     */
+        DMSTAG_LEFT, DMSTAG_DOWN, DMSTAG_BACK,                 /* faces     */
+        DMSTAG_ELEMENT                                         /* elements  */
+    };
+    const PetscInt ndof[8] = {
+        dof[0],
+        dof[1], dof[1], dof[1],
+        dof[2], dof[2], dof[2],
+        dof[3]
+    };
+
+    for (PetscInt s = 0; s < 8; ++s) {
+        for (PetscInt c = 0; c < ndof[s]; ++c) {
+            DM   da;
+            Vec  davec;
+            char name[64];
+
+            PetscCall(PetscSNPrintf(name, sizeof(name), "stag_%d_%d", (int)locs[s], (int)c));
+
+            /* Builds a DMDA (rank-independent natural ordering) for this
+               stratum/component and copies the current stag values into davec. */
+            PetscCall(DMStagVecSplitToDMDA(stagdm, X, locs[s], c, &da, &davec));
+            PetscCall(PetscObjectSetName((PetscObject)davec, name));
+
+            if (load) {
+                PetscInt      slot, xs, ys, zs, xm, ym, zm;
+                PetscScalar ****stagarr;
+                PetscScalar  ***daarr;
+
+                PetscCall(VecLoad(davec, viewer));
+
+                PetscCall(DMStagGetLocationSlot(stagdm, locs[s], c, &slot));
+                PetscCall(DMStagVecGetArray(stagdm, X, &stagarr));
+                PetscCall(DMDAVecGetArrayRead(da, davec, &daarr));
+                PetscCall(DMDAGetCorners(da, &xs, &ys, &zs, &xm, &ym, &zm));
+                for (PetscInt k = zs; k < zs + zm; ++k)
+                    for (PetscInt j = ys; j < ys + ym; ++j)
+                        for (PetscInt i = xs; i < xs + xm; ++i)
+                            stagarr[k][j][i][slot] = daarr[k][j][i];
+                PetscCall(DMDAVecRestoreArrayRead(da, davec, &daarr));
+                PetscCall(DMStagVecRestoreArray(stagdm, X, &stagarr));
+            } else {
+                PetscCall(VecView(davec, viewer));
+            }
+
+            PetscCall(VecDestroy(&davec));
+            PetscCall(DMDestroy(&da));
+        }
+    }
+
+    PetscFunctionReturn(PETSC_SUCCESS);
+}
+
 PetscErrorCode mhd_savesolution(User *user, const char *filename)
 {
     PetscViewer viewer;
@@ -780,7 +866,7 @@ PetscErrorCode mhd_savesolution(User *user, const char *filename)
                                     FILE_MODE_WRITE,
                                     &viewer));
 
-    PetscCall(VecView(X, viewer));
+    PetscCall(stag_vec_io(user, viewer, X, PETSC_FALSE));
 
     PetscCall(PetscViewerDestroy(&viewer));
 
@@ -801,7 +887,7 @@ PetscErrorCode mhd_loadsolution(User *user, const char *filename)
                                     FILE_MODE_READ,
                                     &viewer));
 
-    PetscCall(VecLoad(X, viewer));
+    PetscCall(stag_vec_io(user, viewer, X, PETSC_TRUE));
 
     PetscCall(PetscViewerDestroy(&viewer));
 
@@ -822,14 +908,12 @@ PetscErrorCode mhd_save_hdf5(User *user, const char *filename)
 
     PetscCall(TSGetSolution(user->ts, &X));
 
-    PetscCall(PetscObjectSetName((PetscObject)X, "solution"));
-
     PetscCall(PetscViewerHDF5Open(PETSC_COMM_WORLD,
                                   filename,
                                   FILE_MODE_WRITE,
                                   &viewer));
 
-    PetscCall(VecView(X, viewer));
+    PetscCall(stag_vec_io(user, viewer, X, PETSC_FALSE));
 
     PetscCall(PetscViewerDestroy(&viewer));
 
@@ -845,17 +929,12 @@ PetscErrorCode mhd_load_hdf5(User *user, const char *filename)
 
     PetscCall(TSGetSolution(user->ts, &X));
 
-    /*
-       This name must match the name used during writing.
-    */
-    PetscCall(PetscObjectSetName((PetscObject)X, "solution"));
-
     PetscCall(PetscViewerHDF5Open(PETSC_COMM_WORLD,
                                   filename,
                                   FILE_MODE_READ,
                                   &viewer));
 
-    PetscCall(VecLoad(X, viewer));
+    PetscCall(stag_vec_io(user, viewer, X, PETSC_TRUE));
 
     PetscCall(PetscViewerDestroy(&viewer));
 
