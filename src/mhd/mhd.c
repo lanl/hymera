@@ -766,31 +766,100 @@ int mhd_destroy(User* user) {
   return 0;
 }
 
-int mhd_savesolution(User* user, const char* filename) {
-  PetscViewer viewerX;
-  PetscPrintf(PETSC_COMM_WORLD, "Writing X vector into file %s ...\n", filename);
-  PetscViewerBinaryOpen(PETSC_COMM_WORLD, filename, FILE_MODE_WRITE, & viewerX);
+PetscErrorCode mhd_savesolution(User *user, const char *filename)
+{
+    PetscViewer viewer;
+    Vec X;
 
-  Vec X;
-  TSGetSolution(user->ts, &X);
-  VecView(X, viewerX);
+    PetscFunctionBeginUser;
 
-  PetscViewerDestroy( & viewerX);
-  PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
-  return 0;
+    PetscCall(TSGetSolution(user->ts, &X));
+
+    PetscCall(PetscViewerBinaryOpen(PETSC_COMM_WORLD,
+                                    filename,
+                                    FILE_MODE_WRITE,
+                                    &viewer));
+
+    PetscCall(VecView(X, viewer));
+
+    PetscCall(PetscViewerDestroy(&viewer));
+
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
-int mhd_loadsolution(User* user, const char* filename) {
-  PetscViewer viewerX;
-  PetscPrintf(PETSC_COMM_WORLD, "Reading X vector from file %s ...\n", filename);
-  PetscViewerBinaryOpen(PETSC_COMM_WORLD, filename, FILE_MODE_READ, & viewerX);
-  Vec X;
-  TSGetSolution(user->ts, &X);
-  VecLoad(X, viewerX);
-  TSSetSolution(user->ts, X);
+PetscErrorCode mhd_loadsolution(User *user, const char *filename)
+{
+    PetscViewer viewer;
+    Vec X;
 
-  PetscViewerDestroy( & viewerX);
-  PetscPrintf(PETSC_COMM_WORLD, "Reading from file %s is over.\n", filename);
+    PetscFunctionBeginUser;
+
+    PetscCall(TSGetSolution(user->ts, &X));
+
+    PetscCall(PetscViewerBinaryOpen(PETSC_COMM_WORLD,
+                                    filename,
+                                    FILE_MODE_READ,
+                                    &viewer));
+
+    PetscCall(VecLoad(X, viewer));
+
+    PetscCall(PetscViewerDestroy(&viewer));
+
+    /*
+       TSGetSolution() already returned the TS solution vector.
+       TSSetSolution(user->ts, X) is normally unnecessary here.
+    */
+
+    PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+PetscErrorCode mhd_save_hdf5(User *user, const char *filename)
+{
+    PetscViewer viewer;
+    Vec X;
+
+    PetscFunctionBeginUser;
+
+    PetscCall(TSGetSolution(user->ts, &X));
+
+    PetscCall(PetscObjectSetName((PetscObject)X, "solution"));
+
+    PetscCall(PetscViewerHDF5Open(PETSC_COMM_WORLD,
+                                  filename,
+                                  FILE_MODE_WRITE,
+                                  &viewer));
+
+    PetscCall(VecView(X, viewer));
+
+    PetscCall(PetscViewerDestroy(&viewer));
+
+    PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+PetscErrorCode mhd_load_hdf5(User *user, const char *filename)
+{
+    PetscViewer viewer;
+    Vec X;
+
+    PetscFunctionBeginUser;
+
+    PetscCall(TSGetSolution(user->ts, &X));
+
+    /*
+       This name must match the name used during writing.
+    */
+    PetscCall(PetscObjectSetName((PetscObject)X, "solution"));
+
+    PetscCall(PetscViewerHDF5Open(PETSC_COMM_WORLD,
+                                  filename,
+                                  FILE_MODE_READ,
+                                  &viewer));
+
+    PetscCall(VecLoad(X, viewer));
+
+    PetscCall(PetscViewerDestroy(&viewer));
+
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 void view4d_zero(view4d_t v) {
