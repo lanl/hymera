@@ -46,7 +46,7 @@ nx3 = 1
 <MHD_Config>
 input_folder=../../inputs/mhd
 ic_binary_path=X_4.petscbin
-ic_binary_load=1
+ic_binary_load=0
 
 <Geometry>
 input_file=../../inputs/AxisSymmetricGeometry.dat

@@ -80,6 +80,11 @@ set(PROFILE_SRC_LIST
   kinetic/profile.cpp
 )
 
+set(SINGLE_PARTICLE_SRC_LIST
+  kinetic/SingleParticleDriver.cpp
+  kinetic/single_particle.cpp
+)
+
 add_executable(mhd ${MHD_SRC_LIST})
 target_link_libraries(mhd PRIVATE mhd_core infrastructure)
 add_executable(hybrid ${HYBRID_SRC_LIST})
@@ -90,3 +95,5 @@ add_executable(conservation ${CONSERVATION_SRC_LIST})
 target_link_libraries(conservation PRIVATE particles_core mhd_core infrastructure)
 add_executable(profile ${PROFILE_SRC_LIST})
 target_link_libraries(profile PRIVATE particles_core mhd_core infrastructure)
+add_executable(single_particle ${SINGLE_PARTICLE_SRC_LIST})
+target_link_libraries(single_particle PRIVATE particles_core infrastructure mhd_core)

@@ -43,12 +43,12 @@ nx2 = 1
 nx3 = 1
 
 <MHD_Config>
-input_folder=../inputs/mhd
-ic_binary_path=X_2.petscbin
+input_folder=../../inputs/mhd
+ic_binary_path=X_8.petscbin
 ic_binary_load=0
 
 <Geometry>
-input_file=../inputs/AxisSymmetricGeometry.dat
+input_file=../../inputs/AxisSymmetricGeometry.dat
 
 <parthenon/time>
 dt_force = 0.000165483
