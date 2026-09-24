@@ -65,6 +65,7 @@ PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx) {
   PetscPrintf(comm,"\n-- Flags --\n");
   PetscPrintf(comm,"debug       = %d\n",(int)ctx->debug);
   PetscPrintf(comm,"dump        = %d\n",(int)ctx->dump);
+  PetscPrintf(comm,"monitor     = %d\n",(int)ctx->monitor);
   PetscPrintf(comm,"prestep     = %d\n",(int)ctx->prestep);
   PetscPrintf(comm,"savecoords  = %d\n",(int)ctx->savecoords);
   PetscPrintf(comm,"savesol     = %d\n",(int)ctx->savesol);

@@ -94,19 +94,55 @@ int mhd_initialize(User* user) {
     return 1;
   }
 
-  PetscInt numC = 0;
   char filename[PETSC_MAX_PATH_LEN];
 
+  /* Grid data from inputs/mhd. The element count of each file is a fixed
+   * function of the grid, so check it rather than trusting the count in the
+   * file header:
+   *   veceta -> dataC    cell-centred material tags   Nr     * Nphi     * Nz
+   *   vecpsi -> datapsi  poloidal flux, r-z edge      (Nr+1) * Nphi     * (Nz+1)
+   *   vecg   -> datag    R*B_phi, phi-face            Nr     * (Nphi+1) * Nz
+   * A mismatch means the grid and the data disagree, which previously produced
+   * silent out-of-bounds reads rather than an error.
+   */
   PetscSNPrintf(filename, sizeof(filename), "%s/veceta_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz);
-  ReadInitialData( & (user->dataC), & numC, filename);
+  PetscCall(ReadInitialData( & (user->dataC), & (user->numC), filename));
+  PetscCheck(user->numC == user->Nr * user->Nphi * user->Nz, PETSC_COMM_WORLD,
+             PETSC_ERR_FILE_UNEXPECTED,
+             "%s holds %" PetscInt_FMT " values but a %" PetscInt_FMT "x%" PetscInt_FMT
+             "x%" PetscInt_FMT " grid needs %" PetscInt_FMT,
+             filename, user->numC, user->Nr, user->Nphi, user->Nz,
+             user->Nr * user->Nphi * user->Nz);
 
-  PetscSNPrintf(filename, sizeof(filename), "%s/vecpsi_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz);
-  ReadInitialData( & (user->datapsi), & (user->numpsi), filename);
+  /* datapsi and datag are only consumed by FormInitialSolution_psi, i.e. the
+   * ictype 9/15 equilibrium path. The manufactured initial conditions used by
+   * the regression harness never touch them, and the files only exist at the
+   * one production resolution, so do not require them otherwise. */
+  if (user->ictype == 9 || user->ictype == 15) {
+    PetscSNPrintf(filename, sizeof(filename), "%s/vecpsi_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz);
+    PetscCall(ReadInitialData( & (user->datapsi), & (user->numpsi), filename));
+    PetscCheck(user->numpsi == (user->Nr + 1) * user->Nphi * (user->Nz + 1),
+               PETSC_COMM_WORLD, PETSC_ERR_FILE_UNEXPECTED,
+               "%s holds %" PetscInt_FMT " values but a %" PetscInt_FMT "x%" PetscInt_FMT
+               "x%" PetscInt_FMT " grid needs %" PetscInt_FMT,
+               filename, user->numpsi, user->Nr, user->Nphi, user->Nz,
+               (user->Nr + 1) * user->Nphi * (user->Nz + 1));
 
-  PetscSNPrintf(filename, sizeof(filename), "%s/vecg_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz);
-  ReadInitialData( & (user->datag), & (user->numg), filename);
+    PetscSNPrintf(filename, sizeof(filename), "%s/vecg_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz);
+    PetscCall(ReadInitialData( & (user->datag), & (user->numg), filename));
+    PetscCheck(user->numg == user->Nr * (user->Nphi + 1) * user->Nz,
+               PETSC_COMM_WORLD, PETSC_ERR_FILE_UNEXPECTED,
+               "%s holds %" PetscInt_FMT " values but a %" PetscInt_FMT "x%" PetscInt_FMT
+               "x%" PetscInt_FMT " grid needs %" PetscInt_FMT,
+               filename, user->numg, user->Nr, user->Nphi, user->Nz,
+               user->Nr * (user->Nphi + 1) * user->Nz);
 
-  PetscPrintf(PETSC_COMM_WORLD, "Read initial data from g and psi input!\n");
+    PetscPrintf(PETSC_COMM_WORLD, "Read initial data from g and psi input!\n");
+  } else {
+    PetscPrintf(PETSC_COMM_WORLD,
+                "ictype %" PetscInt_FMT ": manufactured initial condition, "
+                "skipping psi/g equilibrium input\n", user->ictype);
+  }
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Create 3D DMStag for the solution, and set up.
@@ -155,7 +191,9 @@ int mhd_initialize(User* user) {
   {
     PetscInt N[3];
     DMStagGetGlobalSizes(user->da, & N[0], & N[1], & N[2]);
-    PetscPrintf(PETSC_COMM_WORLD, "Using a %D x %D x %D mesh\n", N[0], N[1], N[2]);
+    /* PetscInt must be printed with PetscInt_FMT; the old %D specifier was
+     * removed in PETSc 3.16 and is now just an unrecognised conversion. */
+    PetscPrintf(PETSC_COMM_WORLD, "Using a %" PetscInt_FMT " x %" PetscInt_FMT " x %" PetscInt_FMT " mesh\n", N[0], N[1], N[2]);
     PetscPrintf(PETSC_COMM_WORLD, "dr: %g\n", user->dr);
     PetscPrintf(PETSC_COMM_WORLD, "dphi: %g\n", user->dphi);
     PetscPrintf(PETSC_COMM_WORLD, "dz: %g\n", user->dz);
@@ -622,7 +660,20 @@ int mhd_initialize(User* user) {
   if (user->tstype > 1) {
     MatDestroy( & J);
   }
-  FormInitialSolution_psi(user->ts, user->X, user); // Set initial condition
+  /* Set the initial condition.
+   *
+   * FormInitialSolution_psi builds the tokamak equilibrium from the EFIT /
+   * Grad-Shafranov data in inputs/mhd (user->datapsi, user->datag), which it
+   * reads unconditionally, so it is only valid for the ictype 9/15 production
+   * path. The manufactured analytic initial conditions (ictype 1..8, 10..13)
+   * live in FormInitialSolution and read none of that data; they are what the
+   * regression harness uses to measure spatial convergence order.
+   */
+  if (user->ictype == 9 || user->ictype == 15) {
+    PetscCall(FormInitialSolution_psi(user->ts, user->X, user));
+  } else {
+    PetscCall(FormInitialSolution(user->ts, user->X, user));
+  }
   return 0;
 }
 
@@ -655,9 +706,33 @@ int mhd_step(User* user) {
   PetscInt steps;
   TSGetStepNumber(user->ts, & steps);
 
+  /* Run the per-step diagnostics, if enabled.
+   *
+   * Monitor is registered with TSMonitorSet in mhd_initialize, but PETSc only
+   * invokes monitors from TSSolve, and this driver advances the solution with
+   * TSStep so that the kinetic side can interleave its own work between steps.
+   * The registration therefore never fired, and the step norms, divergence-of-B
+   * measure and toroidal-current diagnostics were silently absent from every
+   * run. Monitor takes the TSMonitor argument list explicitly, so it can simply
+   * be called here, which is where the registration intended it to run.
+   *
+   * It is off by default because it is not free: Monitor builds an extra DM,
+   * applies the derived curl, and computes the toroidal currents, which costs a
+   * nested linear solve per step. Enable it with MHD_Config/monitor=1 when
+   * diagnostics are wanted -- in particular the regression harness relies on
+   * this output as its per-step fingerprint.
+   */
+  if (user->monitor) {
+    Vec Xnow;
+    PetscReal tnow;
+    TSGetSolution(user->ts, & Xnow);
+    TSGetTime(user->ts, & tnow);
+    PetscCall(Monitor(user->ts, steps, tnow, Xnow, user));
+  }
+
   TSConvergedReason reason;
   TSGetConvergedReason(user->ts, & reason);
-  PetscPrintf(PETSC_COMM_WORLD, "%s at time %g after %D steps\n", TSConvergedReasons[reason], (double) ftime, steps);
+  PetscPrintf(PETSC_COMM_WORLD, "%s at time %g after %" PetscInt_FMT " steps\n", TSConvergedReasons[reason], (double) ftime, steps);
   return 0;
 }
 

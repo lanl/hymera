@@ -189,7 +189,14 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     mhd_context->zmin                   = Zmin * a;
     mhd_context->zmax                   = Zmax * a;;
     mhd_context->dt                     = dt_mhd / tauA;
-    mhd_context->ictype                 = 9;
+    // Initial-condition selector, consumed in src/mhd/ts_functions.c.
+    //   9  = EFIT + Grad-Shafranov equilibrium from inputs/mhd/vec{psi,g}*.txt
+    //        (production; the only value used by physics runs)
+    //   1..8, 10..13 = manufactured analytic solutions with closed forms, used
+    //        by the regression harness to measure spatial convergence order.
+    //        These read none of the inputs/mhd/*.txt equilibrium data.
+    // Default stays 9 so production behaviour is unchanged.
+    mhd_context->ictype                 = pin->GetOrAddInteger("MHD_Config", "ictype", 9);
     mhd_context->Nr                     = NR;
     mhd_context->Nphi                   = Nphi;
     mhd_context->Nz                     = NZ;
@@ -204,6 +211,11 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     mhd_context->jtype                  = pin->GetOrAddInteger("MHD_Config", "jtype",  2);
     mhd_context->debug                  = pin->GetOrAddInteger("MHD_Config", "debug",  0);
     mhd_context->dump                   = pin->GetOrAddInteger("MHD_Config", "dump",  0);
+    // Per-step diagnostics from Monitor: step norms, max|div B|, toroidal
+    // currents. Costs a nested linear solve per step, hence off by default.
+    // The regression harness turns this on and uses the output as its
+    // per-step fingerprint.
+    mhd_context->monitor                = pin->GetOrAddInteger("MHD_Config", "monitor",  0);
     mhd_context->savecoords             = pin->GetOrAddInteger("MHD_Config", "savecoords",  0);
     mhd_context->isB                    = NULL;
     mhd_context->isEP                   = NULL;

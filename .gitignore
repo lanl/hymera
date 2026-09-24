@@ -53,3 +53,15 @@ run/*
 # Cache
 __pycache__
 .cache
+
+# Regression harness. The rules above exclude *dat and *hdf, which would
+# otherwise swallow the committed fixtures and baselines, so re-include the
+# harness tree explicitly. Scoped to tests/regression so it cannot accidentally
+# re-include run output elsewhere.
+!tests/regression/**
+
+# Generated figures are reproducible from the committed fixtures, so they are
+# not tracked. Same for bytecode: the re-include above outranks the global
+# __pycache__ rule, so restate it here.
+tests/regression/viz/out/
+tests/regression/**/__pycache__/

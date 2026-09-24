@@ -1,0 +1,220 @@
+{
+  "config": {
+    "B0": "5.3",
+    "DiagBlock_B": "NULL",
+    "DiagBlock_EP": "NULL",
+    "DiagBlock_V": "NULL",
+    "DiagMe": "NULL",
+    "DiagMe1": "NULL",
+    "Ebc": "0",
+    "Iphi1": "0.",
+    "Iphi2": "0.",
+    "Iphi3": "0.",
+    "KSP_B": "NULL",
+    "KSP_EP": "NULL",
+    "KSP_V": "NULL",
+    "L0": "2.",
+    "MeVec": "NULL",
+    "MeVec1": "NULL",
+    "Nphi": "2",
+    "Nr": "100",
+    "Nz": "200",
+    "Re": "200.",
+    "V_A": "1.16024e+07",
+    "X0": "NULL",
+    "coorda": "NULL",
+    "dampV": "0.01",
+    "dataC": "NULL",
+    "datag": "NULL",
+    "dataphi": "NULL",
+    "datapsi": "NULL",
+    "datar": "NULL",
+    "dataz": "NULL",
+    "debug": "0",
+    "density": "1e+20",
+    "dphi": "3.14159",
+    "dr": "0.0345",
+    "dt": "6265.28",
+    "dump": "0",
+    "dumpfreq": "1",
+    "dz": "0.02975",
+    "eta": "1.",
+    "eta0": "29.1599",
+    "etaVV": "1.30288e-06",
+    "etaout": "0.00130288",
+    "etaplasma": "2.46016e-05",
+    "etasepwal": "2.46016e-05",
+    "etawall": "0.044",
+    "etawallperp": "0.044",
+    "etawallphi": "0.044",
+    "etawallphi_isol_cell": "0.044",
+    "ftime": "6265.28",
+    "ic_binary_mode": "c",
+    "ic_binary_path": "X_4.petscbin",
+    "ictype": "9",
+    "input_folder": "../../inputs/mhd",
+    "isALL_V": "NULL",
+    "isB": "NULL",
+    "isB_boundary": "NULL",
+    "isEP": "NULL",
+    "isE_boundary": "NULL",
+    "isV": "NULL",
+    "isni": "NULL",
+    "isni_boundary": "NULL",
+    "istau": "NULL",
+    "itime": "0.",
+    "mi": "1.66054e-27",
+    "mu0": "1.25664e-06",
+    "n_record": "0",
+    "n_record_Steady_jRE": "0",
+    "numg": "0",
+    "numphi": "0",
+    "numpsi": "0",
+    "numr": "0",
+    "numz": "0",
+    "oldstep": "0",
+    "phibtype": "1",
+    "phimax": "6.28319",
+    "phimin": "0.",
+    "prestep": "0",
+    "rmax": "9.95",
+    "rmin": "3.05",
+    "savecoords": "0",
+    "savesol": "0",
+    "tempdump": "0",
+    "testSpGD": "0",
+    "testSpGDsamerhs": "0",
+    "ts": "NULL",
+    "tstype": "2",
+    "zmax": "5.95",
+    "zmin": "-5.95"
+  },
+  "converged": [],
+  "currents": [
+    {
+      "value": "1.50135e+07",
+      "where": "plasma"
+    },
+    {
+      "value": "7.38953",
+      "where": "outside"
+    },
+    {
+      "value": "13146.9",
+      "where": "vacuum_vessel"
+    },
+    {
+      "value": "1.49753e+07",
+      "where": "plasma"
+    },
+    {
+      "value": "38282.4",
+      "where": "outside"
+    },
+    {
+      "value": "13146.9",
+      "where": "vacuum_vessel"
+    },
+    {
+      "value": "1.49584e+07",
+      "where": "plasma"
+    },
+    {
+      "value": "55163.",
+      "where": "outside"
+    },
+    {
+      "value": "13146.9",
+      "where": "vacuum_vessel"
+    }
+  ],
+  "derived": {
+    "dt_normalized": "0.00108",
+    "lundquist": "1.18528e+06",
+    "mesh": "100 x 2 x 200",
+    "resistive_time": "0.204318",
+    "reynolds": "200."
+  },
+  "div_b": [
+    {
+      "max_div_b": "2.70127e-13",
+      "step": 0,
+      "time": "0."
+    },
+    {
+      "max_div_b": "2.70127e-13",
+      "step": 1,
+      "time": "100."
+    },
+    {
+      "max_div_b": "2.70127e-13",
+      "step": 2,
+      "time": "200."
+    }
+  ],
+  "div_b_ratio": [
+    "1.34388e-13",
+    "1.34388e-13",
+    "1.34388e-13"
+  ],
+  "ksp_counts": [
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "mms_error": [],
+  "snes_counts": [
+    3,
+    3,
+    3,
+    3,
+    1
+  ],
+  "source": "onestep_b.log",
+  "steps": [
+    {
+      "dX_l2": "305.615",
+      "dX_max": "2.01005",
+      "dt": "100.",
+      "step": 0,
+      "time": "0."
+    },
+    {
+      "dX_l2": "5.61281",
+      "dX_max": "0.0900652",
+      "dt": "100.",
+      "step": 1,
+      "time": "100."
+    },
+    {
+      "dX_l2": "0.75993",
+      "dX_max": "0.0172649",
+      "dt": "100.",
+      "step": 2,
+      "time": "200."
+    }
+  ]
+}

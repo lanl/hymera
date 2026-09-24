@@ -11,10 +11,12 @@
 // the public, perform publicly and display publicly, and to permit others to do so.
 //========================================================================================
 
-#ifndef MHD_H_
-#define MHD_H_
+/* NOTE: this header previously used the include guard MHD_H_, which is also the
+ * guard in mhd.h. Whichever was included second was silently skipped. */
+#ifndef DEFAULT_PETSC_OPTIONS_H_
+#define DEFAULT_PETSC_OPTIONS_H_
 
-PetscErrorCode default_petsc_options();
+PetscErrorCode default_petsc_options(void);
 
 #endif
 

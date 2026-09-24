@@ -138,6 +138,9 @@ typedef struct {
 
   PetscInt    debug;            /* Flag for displaying debug information */
   PetscInt    dump;             /* Flag for saving output in vtk files */
+  PetscInt    monitor;          /* Flag for running the per-step Monitor diagnostics
+                                   (step norms, div B, toroidal currents). Costs a
+                                   nested solve per step, so off by default. */
   PetscInt    prestep;          /* Flag for activating the prestep to approximate the runaway current contribution */
   Vec 	      X;
   Vec         X0;
@@ -154,6 +157,7 @@ typedef struct {
   PetscReal   *datag,*datapsi;/* Arrays containing the initial psi and G(psi) values */
   PetscInt    numz,numphi,numr;/* Lengths of arrays containing the initial B field components */
   PetscInt    numg,numpsi;/* Lengths of arrays containing the initial psi and G(psi) values */
+  PetscInt    numC;            /* Length of dataC; must equal Nr*Nphi*Nz */
   PetscInt    Ebc;             /* Type of boundary conditions for E field */
   PetscInt    savecoords;      /* Flag for saving coordinates of cell centers, face centers and edge centers in .m files: if 0 save option disabled, otherwise save enabled */
   PetscInt    savesol;         /* Flag for saving values of magnetic fields at face centers in .m files: if 0 the save option is disabled, otherwise the save option is enabled */
