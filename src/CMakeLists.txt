@@ -43,6 +43,7 @@ add_library(infrastructure
 
 target_link_libraries(infrastructure PUBLIC PkgConfig::PETSC)
 target_link_libraries(infrastructure PUBLIC HDF5::HDF5 Parthenon::parthenon hflux::hflux)
+target_link_libraries(infrastructure PUBLIC mhd_core)
 target_include_directories(infrastructure PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/mhd
