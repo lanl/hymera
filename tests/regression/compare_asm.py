@@ -20,6 +20,13 @@ SYMBOL = re.compile(r"^ADDR <([^>]+)>:")
 
 
 def split_functions(path: Path) -> dict[str, list[str]]:
+    """Split a normalized listing into per-symbol instruction blocks.
+
+    Alignment padding is dropped. The linker pads each function out to an
+    alignment boundary, so removing a function elsewhere in the object shifts how
+    much padding its neighbours receive. That is not a behavioural difference, and
+    counting it as one would make every deletion appear to change unrelated code.
+    """
     blocks: dict[str, list[str]] = {}
     current: str | None = None
     for line in path.read_text(errors="replace").splitlines():
@@ -29,7 +36,10 @@ def split_functions(path: Path) -> dict[str, list[str]]:
             blocks[current] = []
             continue
         if current is not None:
-            blocks[current].append(line.rstrip())
+            text = line.rstrip()
+            if text.strip() in ("nop", "nop\t", "udf\t#0"):
+                continue
+            blocks[current].append(text)
     return blocks
 
 

@@ -63,9 +63,33 @@ Proof, strongest first:
 3. **Symbol diff.** `nm --defined-only` and `nm -u`, sorted, before and after.
    Mandatory alongside 1 and 2 — it catches deleting more than intended.
 
-One expected complication: wrapping a call whose return value is currently
-discarded will abort if that call is *already* failing silently in normal
-operation. That is a **bug discovery, not a regression**. Report it and stop; do
+### Deleting lines changes surviving code unless you compensate
+
+PETSc's `PetscCall`, `SETERRQ` and `PetscAssert` macros expand `__LINE__` into the
+generated code as an immediate operand. Removing lines from a file therefore
+renumbers everything below and **changes the instructions of functions you did not
+touch**.
+
+This is not hypothetical. Deleting 22 dead functions from `ts_functions.c` and
+rebuilding shows 6 surviving functions with altered codegen; re-inserting
+`#line` directives at each deletion point restores all of them to identical.
+Verified in both directions.
+
+So for any `EXACT` deletion inside a file that uses those macros:
+
+- replace each removed block with a `#line <original-next-line>` directive, so
+  that every surviving line keeps its original number;
+- then prove it with the codegen check, which will catch the mistake if you
+  forget.
+
+A second, unrelated complication: the linker pads functions to alignment
+boundaries, so removing a function shifts how much `nop` padding its neighbours
+receive. That is not behavioural, and the comparison tool strips `nop` before
+diffing. Do not "fix" a padding difference by changing code.
+
+One expected complication with `PetscCall` insertion specifically: wrapping a call
+whose return value is currently discarded will abort if that call is *already*
+failing silently in normal operation. That is a **bug discovery, not a regression**. Report it and stop; do
 not suppress it. Expect this at least once in `mhd.c`'s construction path, which
 is entirely unchecked.
 
