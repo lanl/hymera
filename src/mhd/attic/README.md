@@ -71,3 +71,70 @@ constraints).
   `SampleShellPCSetUp_ApproximateDiag`.
 - **SampleShellPCDestroy_Diag** -- destroy/cleanup paired with
   `SampleShellPCSetUp_Diag`.
+
+## geometry.c
+
+`geometry_attic.c` contains 17 functions moved verbatim (byte-for-byte
+identical bodies) out of `../geometry.c`. Each had zero callers anywhere in
+`src/`, `tests/`, or the built objects (verified transitively -- several were
+only reachable from other already-dead functions), confirmed with the same
+codegen-identity check used for `ts_functions.c`.
+
+Two additional candidates from the same audit, `ComputeIsEBoundary` and
+`VertexToEdgeReconstruction_scalar`, are **not** moved: each still has a
+caller that is currently compiled into `mhd_core` (`ComputeIsEBoundary` is
+called from `FormDerivedGradDivergence` and `FormDerivedGradEtaDivergence` in
+`mimetic_operators.c`; `VertexToEdgeReconstruction_scalar` is called from
+geometry.c itself). Those callers are themselves unreachable dead code
+scheduled for a later quarantine pass on `mimetic_operators.c`, but as of
+this commit they still compile and link, so moving either function now would
+break the build. They remain in `geometry.c` until that later pass removes
+their callers.
+
+## What each function was
+
+Most of these are inter-stratum projection/reconstruction operators for the
+mimetic staggered grid (moving field data between vertex/edge/face/cell
+locations). Every `*Mat` variant listed below is the matrix-assembling twin
+of a live Vec-applying operator of the same base name (e.g.
+`VertexToEdgeReconstructionMat` assembles the matrix form of the live
+`VertexToEdgeReconstruction`); `EdgeToVertexProjection_Original` is a
+superseded earlier implementation of the live `EdgeToVertexProjection`.
+
+- **EBoundaryAdjusters** -- assembles Jacobian adjustment entries (`LM`,
+  `Offset`) for edge-located degrees of freedom on domain boundary faces.
+- **ComputeIsBBoundary** -- builds an `IS` of the B-field (face-located)
+  boundary degrees of freedom, via a dummy Jacobian/PC/KSP probe.
+- **ComputeIsCBoundary** -- builds an `IS` of the cell-centered boundary
+  degrees of freedom, via the same dummy Jacobian/PC/KSP probe pattern.
+- **ReadDataInVec** -- reads face/cell field data (`F_r2`, `F_phi2`, `F_z2`,
+  `C2`) from a secondary DM layout into vectors, for cross-mesh data import.
+- **CellToVertexProjectionVector** -- projects a cell-centered vector field
+  onto vertex locations (vector-field counterpart of the live
+  `CellToVertexProjectionScalar`).
+- **VertexToCellReconstruction** -- reconstructs a cell-centered field from
+  vertex-located values.
+- **VertexToEdgeReconstructionMat** -- matrix form of the live
+  `VertexToEdgeReconstruction` (vertex-to-edge reconstruction operator).
+- **VertexToFaceReconstructionMat** -- matrix form of the live
+  `VertexToFaceReconstruction` (vertex-to-face reconstruction operator).
+- **EdgeToCellReconstructionMat** -- matrix form of the live
+  `EdgeToCellReconstruction_{r,phi,z}` family (edge-to-cell reconstruction).
+- **FaceToCellReconstructionMat** -- matrix-assembling face-to-cell
+  reconstruction operator (no live Vec-applying analogue of this exact name
+  remains; superseded by other reconstruction paths).
+- **FaceToVertexProjectionMat** -- matrix form of the live
+  `FaceToVertexProjection` (face-to-vertex projection operator).
+- **EdgeToVertexProjection_Original** -- superseded earlier implementation of
+  the live `EdgeToVertexProjection` (edge-to-vertex projection).
+- **EdgeToVertexProjectionMat** -- matrix form of the live
+  `EdgeToVertexProjection` (edge-to-vertex projection operator).
+- **CellToFaceProjectionMat** -- matrix form of the live
+  `CellToFaceProjection` (cell-to-face projection operator).
+- **FromPetscVecToArray** -- unpacks a PETSc `Vec` (B-field and current
+  components) into flat C arrays (`gf_BR/BP/BZ`, `g_R/P/Z`) for interop
+  outside the DMStag machinery.
+- **CellCoordArrays** -- fills flat R/Z coordinate arrays (`vecCR`, `vecCZ`)
+  for cell centers.
+- **ScatterTest** -- diagnostic exercising a PETSc `VecScatter` between two
+  layouts; a standalone correctness probe, not part of any solve path.

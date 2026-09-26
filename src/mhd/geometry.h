@@ -30,37 +30,20 @@
 
 PetscScalar cyldistance(PetscScalar,PetscScalar,PetscScalar,PetscScalar,PetscScalar,PetscScalar);
 PetscScalar surface(PetscInt,PetscInt,PetscInt,DMStagStencilLocation,void*);
-PetscErrorCode EBoundaryAdjusters(TS,Mat,Mat,void*);
 PetscErrorCode ComputeIsEBoundary(TS,IS*,void*);
-PetscErrorCode ComputeIsBBoundary(TS,IS*,void*);
-PetscErrorCode ComputeIsCBoundary(TS,IS*,void*);
 PetscErrorCode SaveSolution(TS,Vec,void*);
 PetscErrorCode SaveCoordinates(TS,void*);
-PetscErrorCode ReadDataInVec(DM,Vec,Vec,Vec,Vec,void*);
 PetscErrorCode CellToVertexProjectionScalar(TS,Vec,Vec,void*);
-PetscErrorCode CellToVertexProjectionVector(TS,Vec,Vec,void*);
 PetscErrorCode EdgeToCellReconstruction_r(TS,Vec,Vec,void*);
 PetscErrorCode EdgeToCellReconstruction_phi(TS,Vec,Vec,void*);
 PetscErrorCode EdgeToCellReconstruction_z(TS,Vec,Vec,void*);
-PetscErrorCode VertexToCellReconstruction(TS,Vec,Vec,void*);
 PetscErrorCode VertexToEdgeReconstruction_scalar(TS,Vec,Vec,void*);
 PetscErrorCode VertexToEdgeReconstruction(TS,Vec,Vec,void*);
-PetscErrorCode VertexToEdgeReconstructionMat(TS,Mat,void*);
 PetscErrorCode VertexToFaceReconstruction(TS,Vec,Vec,void*);
-PetscErrorCode VertexToFaceReconstructionMat(TS,Mat,void*);
-PetscErrorCode EdgeToCellReconstructionMat(TS,Mat,void*);
-PetscErrorCode FaceToCellReconstructionMat(TS,Mat,void*);
 PetscErrorCode FaceToVertexProjection(TS,Vec,Vec,void*);
-PetscErrorCode FaceToVertexProjectionMat(TS,Mat,void*);
-PetscErrorCode EdgeToVertexProjection_Original(TS,Vec,Vec,void*);
 PetscErrorCode EdgeToVertexProjection(TS,Vec,Vec,void*);
-PetscErrorCode EdgeToVertexProjectionMat(TS,Mat,void*);
-PetscErrorCode CellToFaceProjectionMat(TS,Mat,void*);
 PetscErrorCode CellToFaceProjection(TS,Vec,Vec,void*);
 PetscErrorCode VertexCrossProduct(TS,Vec,Vec,Vec,void*);
-PetscErrorCode FromPetscVecToArray(TS,Vec,PetscScalar*,PetscScalar*,PetscScalar*,PetscScalar*,PetscScalar*,PetscScalar*,void*);
-PetscErrorCode CellCoordArrays(TS,PetscScalar*,PetscScalar*,void*);
-PetscErrorCode ScatterTest(TS,void*);
 
 PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivative);
 PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr);
