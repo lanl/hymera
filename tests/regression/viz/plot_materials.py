@@ -40,8 +40,10 @@ from mhd_data import (  # noqa: E402
     read_geometry_dat,
 )
 
-# Hardcoded in betaephi_isolcell at src/mhd/mass_matrix_coefficients.c:3426,
-# 3451, 3469. Reached on the production IC path via FormIFunction_InitializeEP_halo
+# Hardcoded in alphaecphi_isolcell (src/mhd/mass_matrix_coefficients.c:3361) at
+# lines 3426, 3451 and 3469. betaephi_isolcell (line 1326) is the edge-weighting
+# function that calls it; the literals are not in betaephi_isolcell itself.
+# Reached on the production IC path via FormIFunction_InitializeEP_halo
 # (src/mhd/ts_functions.c:10383). Grid-resolution dependent: at any other NR/NZ
 # these indices address different cells, or none.
 ISOLCELL_INDICES = [(28, 183), (13, 176), (47, 176)]
@@ -170,7 +172,7 @@ def main() -> int:
             color="#c44601", fontsize=8, fontweight="bold",
         )
     ax.plot([], [], "o", ms=9, mfc="none", mec="#c44601", mew=2.0,
-            label="betaephi_isolcell hardcoded cells")
+            label="alphaecphi_isolcell hardcoded cells")
     ax.legend(loc="upper right", fontsize=8, framealpha=0.95)
 
     out = outdir / "materials.png"

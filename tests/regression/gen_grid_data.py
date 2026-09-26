@@ -20,7 +20,7 @@ Two modes:
                    same data transposed). Preserves the tokamak layering, so the
                    code paths for all five materials stay exercised.
                    NOTE: this is NOT a physics-equivalent coarsening. The
-                   hardcoded cell indices in betaephi_isolcell
+                   hardcoded cell indices in alphaecphi_isolcell
                    (mass_matrix_coefficients.c:3426,3451,3469) address absolute
                    (er,ez) positions and will land on different cells, or none.
 
