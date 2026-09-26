@@ -23,8 +23,6 @@
 
 #include <mimetic_operators.h>
 
-#include "RunawayKineticSolverWrapper.h"
-
 
 PetscErrorCode DumpVelocity_Cell(TS ts, PetscInt step, Vec X, char* prefix, void * ptr) {
   User * user = (User * ) ptr;

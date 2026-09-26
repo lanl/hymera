@@ -13,6 +13,12 @@
 #
 # If any of those change, this proof is void. The script asserts 1 and 3 itself.
 #
+# LIMITATION: this compares instructions, not data. Changing a string literal --
+# for example a PetscLogEventRegister label -- alters .rodata while leaving every
+# instruction identical, so it passes. That is correct for behaviour preservation
+# (the computed result is unchanged) but means this check alone does not prove a
+# diff touched no data. Verify string changes separately with `strings`.
+#
 # Usage:
 #   codegen_identity.sh snapshot <name>     # record the current object code
 #   codegen_identity.sh compare  <name>     # rebuild and diff against it

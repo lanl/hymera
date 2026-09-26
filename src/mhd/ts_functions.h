@@ -49,7 +49,6 @@ PetscErrorCode FormIFunction_DampingV(TS,PetscReal,Vec,Vec,Vec,void*); /* This I
 PetscErrorCode FormRHSFunction_BImplicit(TS,PetscReal,Vec,Vec,void*); /* This RHSFunction contains only zero entries */
 PetscErrorCode FormInitialSolution(TS,Vec,void*); /* This routine sets up the initial solution X_0 from input data files containing the B field values on face centers and the levelset function on cell centers */
 PetscErrorCode FormExactSolution(PetscReal,TS,Vec*,void*); /* This routine sets up the vector which will be used to set the boundary conditions inside FormIFunction_DampingV */
-PetscErrorCode Update_J_RE(TS);
 PetscErrorCode Monitor(TS,PetscInt,PetscReal,Vec,void*);
 PetscErrorCode FormDummyIJacobian4(TS,Vec,Vec,PetscReal,Mat,Mat,void*); /* When used with PCFieldSplitSetDetectSaddlePoint, this dummy jacobian gives a field splitting where the electrostatic potential Phi is first and n, tau, B and V fields are last */
 PetscErrorCode SampleShellPCSetUp(PC); /* This routine sets up a Shell Preconditioner that has the same effect as a 2-field fieldsplit preconditioner where the velocity is split from the remaining unknowns */

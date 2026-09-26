@@ -8628,7 +8628,7 @@ PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, 
     PetscClassId   classid;
 
     PetscClassIdRegister("class name",&classid);
-    PetscLogEventRegister("FromPetscVecToArray_EfieldCell",classid,&USER_EVENT);
+    PetscLogEventRegister("getEJArray",classid,&USER_EVENT);
     PetscLogEventBegin(USER_EVENT,0,0,0,0);
 
     User           *user = (User*)ptr;

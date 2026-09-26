@@ -58,8 +58,6 @@ PetscErrorCode EdgeToVertexProjectionMat(TS,Mat,void*);
 PetscErrorCode CellToFaceProjectionMat(TS,Mat,void*);
 PetscErrorCode CellToFaceProjection(TS,Vec,Vec,void*);
 PetscErrorCode VertexCrossProduct(TS,Vec,Vec,Vec,void*);
-PetscErrorCode Computepsi(TS,PetscInt,Vec,void*);
-PetscErrorCode FromPetscVecToArray_EfieldCell(TS,Vec,PetscScalar*,PetscScalar*,PetscScalar*,void*);
 PetscErrorCode FromPetscVecToArray(TS,Vec,PetscScalar*,PetscScalar*,PetscScalar*,PetscScalar*,PetscScalar*,PetscScalar*,void*);
 PetscErrorCode CellCoordArrays(TS,PetscScalar*,PetscScalar*,void*);
 PetscErrorCode ScatterTest(TS,void*);
