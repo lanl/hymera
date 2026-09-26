@@ -19,9 +19,25 @@
 # (the computed result is unchanged) but means this check alone does not prove a
 # diff touched no data. Verify string changes separately with `strings`.
 #
+# SECOND LIMITATION, and the one that actually bites: references into .rodata
+# carry no local symbol, so objdump annotates them with the nearest PRECEDING
+# defined function symbol. Deleting the first function in an object therefore
+# relabels every such reference in every surviving function, e.g.
+#   adrp x0, <FormMaterialPropertiesMatrix>  ->  adrp x0, <FormDiscreteDivergence>
+# while the encoded instruction bytes are unchanged. That shows up here as a
+# spurious "CHANGED" on many functions at once, all with identical instruction
+# counts and all differing only in that annotation.
+#
+# When that pattern appears, settle it with `rawbytes`, which compares the encoded
+# instruction bytes and ignores annotation entirely. Do NOT loosen the normalizer
+# to make the symptom go away: `bl <name>` call targets must stay comparable, and
+# blurring symbol names would hide a genuinely retargeted call.
+#
 # Usage:
 #   codegen_identity.sh snapshot <name>     # record the current object code
 #   codegen_identity.sh compare  <name>     # rebuild and diff against it
+#   codegen_identity.sh rawbytes <name> <object> <function>
+#                                           # compare encoded bytes of one function
 #
 # Typical session:
 #   ./tests/regression/codegen_identity.sh snapshot before
@@ -165,8 +181,62 @@ compare() {
   return $fail
 }
 
+# Compare the encoded instruction bytes of one function, ignoring all objdump
+# annotation. Use this to settle a suspected annotation artifact: if the byte
+# streams match, the machine code is identical regardless of what labels objdump
+# printed.
+#
+# Needs the pre-change object, which `snapshot` does not keep (it stores only
+# disassembly), so this reconstructs it by stashing the working tree, rebuilding,
+# extracting, then restoring. That means it must be run with a clean index.
+rawbytes() {
+  local obj="${3:-}" fn="${4:-}"
+  [ -n "$obj" ] && [ -n "$fn" ] || {
+    echo "usage: codegen_identity.sh rawbytes <name> <object-basename> <function>" >&2
+    exit 2
+  }
+
+  local target="$OBJDIR/$obj.o"
+  [ -f "$target" ] || { echo "no such object: $target" >&2; exit 1; }
+
+  extract_bytes() {
+    objdump -d "$1" \
+      | awk -v f="<$2>:" '$0 ~ f {go=1; next} go && /^$/ {exit} go' \
+      | sed -E 's/^\s*[0-9a-f]+:\s+//' \
+      | awk '{print $1}'
+  }
+
+  local after; after="$(mktemp)"
+  extract_bytes "$target" "$fn" > "$after"
+
+  echo "stashing working tree to rebuild the pre-change object"
+  local stashed=0
+  if ! git -C "$REPO" diff --quiet || ! git -C "$REPO" diff --cached --quiet; then
+    git -C "$REPO" stash push -q --include-untracked -m "codegen_identity rawbytes" \
+      && stashed=1
+  fi
+  cmake --build "$REPO/build" --target mhd_core -j "$(nproc)" >/dev/null
+
+  local before; before="$(mktemp)"
+  extract_bytes "$target" "$fn" > "$before"
+
+  if [ $stashed -eq 1 ]; then
+    git -C "$REPO" stash pop -q
+    cmake --build "$REPO/build" --target mhd_core -j "$(nproc)" >/dev/null
+  fi
+
+  local nb na nd
+  nb=$(wc -l < "$before"); na=$(wc -l < "$after")
+  nd=$(diff "$before" "$after" | grep -c '^[<>]' || true)
+  echo "$fn in $obj.o: $nb -> $na instructions, $nd differing encoded bytes"
+  rm -f "$before" "$after"
+  [ "$nd" -eq 0 ] && echo "IDENTICAL machine code" || echo "MACHINE CODE DIFFERS"
+  [ "$nd" -eq 0 ]
+}
+
 case "$MODE" in
   snapshot) snapshot ;;
   compare)  compare ;;
+  rawbytes) rawbytes "$@" ;;
   *) echo "unknown mode: $MODE" >&2; exit 2 ;;
 esac

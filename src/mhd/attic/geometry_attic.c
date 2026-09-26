@@ -5105,3 +5105,630 @@ PetscErrorCode ScatterTest(TS ts, void *ptr)
 
   return(0);
 }
+
+PetscErrorCode ComputeIsEBoundary(TS ts, IS * isE_boundary, void * ptr) {
+
+  User * user = (User * ) ptr;
+  DM da;
+  PetscInt startr, startphi, startz, nr, nphi, nz;
+  PetscInt N[3], er, ephi, ez, n = 1;
+
+  PetscReal t;
+  Vec dummyX;
+  Mat Jpre;
+  PC dummypc;
+  KSP dummyksp, * subksp;
+  PetscErrorCode ierr = 0;
+
+  TSGetDM(ts, & da);
+  DMCreateGlobalVector(da, & dummyX);
+  FormInitialSolution(ts, dummyX, user);
+  TSGetTime(ts, & t);
+  DMCreateMatrix(da, & Jpre);
+  MatZeroEntries(Jpre);
+
+  DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
+  DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+
+  /* Loop over all local elements */
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+        DMStagStencil row, col[1];
+        PetscScalar valJ[1];
+        PetscInt nEntries;
+
+        /* The edges are oriented in the directions of unit vectors: e_r, e_phi and e_z */
+
+        /* E field part */
+
+        if (er == 0 || ez == 0) {
+          /* Equation on the back or left boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = BACK_LEFT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = BACK_LEFT;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if ((user -> phibtype && (er == 0)) || (((er == 0 || ephi == 0)) && !(user -> phibtype))) {
+          /* Equation on the left or down boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = DOWN_LEFT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = DOWN_LEFT;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if ((user -> phibtype && (ez == 0)) || (((ephi == 0 || ez == 0)) && !(user -> phibtype))) {
+          /* Equation on the back or down boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = BACK_DOWN;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = BACK_DOWN;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if (er == N[0] - 1) {
+          /* Equation on the right boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = BACK_RIGHT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = BACK_RIGHT;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+
+          /* Equation on the right boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = DOWN_RIGHT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = DOWN_RIGHT;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if (ephi == N[1] - 1 && !(user -> phibtype)) {
+          /* Equation on the up boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = BACK_UP;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = BACK_UP;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+
+          /* Equation on the up boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = UP_LEFT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = UP_LEFT;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if (ez == N[2] - 1) {
+          /* Equation on the front boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = FRONT_LEFT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = FRONT_LEFT;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+
+          /* Equation on the front boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = FRONT_DOWN;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = FRONT_DOWN;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if (er == N[0] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
+          /* Equation on the right and up boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = UP_RIGHT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = UP_RIGHT;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if (ephi == N[1] - 1 && ez == N[2] - 1 && !(user -> phibtype)) {
+          /* Equation on the right and up boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = FRONT_UP;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = FRONT_UP;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if (er == N[0] - 1 && ez == N[2] - 1) {
+          /* Equation on the front and right boundary */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = FRONT_RIGHT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = FRONT_RIGHT;
+          col[0].c = 0;
+          valJ[0] = 1.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if ((user -> phibtype && !(er == 0)) || ((!(er == 0 || ephi == 0)) && !(user -> phibtype))) {
+          /* Equation on internal down left edge */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = DOWN_LEFT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = DOWN_LEFT;
+          col[0].c = 0;
+          valJ[0] = 0.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if ((user -> phibtype && !(ez == 0)) || ((!(ez == 0 || ephi == 0)) && !(user -> phibtype))) {
+          /* Equation on internal back down edge */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = BACK_DOWN;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = BACK_DOWN;
+          col[0].c = 0;
+          valJ[0] = 0.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if (!(er == 0 || ez == 0)) {
+          /* Equation on internal back left edge */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = BACK_LEFT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = BACK_LEFT;
+          col[0].c = 0;
+          valJ[0] = 0.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        /* B field part */
+
+        /*if (!(er == 0)){*/
+        /* Equation on left face */
+        nEntries = 1;
+        row.i = er;
+        row.j = ephi;
+        row.k = ez;
+        row.loc = LEFT;
+        row.c = 0;
+
+        col[0].i = er;
+        col[0].j = ephi;
+        col[0].k = ez;
+        col[0].loc = LEFT;
+        col[0].c = 0;
+        valJ[0] = 0.0;
+
+        DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        /*}*/
+
+        /*if(user->phibtype || (ephi != 0 && !(user->phibtype)) ){*/
+        /* Equation on down face */
+        nEntries = 1;
+        row.i = er;
+        row.j = ephi;
+        row.k = ez;
+        row.loc = DOWN;
+        row.c = 0;
+
+        col[0].i = er;
+        col[0].j = ephi;
+        col[0].k = ez;
+        col[0].loc = DOWN;
+        col[0].c = 0;
+        valJ[0] = 0.0;
+
+        DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        /*}*/
+
+        /*if (!(ez == 0)){*/
+        /* Equation on back face */
+        nEntries = 1;
+        row.i = er;
+        row.j = ephi;
+        row.k = ez;
+        row.loc = BACK;
+        row.c = 0;
+
+        col[0].i = er;
+        col[0].j = ephi;
+        col[0].k = ez;
+        col[0].loc = BACK;
+        col[0].c = 0;
+        valJ[0] = 0.0;
+
+        DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        /*}*/
+
+        if (er == N[0] - 1) {
+          /* Equation on right boundary face */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = RIGHT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = RIGHT;
+          col[0].c = 0;
+          valJ[0] = 0.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if (ephi == N[1] - 1 && !(user -> phibtype)) {
+          /* Equation on up boundary face */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = UP;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = UP;
+          col[0].c = 0;
+          valJ[0] = 0.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+        if (ez == N[2] - 1) {
+          /* Equation on front boundary face */
+          nEntries = 1;
+          row.i = er;
+          row.j = ephi;
+          row.k = ez;
+          row.loc = FRONT;
+          row.c = 0;
+
+          col[0].i = er;
+          col[0].j = ephi;
+          col[0].k = ez;
+          col[0].loc = FRONT;
+          col[0].c = 0;
+          valJ[0] = 0.0;
+
+          DMStagMatSetValuesStencil(da, Jpre, 1, & row, nEntries, col, valJ, INSERT_VALUES);
+        }
+
+      }
+    }
+  }
+
+  MatAssemblyBegin(Jpre, MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(Jpre, MAT_FINAL_ASSEMBLY);
+
+  if (user -> debug) {
+    PetscPrintf(PETSC_COMM_WORLD, "Jpre:\n");
+    MatView(Jpre, PETSC_VIEWER_STDOUT_WORLD);
+  }
+
+  KSPCreate(PETSC_COMM_WORLD, & dummyksp);
+  KSPSetFromOptions(dummyksp);
+  KSPSetOperators(dummyksp, Jpre, Jpre);
+  PetscBarrier((PetscObject)Jpre);
+  MatDestroy( & Jpre);
+  KSPGetPC(dummyksp, & dummypc);
+  PCSetType(dummypc, PCFIELDSPLIT);
+  PCFieldSplitSetDetectSaddlePoint(dummypc, PETSC_TRUE);
+  PCSetUp(dummypc);
+  PCFieldSplitSetSchurFactType(dummypc, PC_FIELDSPLIT_SCHUR_FACT_FULL);
+  PCFieldSplitSetSchurPre(dummypc, PC_FIELDSPLIT_SCHUR_PRE_SELFP, NULL);
+  KSPSetUp(dummyksp);
+  KSPSetTolerances(dummyksp, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT, 1); //use 1 outer iteration for the dummy solve
+  PCFieldSplitGetSubKSP(dummypc, & n, & subksp);
+  KSPSetTolerances(subksp[1], PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT, 1); //use 1 inner iteration maximum for the dummy solve
+  KSPSolve(dummyksp, dummyX, dummyX);
+  PetscBarrier((PetscObject)dummyX);
+  VecDestroy( & dummyX);
+  IS isdup;
+  PCFieldSplitGetISByIndex(dummypc, 0, & isdup);
+  ISDuplicate(isdup, isE_boundary);
+  PetscBarrier((PetscObject)dummyksp);
+  KSPDestroy( & dummyksp);
+
+  return (0);
+}
+
+PetscErrorCode VertexToEdgeReconstruction_scalar(TS ts, Vec V, Vec E, void *ptr)
+{
+  PetscLogEvent  USER_EVENT;
+  PetscClassId   classid;
+
+  PetscClassIdRegister("class name",&classid);
+  PetscLogEventRegister("VertexToEdgeReconstruction_scalar",classid,&USER_EVENT);
+  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+
+    User           *user = (User*)ptr;
+    DM             da, coordDA = user->coorda;
+    Vec            VLocal;
+    PetscInt startr, startphi, startz, nr, nphi, nz;
+    PetscInt N[3], er, ephi, ez, n = 1;
+
+    PetscErrorCode ierr = 0;
+
+    VecZeroEntries(E);
+    TSGetDM(ts, & da);
+    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
+    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+    DMGetLocalVector(da,&VLocal);
+    DMGlobalToLocal(da,V,INSERT_VALUES,VLocal);
+
+    /* Loop over all local elements */
+    for (ez = startz; ez < startz + nz; ++ez) {
+      for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+        for (er = startr; er < startr + nr; ++er) {
+          DMStagStencil from[8], to[12];
+          PetscScalar valFrom[8], valTo[12];
+
+          from[0].i = er;
+          from[0].j = ephi;
+          from[0].k = ez;
+          from[0].loc = FRONT_UP_RIGHT;
+          from[0].c = 3;
+          from[1].i = er;
+          from[1].j = ephi;
+          from[1].k = ez;
+          from[1].loc = FRONT_UP_LEFT;
+          from[1].c = 3;
+          from[2].i = er;
+          from[2].j = ephi;
+          from[2].k = ez;
+          from[2].loc = FRONT_DOWN_LEFT;
+          from[2].c = 3;
+          from[3].i = er;
+          from[3].j = ephi;
+          from[3].k = ez;
+          from[3].loc = FRONT_DOWN_RIGHT;
+          from[3].c = 3;
+          from[4].i = er;
+          from[4].j = ephi;
+          from[4].k = ez;
+          from[4].loc = BACK_UP_RIGHT;
+          from[4].c = 3;
+          from[5].i = er;
+          from[5].j = ephi;
+          from[5].k = ez;
+          from[5].loc = BACK_UP_LEFT;
+          from[5].c = 3;
+          from[6].i = er;
+          from[6].j = ephi;
+          from[6].k = ez;
+          from[6].loc = BACK_DOWN_LEFT;
+          from[6].c = 3;
+          from[7].i = er;
+          from[7].j = ephi;
+          from[7].k = ez;
+          from[7].loc = BACK_DOWN_RIGHT;
+          from[7].c = 3;
+          DMStagVecGetValuesStencil(da, VLocal, 8, from, valFrom);
+          to[0].i = er;
+          to[0].j = ephi;
+          to[0].k = ez;
+          to[0].loc = FRONT_UP;
+          to[0].c = 0;
+          valTo[0] = 0.5 * (valFrom[0] + valFrom[1]);
+          to[1].i = er;
+          to[1].j = ephi;
+          to[1].k = ez;
+          to[1].loc = FRONT_LEFT;
+          to[1].c = 0;
+          valTo[1] = 0.5 * (valFrom[1] + valFrom[2]);
+          to[2].i = er;
+          to[2].j = ephi;
+          to[2].k = ez;
+          to[2].loc = FRONT_DOWN;
+          to[2].c = 0;
+          valTo[2] = 0.5 * (valFrom[2] + valFrom[3]);
+          to[3].i = er;
+          to[3].j = ephi;
+          to[3].k = ez;
+          to[3].loc = FRONT_RIGHT;
+          to[3].c = 0;
+          valTo[3] = 0.5 * (valFrom[0] + valFrom[3]);
+          to[4].i = er;
+          to[4].j = ephi;
+          to[4].k = ez;
+          to[4].loc = BACK_UP;
+          to[4].c = 0;
+          valTo[4] = 0.5 * (valFrom[4] + valFrom[5]);
+          to[5].i = er;
+          to[5].j = ephi;
+          to[5].k = ez;
+          to[5].loc = BACK_LEFT;
+          to[5].c = 0;
+          valTo[5] = 0.5 * (valFrom[5] + valFrom[6]);
+          to[6].i = er;
+          to[6].j = ephi;
+          to[6].k = ez;
+          to[6].loc = BACK_DOWN;
+          to[6].c = 0;
+          valTo[6] = 0.5 * (valFrom[6] + valFrom[7]);
+          to[7].i = er;
+          to[7].j = ephi;
+          to[7].k = ez;
+          to[7].loc = BACK_RIGHT;
+          to[7].c = 0;
+          valTo[7] = 0.5 * (valFrom[4] + valFrom[7]);
+          to[8].i = er;
+          to[8].j = ephi;
+          to[8].k = ez;
+          to[8].loc = UP_RIGHT;
+          to[8].c = 0;
+          valTo[8] = 0.5 * (valFrom[0] + valFrom[4]);
+          to[9].i = er;
+          to[9].j = ephi;
+          to[9].k = ez;
+          to[9].loc = UP_LEFT;
+          to[9].c = 0;
+          valTo[9] = 0.5 * (valFrom[1] + valFrom[5]);
+          to[10].i = er;
+          to[10].j = ephi;
+          to[10].k = ez;
+          to[10].loc = DOWN_RIGHT;
+          to[10].c = 0;
+          valTo[10] = 0.5 * (valFrom[3] + valFrom[7]);
+          to[11].i = er;
+          to[11].j = ephi;
+          to[11].k = ez;
+          to[11].loc = DOWN_LEFT;
+          to[11].c = 0;
+          valTo[11] = 0.5 * (valFrom[2] + valFrom[6]);
+          DMStagVecSetValuesStencil(da, E, 12, to, valTo, INSERT_VALUES);
+
+        }
+      }
+    }
+    VecAssemblyBegin(E);
+    VecAssemblyEnd(E);
+    DMRestoreLocalVector(da,&VLocal);
+
+    PetscLogEventEnd(USER_EVENT,0,0,0,0);
+    return(0);
+}

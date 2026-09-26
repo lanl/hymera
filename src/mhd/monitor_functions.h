@@ -33,17 +33,11 @@
 
 PetscErrorCode DumpVelocity_Cell(TS,PetscInt,Vec,char*,void*);
 PetscErrorCode DumpSolution_Cell(TS,PetscInt,Vec,void*);
-PetscErrorCode DumpSolution(TS,PetscInt,Vec,void*);
 PetscErrorCode DumpError(TS,PetscInt,Vec,void*);
 PetscErrorCode DumpDivergence(TS,DM,PetscInt,Vec,void*);
 PetscErrorCode DumpLevelSet(TS,void*);
 PetscErrorCode SaveIntermediateSolution(TS,PetscInt,PetscReal,Vec,void*);
 PetscErrorCode ComputeCurrent(TS,Vec,void*);
-PetscErrorCode Dump1stVertexField(TS,PetscInt,Vec,void*);
 PetscErrorCode DumpEdgeField(TS,PetscInt,Vec,void*);
-PetscErrorCode multiplybyR(PetscScalar*,const PetscScalar*,const int);
-PetscScalar*   createHermiteFD(int*,int*,const PetscScalar*,const PetscScalar*, const int,const int,const int,const int,const int);
-PetscErrorCode getHermiteDataFD(const PetscScalar*,const int,const int,const int,PetscScalar*,const int,const int,const int,const int);
-PetscErrorCode DumpPsi_Cell(TS,PetscInt,PetscScalar*,void*);
 
 #endif /* defined(MONITOR_FUNCTIONS_H) */

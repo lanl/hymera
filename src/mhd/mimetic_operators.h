@@ -28,28 +28,16 @@
 #include <unistd.h>
 #include <petsc/private/dmstagimpl.h>
 
-PetscErrorCode FormMaterialPropertiesMatrix(TS,Vec,void*);
-PetscErrorCode FormFaceMassMatrix(TS,Vec,void*);
-PetscErrorCode FormEdgeMassMatrix(TS,Vec,void*);
 PetscErrorCode FormDiscreteDivergence(TS,DM,Mat,Vec,Vec,void*);
-PetscErrorCode FormGradDerivedDivergence(TS,Mat,void*);
-PetscErrorCode FormDerivedGradDivergence(TS,Mat,void*);
-PetscErrorCode FormDerivedGradEtaDivergence(TS,Mat,void*);
-PetscErrorCode FormDerivedDivergence(TS,Mat,void*);
-PetscErrorCode FormDerivedGradient(TS,Mat,Mat,void*);
-PetscErrorCode FormDiscreteGradient(TS,Mat,void*);
 PetscErrorCode FormPrimaryCurl(TS,Vec,Vec,void*);
 PetscErrorCode FormDerivedCurl(TS,Vec,Vec,void*);
 PetscErrorCode FormDerivedCurlnores(TS,Vec,Vec,void*);
 PetscErrorCode FormDerivedCurlnomp(TS,Vec,Vec,void*);
 PetscErrorCode FormSourceTermPotential(TS,PetscReal,Vec,void*);
-PetscErrorCode FormDerivedCurlExt(Vec,Vec,void*);
-PetscErrorCode FormDiscreteGradientEP_tilde(TS,Vec,Vec,void*);
 PetscErrorCode FormDiscreteGradientEP(TS,Mat,Vec,Vec,void*);
 PetscErrorCode FormDiscreteGradientEP_noMat(TS,Vec,Vec,void*);
 PetscErrorCode FormDiscreteGradientVectorField(TS,Vec,Vec,Vec,Vec,void*);
 PetscErrorCode ApplyDerivedDivergence(TS,Vec,Vec,void*);
-PetscErrorCode ApplyDeltastar(TS,Vec,Vec,void*);
 PetscErrorCode ApplyDeltastar2(TS,Vec,Vec,void*);
 PetscErrorCode ApplyVectorLaplacian(TS,Vec,Vec,void*);
 PetscErrorCode FormElectricField(TS,Vec,Vec,void*); /* This routine computes the electric field E and sets it on the edge values of output vector F. It uses tau field and electrostatic potential from input X: E = tau + \nabla (EP). */

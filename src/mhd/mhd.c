@@ -974,47 +974,9 @@ PetscErrorCode mhd_loadsolution(User *user, const char *filename)
     PetscFunctionReturn(PETSC_SUCCESS);
 }
 
-PetscErrorCode mhd_save_hdf5(User *user, const char *filename)
-{
-    PetscViewer viewer;
-    Vec X;
+#line 997
 
-    PetscFunctionBeginUser;
-
-    PetscCall(TSGetSolution(user->ts, &X));
-
-    PetscCall(PetscViewerHDF5Open(PETSC_COMM_WORLD,
-                                  filename,
-                                  FILE_MODE_WRITE,
-                                  &viewer));
-
-    PetscCall(stag_vec_io(user, viewer, X, PETSC_FALSE));
-
-    PetscCall(PetscViewerDestroy(&viewer));
-
-    PetscFunctionReturn(PETSC_SUCCESS);
-}
-
-PetscErrorCode mhd_load_hdf5(User *user, const char *filename)
-{
-    PetscViewer viewer;
-    Vec X;
-
-    PetscFunctionBeginUser;
-
-    PetscCall(TSGetSolution(user->ts, &X));
-
-    PetscCall(PetscViewerHDF5Open(PETSC_COMM_WORLD,
-                                  filename,
-                                  FILE_MODE_READ,
-                                  &viewer));
-
-    PetscCall(stag_vec_io(user, viewer, X, PETSC_TRUE));
-
-    PetscCall(PetscViewerDestroy(&viewer));
-
-    PetscFunctionReturn(PETSC_SUCCESS);
-}
+#line 1018
 
 void view4d_zero(view4d_t v) {
   for (size_t i = 0; i < v.dim0 * v.dim1 * v.dim2 * v.dim3; ++i)

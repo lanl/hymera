@@ -74,22 +74,27 @@ constraints).
 
 ## geometry.c
 
-`geometry_attic.c` contains 17 functions moved verbatim (byte-for-byte
-identical bodies) out of `../geometry.c`. Each had zero callers anywhere in
-`src/`, `tests/`, or the built objects (verified transitively -- several were
-only reachable from other already-dead functions), confirmed with the same
-codegen-identity check used for `ts_functions.c`.
+`geometry_attic.c` contains 19 functions moved verbatim (byte-for-byte
+identical bodies) out of `../geometry.c`. The first 17 had zero callers
+anywhere in `src/`, `tests/`, or the built objects (verified transitively --
+several were only reachable from other already-dead functions), confirmed
+with the same codegen-identity check used for `ts_functions.c`.
 
-Two additional candidates from the same audit, `ComputeIsEBoundary` and
-`VertexToEdgeReconstruction_scalar`, are **not** moved: each still has a
-caller that is currently compiled into `mhd_core` (`ComputeIsEBoundary` is
-called from `FormDerivedGradDivergence` and `FormDerivedGradEtaDivergence` in
-`mimetic_operators.c`; `VertexToEdgeReconstruction_scalar` is called from
-geometry.c itself). Those callers are themselves unreachable dead code
-scheduled for a later quarantine pass on `mimetic_operators.c`, but as of
-this commit they still compile and link, so moving either function now would
-break the build. They remain in `geometry.c` until that later pass removes
-their callers.
+The remaining two, `ComputeIsEBoundary` and `VertexToEdgeReconstruction_scalar`,
+were held back at that time because each still had a caller compiled into
+`mhd_core` (`ComputeIsEBoundary` was called from `FormDerivedGradDivergence`
+and `FormDerivedGradEtaDivergence` in `mimetic_operators.c`;
+`VertexToEdgeReconstruction_scalar` was called from geometry.c itself, inside
+`ComputeIsEBoundary`). The later quarantine pass on `mimetic_operators.c`
+(see below) removed both callers as unreachable, so this commit re-verified
+(via `nm -u`) that neither function has any remaining caller and appended
+them to this file.
+
+- **ComputeIsEBoundary** -- builds an `IS` of edge-located boundary degrees of
+  freedom, via a dummy Jacobian/PC/KSP probe (the edge-DOF analogue of the
+  already-quarantined `ComputeIsBBoundary`/`ComputeIsCBoundary`).
+- **VertexToEdgeReconstruction_scalar** -- scalar-field variant of the live
+  `VertexToEdgeReconstruction` (vertex-to-edge reconstruction operator).
 
 ## What each function was
 
@@ -138,3 +143,104 @@ superseded earlier implementation of the live `EdgeToVertexProjection`.
   for cell centers.
 - **ScatterTest** -- diagnostic exercising a PETSc `VecScatter` between two
   layouts; a standalone correctness probe, not part of any solve path.
+
+## mimetic_operators.c
+
+`mimetic_operators_attic.c` contains 12 functions moved verbatim (byte-for-byte
+identical bodies) out of `../mimetic_operators.c`. Each had zero callers
+anywhere in `src/`, `tests/`, or the built objects (verified with `nm`,
+several only reachable from other functions in this same group), confirmed
+with the same codegen-identity check used for `ts_functions.c` and
+`geometry.c`.
+
+One candidate from the original task list, `ApplyDeltastar2`, was **not**
+moved: it is still called from `FormIFunction_Initializepsi` in
+`../ts_functions.c` (a live, currently-compiled function that this task was
+not scoped to touch), so moving it breaks the `mhd_core` build. It remains
+declared in `mimetic_operators.h` and defined in `mimetic_operators.c`.
+
+The divergence/gradient family below (`FormGradDerivedDivergence`,
+`FormDerivedGradDivergence`, `FormDerivedGradEtaDivergence`,
+`FormDerivedDivergence`, `FormDerivedGradient`, `FormDiscreteGradient`) are
+alternative discrete mimetic divergence/gradient operator formulations,
+distinct from the live `FormDiscreteDivergence`/`ApplyDerivedDivergence`/
+`ApplyVectorLaplacian` path. `FormDerivedCurlExt` is a variant of the live
+`FormDerivedCurl`/`FormDerivedCurlnores`/`FormDerivedCurlnomp` family (note
+its different signature: it takes `Vec,Vec,void*` with no `TS` argument).
+
+- **FormMaterialPropertiesMatrix** -- assembles a diagonal matrix of material
+  property coefficients (`MPdiag`) on cell centers.
+- **FormFaceMassMatrix** -- assembles the diagonal face-located mass matrix
+  (`Mfdiag`) for the mimetic B-field discretization.
+- **FormEdgeMassMatrix** -- assembles the diagonal edge-located mass matrix
+  (`Mediag`) for the mimetic E/tau-field discretization.
+- **FormGradDerivedDivergence** -- assembles a "gradient of derived
+  divergence" operator matrix (`GD`); calls the now-attic
+  `FormDerivedDivergence` internally.
+- **FormDerivedGradDivergence** -- assembles a "derived gradient of
+  divergence" operator matrix (`GD`), a different discrete composition than
+  `FormGradDerivedDivergence`.
+- **FormDerivedGradEtaDivergence** -- as `FormDerivedGradDivergence`, but with
+  an `eta`-weighted (resistivity-weighted) divergence term.
+- **FormDerivedDivergence** -- assembles the derived discrete divergence
+  operator matrix (`D`); an alternate matrix-assembling formulation next to
+  the live `ApplyDerivedDivergence`.
+- **FormDerivedGradient** -- assembles both the derived divergence (`D`) and
+  derived gradient (`G`) operator matrices together in one pass.
+- **FormDiscreteGradient** -- assembles the discrete primary gradient
+  operator matrix (`G`).
+- **FormDerivedCurlExt** -- vector-field variant of the live
+  `FormDerivedCurl`/`FormDerivedCurlnores`/`FormDerivedCurlnomp` family,
+  taking `X`/`F` directly with no `TS`/`user` context argument.
+- **FormDiscreteGradientEP_tilde** -- computes `(1/r) \tilde{\nabla}(EP)`, a
+  variant of the live `FormDiscreteGradientEP`/`FormDiscreteGradientEP_noMat`
+  used only by the now-attic `ApplyDeltastar`.
+- **ApplyDeltastar** -- applies the discrete `Delta*` operator to `EP` via
+  `FormDiscreteGradientEP_tilde` followed by `ApplyDerivedDivergence`; a
+  composed-operator alternative to the live `ApplyDeltastar2`.
+
+## monitor_functions.c
+
+`monitor_functions_attic.c` contains 6 functions moved verbatim (byte-for-byte
+identical bodies) out of `../monitor_functions.c`. `DumpSolution` and
+`Dump1stVertexField` are referenced only from commented-out call sites in
+`../ts_functions.c`; `getHermiteDataFD`'s only caller is `createHermiteFD`,
+which is itself dead; `createHermiteFD` and `multiplybyR` have zero callers
+anywhere. Confirmed with the same codegen-identity check used elsewhere in
+this directory.
+
+- **DumpSolution** -- writes a full solution dump (B, V, EP, tau, n_i, and
+  derived fields) to disk; superseded by the live `DumpSolution_Cell`.
+- **Dump1stVertexField** -- writes a single vertex-located vector field to
+  disk, e.g. for the `CurlBxB` diagnostic referenced (commented out) in
+  `FormDummyIJacobian4`.
+- **DumpPsi_Cell** -- writes the poloidal flux function `psi` (cell-centered)
+  to disk.
+- **getHermiteDataFD** -- fills a per-cell Hermite finite-difference stencil
+  data block from a flat field array; called only by `createHermiteFD`.
+- **createHermiteFD** -- builds a Hermite finite-difference interpolant table
+  over the full mesh, cell by cell, by calling `getHermiteDataFD`.
+- **multiplybyR** -- scales a flat field array by `R` element-wise.
+
+## mhd.c
+
+`mhd_attic.c` contains 2 functions moved verbatim (byte-for-byte identical
+bodies) out of `../mhd.c`. Neither `mhd_save_hdf5` nor `mhd_load_hdf5` is
+declared in `mhd.h`, and neither has any caller anywhere in `src/` or
+`tests/` (confirmed with `grep`/`nm`). Structurally each is byte-identical in
+shape to the live `mhd_savesolution`/`mhd_loadsolution` except for using
+`PetscViewerHDF5Open` (HDF5-backed I/O) in place of `PetscViewerBinaryOpen`
+(binary-file I/O).
+
+- **mhd_save_hdf5** -- saves the current TS solution vector to an HDF5 file
+  via `stag_vec_io`, the HDF5-viewer counterpart of the live
+  `mhd_savesolution`.
+- **mhd_load_hdf5** -- loads a TS solution vector from an HDF5 file via
+  `stag_vec_io`, the HDF5-viewer counterpart of the live `mhd_loadsolution`.
+
+Note: `mhd.c` still `#include`s `<petscviewerhdf5.h>` after this move. That
+include has no other use left in the file (`grep -n 'HDF5\|hdf5' mhd.c` shows
+only the include line itself), but per this task's instructions it was left
+in place -- removing an unused include is a separate concern from moving dead
+functions, and pruning it here could perturb codegen via macro definitions
+pulled in by that header.

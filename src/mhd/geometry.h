@@ -30,14 +30,12 @@
 
 PetscScalar cyldistance(PetscScalar,PetscScalar,PetscScalar,PetscScalar,PetscScalar,PetscScalar);
 PetscScalar surface(PetscInt,PetscInt,PetscInt,DMStagStencilLocation,void*);
-PetscErrorCode ComputeIsEBoundary(TS,IS*,void*);
 PetscErrorCode SaveSolution(TS,Vec,void*);
 PetscErrorCode SaveCoordinates(TS,void*);
 PetscErrorCode CellToVertexProjectionScalar(TS,Vec,Vec,void*);
 PetscErrorCode EdgeToCellReconstruction_r(TS,Vec,Vec,void*);
 PetscErrorCode EdgeToCellReconstruction_phi(TS,Vec,Vec,void*);
 PetscErrorCode EdgeToCellReconstruction_z(TS,Vec,Vec,void*);
-PetscErrorCode VertexToEdgeReconstruction_scalar(TS,Vec,Vec,void*);
 PetscErrorCode VertexToEdgeReconstruction(TS,Vec,Vec,void*);
 PetscErrorCode VertexToFaceReconstruction(TS,Vec,Vec,void*);
 PetscErrorCode FaceToVertexProjection(TS,Vec,Vec,void*);
