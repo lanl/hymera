@@ -141,12 +141,13 @@ PetscScalar surface(PetscInt er, PetscInt ephi, PetscInt ez, DMStagStencilLocati
 
 PetscErrorCode SaveSolution(TS ts, Vec X, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("SaveSolution",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("SaveSolution",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -180,165 +181,166 @@ PetscErrorCode SaveSolution(TS ts, Vec X, void *ptr)
     DM              dmCoord,dmCoorda;
     PetscScalar       ****arrCoord,****arrCoorda,****arrX,****arrCr,****arrCphi,****arrCz,****arrFr,****arrFphi,****arrFz,****arrVr,****arrVphi,****arrVz;
 
-    TSGetDM(ts,&da);
+    PetscCall(TSGetDM(ts,&da));
 
     DMStagCreateCompatibleDMStag(da,0,0,1,0,&dmFr); /* 1 dof per face */
-    DMSetUp(dmFr);
-    DMStagSetUniformCoordinatesExplicit(dmFr,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmFr,&F_r2);
+    PetscCall(DMSetUp(dmFr));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmFr,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmFr,&F_r2));
 
     DMStagCreateCompatibleDMStag(da,0,0,1,0,&dmFphi); /* 1 dof per face */
-    DMSetUp(dmFphi);
-    DMStagSetUniformCoordinatesExplicit(dmFphi,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmFphi,&F_phi2);
+    PetscCall(DMSetUp(dmFphi));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmFphi,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmFphi,&F_phi2));
 
     DMStagCreateCompatibleDMStag(da,0,0,1,0,&dmFz); /* 1 dof per face */
-    DMSetUp(dmFz);
-    DMStagSetUniformCoordinatesExplicit(dmFz,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmFz,&F_z2);
+    PetscCall(DMSetUp(dmFz));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmFz,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmFz,&F_z2));
 
 
 
 
-    DMGetLocalVector(da, & XLocal);
-    DMGlobalToLocalBegin(da, X, INSERT_VALUES, XLocal);
-    DMGlobalToLocalEnd(da, X, INSERT_VALUES, XLocal);
+    PetscCall(DMGetLocalVector(da, & XLocal));
+    PetscCall(DMGlobalToLocalBegin(da, X, INSERT_VALUES, XLocal));
+    PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, XLocal));
 
 
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before copying F_r values\n");
-    DMStagGetCorners(dmFr,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmFr,&N[0],&N[1],&N[2]);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before copying F_r values\n"));
+    PetscCall(DMStagGetCorners(dmFr,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmFr,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
                 DMStagStencil from[1];
                 PetscScalar   valFrom[1];
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = LEFT;    from[0].c = 0;
-                DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom);
-                DMStagVecSetValuesStencil(dmFr,F_r2,1,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmFr,F_r2,1,from,valFrom,INSERT_VALUES));
                 if(er == N[0]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = RIGHT;    from[0].c = 0;
-                    DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom);
-                    DMStagVecSetValuesStencil(dmFr,F_r2,1,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmFr,F_r2,1,from,valFrom,INSERT_VALUES));
                 }
             }
         }
     }
-    VecAssemblyBegin(F_r2);
-    VecAssemblyEnd(F_r2);
+    PetscCall(VecAssemblyBegin(F_r2));
+    PetscCall(VecAssemblyEnd(F_r2));
 
     DMStagVecSplitToDMDA(dmFr,F_r2,LEFT,-1,&daFr,&vecFr); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecFr,"rFace_center_values");
+    PetscCall(PetscObjectSetName((PetscObject)vecFr,"rFace_center_values"));
 
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before copying F_phi values\n");
-    DMStagGetCorners(dmFphi,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmFphi,&N[0],&N[1],&N[2]);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before copying F_phi values\n"));
+    PetscCall(DMStagGetCorners(dmFphi,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmFphi,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
                 DMStagStencil from[1];
                 PetscScalar   valFrom[1];
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = DOWN;    from[0].c = 0;
-                DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom);
-                DMStagVecSetValuesStencil(dmFphi,F_phi2,1,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmFphi,F_phi2,1,from,valFrom,INSERT_VALUES));
                 if(ephi == N[1]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = UP; from[0].c = 0;
-                    DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom);
-                    DMStagVecSetValuesStencil(dmFphi,F_phi2,1,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmFphi,F_phi2,1,from,valFrom,INSERT_VALUES));
                 }
             }
         }
     }
-    VecAssemblyBegin(F_phi2);
-    VecAssemblyEnd(F_phi2);
+    PetscCall(VecAssemblyBegin(F_phi2));
+    PetscCall(VecAssemblyEnd(F_phi2));
 
     DMStagVecSplitToDMDA(dmFphi,F_phi2,DOWN,-1,&daFphi,&vecFphi); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecFphi,"phiFace_center_values");
+    PetscCall(PetscObjectSetName((PetscObject)vecFphi,"phiFace_center_values"));
 
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before copying F_z values\n");
-    DMStagGetCorners(dmFz,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmFz,&N[0],&N[1],&N[2]);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before copying F_z values\n"));
+    PetscCall(DMStagGetCorners(dmFz,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmFz,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
                 DMStagStencil from[3];
                 PetscScalar   valFrom[3];
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = BACK;    from[0].c = 0;
-                DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom);
-                DMStagVecSetValuesStencil(dmFz,F_z2,1,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmFz,F_z2,1,from,valFrom,INSERT_VALUES));
                 if(ez == N[2]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = FRONT; from[0].c = 0;
-                    DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom);
-                    DMStagVecSetValuesStencil(dmFz,F_z2,1,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmFz,F_z2,1,from,valFrom,INSERT_VALUES));
                 }
             }
         }
     }
-    VecAssemblyBegin(F_z2);
-    VecAssemblyEnd(F_z2);
+    PetscCall(VecAssemblyBegin(F_z2));
+    PetscCall(VecAssemblyEnd(F_z2));
 
     DMStagVecSplitToDMDA(dmFz,F_z2,BACK,-1,&daFz,&vecFz); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecFz,"zFace_center_values");
+    PetscCall(PetscObjectSetName((PetscObject)vecFz,"zFace_center_values"));
 
     PetscViewer viewerD;
     char filename[PETSC_MAX_PATH_LEN];
-    PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecBr.m", user->input_folder);
-    PetscPrintf(PETSC_COMM_WORLD,"Before opening %s file\n", filename);
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD);
+    PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecBr.m", user->input_folder));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before opening %s file\n", filename));
+    PetscCall(PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD));
     //PetscViewerBinaryOpen(PETSC_COMM_WORLD,"vecBr.m",FILE_MODE_WRITE,&viewerD);
     //PetscViewerPushFormat(viewerD,PETSC_VIEWER_BINARY_MATLAB);
-    PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB);
-    VecView(vecFr,viewerD);
-    PetscViewerPopFormat(viewerD);
+    PetscCall(PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB));
+    PetscCall(VecView(vecFr,viewerD));
+    PetscCall(PetscViewerPopFormat(viewerD));
 
-    PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecBphi.m", user->input_folder);
-    PetscPrintf(PETSC_COMM_WORLD,"Before opening %s file\n", filename);
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD);
-    PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB);
-    VecView(vecFphi,viewerD);
-    PetscViewerPopFormat(viewerD);
+    PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecBphi.m", user->input_folder));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before opening %s file\n", filename));
+    PetscCall(PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD));
+    PetscCall(PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB));
+    PetscCall(VecView(vecFphi,viewerD));
+    PetscCall(PetscViewerPopFormat(viewerD));
 
-    PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecBz.m", user->input_folder);
-    PetscPrintf(PETSC_COMM_WORLD,"Before opening %s file\n", filename);
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD);
-    PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB);
-    VecView(vecFz,viewerD);
-    PetscViewerPopFormat(viewerD);
+    PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecBz.m", user->input_folder));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before opening %s file\n", filename));
+    PetscCall(PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD));
+    PetscCall(PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB));
+    PetscCall(VecView(vecFz,viewerD));
+    PetscCall(PetscViewerPopFormat(viewerD));
 
-    PetscViewerDestroy(&viewerD);
+    PetscCall(PetscViewerDestroy(&viewerD));
 
-    DMDestroy(&dmFr);
-    DMDestroy(&dmFphi);
-    DMDestroy(&dmFz);
+    PetscCall(DMDestroy(&dmFr));
+    PetscCall(DMDestroy(&dmFphi));
+    PetscCall(DMDestroy(&dmFz));
 
-    DMDestroy(&daFr);
-    DMDestroy(&daFphi);
-    DMDestroy(&daFz);
+    PetscCall(DMDestroy(&daFr));
+    PetscCall(DMDestroy(&daFphi));
+    PetscCall(DMDestroy(&daFz));
 
-    VecDestroy(&vecFr);
-    VecDestroy(&vecFphi);
-    VecDestroy(&vecFz);
+    PetscCall(VecDestroy(&vecFr));
+    PetscCall(VecDestroy(&vecFphi));
+    PetscCall(VecDestroy(&vecFz));
 
-    VecDestroy(&F_r2);
-    VecDestroy(&F_phi2);
-    VecDestroy(&F_z2);
+    PetscCall(VecDestroy(&F_r2));
+    PetscCall(VecDestroy(&F_phi2));
+    PetscCall(VecDestroy(&F_z2));
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-  return(0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode SaveCoordinates(TS ts, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("SaveCoordinates",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("SaveCoordinates",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -372,51 +374,51 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
     DM              dmCoord,dmCoorda;
     PetscScalar       ****arrCoord,****arrCoorda,****arrX,****arrCr,****arrCphi,****arrCz,****arrFr,****arrFphi,****arrFz,****arrVr,****arrVphi,****arrVz;
 
-    TSGetDM(ts,&da);
+    PetscCall(TSGetDM(ts,&da));
 
     DMStagCreateCompatibleDMStag(da,0,0,3,0,&dmFr); /* 3 dofs per face */
-    DMSetUp(dmFr);
-    DMStagSetUniformCoordinatesExplicit(dmFr,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmFr,&F_r2);
+    PetscCall(DMSetUp(dmFr));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmFr,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmFr,&F_r2));
 
     DMStagCreateCompatibleDMStag(da,0,0,3,0,&dmFphi); /* 3 dofs per face */
-    DMSetUp(dmFphi);
-    DMStagSetUniformCoordinatesExplicit(dmFphi,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmFphi,&F_phi2);
+    PetscCall(DMSetUp(dmFphi));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmFphi,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmFphi,&F_phi2));
 
     DMStagCreateCompatibleDMStag(da,0,0,3,0,&dmFz); /* 3 dofs per face */
-    DMSetUp(dmFz);
-    DMStagSetUniformCoordinatesExplicit(dmFz,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmFz,&F_z2);
+    PetscCall(DMSetUp(dmFz));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmFz,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmFz,&F_z2));
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before creating compatible DMStag for E_r\n");
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before creating compatible DMStag for E_r\n"));
 
     DMStagCreateCompatibleDMStag(da,0,3,0,0,&dmEr); /* 3 dofs per edge */
-    DMSetUp(dmEr);
-    DMStagSetUniformCoordinatesExplicit(dmEr,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmEr,&E_r2);
+    PetscCall(DMSetUp(dmEr));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmEr,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmEr,&E_r2));
 
     DMStagCreateCompatibleDMStag(da,0,3,0,0,&dmEphi); /* 3 dofs per edge */
-    DMSetUp(dmEphi);
-    DMStagSetUniformCoordinatesExplicit(dmEphi,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmEphi,&E_phi2);
+    PetscCall(DMSetUp(dmEphi));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmEphi,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmEphi,&E_phi2));
 
     DMStagCreateCompatibleDMStag(da,0,3,0,0,&dmEz); /* 3 dofs per edge */
-    DMSetUp(dmEz);
-    DMStagSetUniformCoordinatesExplicit(dmEz,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmEz,&E_z2);
+    PetscCall(DMSetUp(dmEz));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmEz,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmEz,&E_z2));
 
     DMStagCreateCompatibleDMStag(da,0,0,0,3,&dmC); /* 3 dofs per cell */
-    DMSetUp(dmC);
-    DMStagSetUniformCoordinatesExplicit(dmC,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmC,&C2);
+    PetscCall(DMSetUp(dmC));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmC,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmC,&C2));
     //STOPPED HERE
 
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before copying E_r coordinates \n");
-    DMGetCoordinatesLocal(dmEr, &E_r);
-    DMStagGetCorners(dmEr,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmEr,&N[0],&N[1],&N[2]);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before copying E_r coordinates \n"));
+    PetscCall(DMGetCoordinatesLocal(dmEr, &E_r));
+    PetscCall(DMStagGetCorners(dmEr,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmEr,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
@@ -425,43 +427,43 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = BACK_DOWN;    from[0].c = 0;
                 from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = BACK_DOWN;    from[1].c = 1;
                 from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = BACK_DOWN;    from[2].c = 2;
-                DMStagVecGetValuesStencil(dmEr,E_r,3,from,valFrom);
-                DMStagVecSetValuesStencil(dmEr,E_r2,3,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(dmEr,E_r,3,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmEr,E_r2,3,from,valFrom,INSERT_VALUES));
                 if(ephi == N[1]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = BACK_UP;    from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = BACK_UP;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = BACK_UP;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmEr,E_r,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmEr,E_r2,1,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmEr,E_r,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmEr,E_r2,1,from,valFrom,INSERT_VALUES));
                 }
                 if(ez == N[2]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = FRONT_DOWN;    from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = FRONT_DOWN;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = FRONT_DOWN;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmEr,E_r,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmEr,E_r2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmEr,E_r,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmEr,E_r2,3,from,valFrom,INSERT_VALUES));
                 }
                 if(ephi == N[1]-1 && ez == N[2]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = FRONT_UP;    from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = FRONT_UP;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = FRONT_UP;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmEr,E_r,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmEr,E_r2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmEr,E_r,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmEr,E_r2,3,from,valFrom,INSERT_VALUES));
                 }
             }
         }
     }
-    VecAssemblyBegin(E_r2);
-    VecAssemblyEnd(E_r2);
+    PetscCall(VecAssemblyBegin(E_r2));
+    PetscCall(VecAssemblyEnd(E_r2));
 
     DMStagVecSplitToDMDA(dmEr,E_r2,BACK_DOWN,-3,&daEr,&vecEr); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecEr,"rEdge_center_coordinates");
+    PetscCall(PetscObjectSetName((PetscObject)vecEr,"rEdge_center_coordinates"));
 
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before copying E_phi coordinates\n");
-    DMGetCoordinatesLocal(dmEphi, &E_phi);
-    DMStagGetCorners(dmEphi,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmEphi,&N[0],&N[1],&N[2]);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before copying E_phi coordinates\n"));
+    PetscCall(DMGetCoordinatesLocal(dmEphi, &E_phi));
+    PetscCall(DMStagGetCorners(dmEphi,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmEphi,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
@@ -470,44 +472,44 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = BACK_LEFT;    from[0].c = 0;
                 from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = BACK_LEFT;    from[1].c = 1;
                 from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = BACK_LEFT;    from[2].c = 2;
-                DMStagVecGetValuesStencil(dmEphi,E_phi,3,from,valFrom);
-                DMStagVecSetValuesStencil(dmEphi,E_phi2,3,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(dmEphi,E_phi,3,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmEphi,E_phi2,3,from,valFrom,INSERT_VALUES));
                 if(er == N[0]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = BACK_RIGHT; from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = BACK_RIGHT;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = BACK_RIGHT;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmEphi,E_phi,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmEphi,E_phi2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmEphi,E_phi,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmEphi,E_phi2,3,from,valFrom,INSERT_VALUES));
                 }
                 if(ez == N[2]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = FRONT_LEFT; from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = FRONT_LEFT;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = FRONT_LEFT;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmEphi,E_phi,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmEphi,E_phi2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmEphi,E_phi,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmEphi,E_phi2,3,from,valFrom,INSERT_VALUES));
                 }
                 if(er == N[0]-1 && ez == N[2]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = FRONT_RIGHT; from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = FRONT_RIGHT;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = FRONT_RIGHT;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmEphi,E_phi,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmEphi,E_phi2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmEphi,E_phi,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmEphi,E_phi2,3,from,valFrom,INSERT_VALUES));
                 }
             }
         }
     }
-    VecAssemblyBegin(E_phi2);
-    VecAssemblyEnd(E_phi2);
+    PetscCall(VecAssemblyBegin(E_phi2));
+    PetscCall(VecAssemblyEnd(E_phi2));
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before calling DMStagVecSplitToDMDA for E_phi coordinates\n");
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before calling DMStagVecSplitToDMDA for E_phi coordinates\n"));
     DMStagVecSplitToDMDA(dmEphi,E_phi2,BACK_LEFT,-3,&daEphi,&vecEphi); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecEphi,"phiEdge_center_coordinates");
+    PetscCall(PetscObjectSetName((PetscObject)vecEphi,"phiEdge_center_coordinates"));
 
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before copying E_z coordinates\n");
-    DMGetCoordinatesLocal(dmEz, &E_z);
-    DMStagGetCorners(dmEz,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmEz,&N[0],&N[1],&N[2]);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before copying E_z coordinates\n"));
+    PetscCall(DMGetCoordinatesLocal(dmEz, &E_z));
+    PetscCall(DMStagGetCorners(dmEz,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmEz,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
@@ -516,44 +518,44 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = DOWN_LEFT;    from[0].c = 0;
                 from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = DOWN_LEFT;    from[1].c = 1;
                 from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = DOWN_LEFT;    from[2].c = 2;
-                DMStagVecGetValuesStencil(dmEz,E_z,3,from,valFrom);
-                DMStagVecSetValuesStencil(dmEz,E_z2,3,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(dmEz,E_z,3,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmEz,E_z2,3,from,valFrom,INSERT_VALUES));
                 if(er == N[0]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = DOWN_RIGHT; from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = DOWN_RIGHT;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = DOWN_RIGHT;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmEz,E_z,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmEz,E_z2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmEz,E_z,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmEz,E_z2,3,from,valFrom,INSERT_VALUES));
                 }
                 if(ephi == N[1]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = UP_LEFT; from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = UP_LEFT;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = UP_LEFT;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmEz,E_z,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmEz,E_z2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmEz,E_z,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmEz,E_z2,3,from,valFrom,INSERT_VALUES));
                 }
                 if(er == N[0]-1 && ephi == N[1]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = UP_RIGHT; from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = UP_RIGHT;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = UP_RIGHT;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmEz,E_z,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmEz,E_z2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmEz,E_z,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmEz,E_z2,3,from,valFrom,INSERT_VALUES));
                 }
             }
         }
     }
-    VecAssemblyBegin(E_z2);
-    VecAssemblyEnd(E_z2);
+    PetscCall(VecAssemblyBegin(E_z2));
+    PetscCall(VecAssemblyEnd(E_z2));
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before calling DMStagVecSplitToDMDA for E_z coordinates\n");
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before calling DMStagVecSplitToDMDA for E_z coordinates\n"));
     DMStagVecSplitToDMDA(dmEz,E_z2,DOWN_LEFT,-3,&daEz,&vecEz); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecEz,"zEdge_center_coordinates");
+    PetscCall(PetscObjectSetName((PetscObject)vecEz,"zEdge_center_coordinates"));
 
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before copying F_r coordinates\n");
-    DMGetCoordinatesLocal(dmFr, &F_r);
-    DMStagGetCorners(dmFr,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmFr,&N[0],&N[1],&N[2]);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before copying F_r coordinates\n"));
+    PetscCall(DMGetCoordinatesLocal(dmFr, &F_r));
+    PetscCall(DMStagGetCorners(dmFr,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmFr,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
@@ -562,29 +564,29 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = LEFT;    from[0].c = 0;
                 from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = LEFT;    from[1].c = 1;
                 from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = LEFT;    from[2].c = 2;
-                DMStagVecGetValuesStencil(dmFr,F_r,3,from,valFrom);
-                DMStagVecSetValuesStencil(dmFr,F_r2,3,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(dmFr,F_r,3,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmFr,F_r2,3,from,valFrom,INSERT_VALUES));
                 if(er == N[0]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = RIGHT;    from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = RIGHT;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = RIGHT;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmFr,F_r,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmFr,F_r2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmFr,F_r,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmFr,F_r2,3,from,valFrom,INSERT_VALUES));
                 }
             }
         }
     }
-    VecAssemblyBegin(F_r2);
-    VecAssemblyEnd(F_r2);
+    PetscCall(VecAssemblyBegin(F_r2));
+    PetscCall(VecAssemblyEnd(F_r2));
 
     DMStagVecSplitToDMDA(dmFr,F_r2,LEFT,-3,&daFr,&vecFr); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecFr,"rFace_center_coordinates");
+    PetscCall(PetscObjectSetName((PetscObject)vecFr,"rFace_center_coordinates"));
 
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before copying F_phi coordinates\n");
-    DMGetCoordinatesLocal(dmFphi, &F_phi);
-    DMStagGetCorners(dmFphi,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmFphi,&N[0],&N[1],&N[2]);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before copying F_phi coordinates\n"));
+    PetscCall(DMGetCoordinatesLocal(dmFphi, &F_phi));
+    PetscCall(DMStagGetCorners(dmFphi,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmFphi,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
@@ -593,29 +595,29 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = DOWN;    from[0].c = 0;
                 from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = DOWN;    from[1].c = 1;
                 from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = DOWN;    from[2].c = 2;
-                DMStagVecGetValuesStencil(dmFphi,F_phi,3,from,valFrom);
-                DMStagVecSetValuesStencil(dmFphi,F_phi2,3,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(dmFphi,F_phi,3,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmFphi,F_phi2,3,from,valFrom,INSERT_VALUES));
                 if(ephi == N[1]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = UP; from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = UP;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = UP;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmFphi,F_phi,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmFphi,F_phi2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmFphi,F_phi,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmFphi,F_phi2,3,from,valFrom,INSERT_VALUES));
                 }
             }
         }
     }
-    VecAssemblyBegin(F_phi2);
-    VecAssemblyEnd(F_phi2);
+    PetscCall(VecAssemblyBegin(F_phi2));
+    PetscCall(VecAssemblyEnd(F_phi2));
 
     DMStagVecSplitToDMDA(dmFphi,F_phi2,DOWN,-3,&daFphi,&vecFphi); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecFphi,"phiFace_center_coordinates");
+    PetscCall(PetscObjectSetName((PetscObject)vecFphi,"phiFace_center_coordinates"));
 
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before copying F_z coordinates\n");
-    DMGetCoordinatesLocal(dmFz, &F_z);
-    DMStagGetCorners(dmFz,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmFz,&N[0],&N[1],&N[2]);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before copying F_z coordinates\n"));
+    PetscCall(DMGetCoordinatesLocal(dmFz, &F_z));
+    PetscCall(DMStagGetCorners(dmFz,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmFz,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
@@ -624,28 +626,28 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = BACK;    from[0].c = 0;
                 from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = BACK;    from[1].c = 1;
                 from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = BACK;    from[2].c = 2;
-                DMStagVecGetValuesStencil(dmFz,F_z,3,from,valFrom);
-                DMStagVecSetValuesStencil(dmFz,F_z2,3,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(dmFz,F_z,3,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmFz,F_z2,3,from,valFrom,INSERT_VALUES));
                 if(ez == N[2]-1){
                     from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = FRONT; from[0].c = 0;
                     from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = FRONT;    from[1].c = 1;
                     from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = FRONT;    from[2].c = 2;
-                    DMStagVecGetValuesStencil(dmFz,F_z,3,from,valFrom);
-                    DMStagVecSetValuesStencil(dmFz,F_z2,3,from,valFrom,INSERT_VALUES);
+                    PetscCall(DMStagVecGetValuesStencil(dmFz,F_z,3,from,valFrom));
+                    PetscCall(DMStagVecSetValuesStencil(dmFz,F_z2,3,from,valFrom,INSERT_VALUES));
                 }
             }
         }
     }
-    VecAssemblyBegin(F_z2);
-    VecAssemblyEnd(F_z2);
+    PetscCall(VecAssemblyBegin(F_z2));
+    PetscCall(VecAssemblyEnd(F_z2));
 
     DMStagVecSplitToDMDA(dmFz,F_z2,BACK,-3,&daFz,&vecFz); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecFz,"zFace_center_coordinates");
+    PetscCall(PetscObjectSetName((PetscObject)vecFz,"zFace_center_coordinates"));
 
 
-    PetscPrintf(PETSC_COMM_WORLD,"Before copying cell coordinates\n");
-    DMGetCoordinatesLocal(dmC, &C);
-    DMStagGetCorners(dmC,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before copying cell coordinates\n"));
+    PetscCall(DMGetCoordinatesLocal(dmC, &C));
+    PetscCall(DMStagGetCorners(dmC,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
@@ -654,116 +656,117 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = ELEMENT;    from[0].c = 0;
                 from[1].i = er; from[1].j = ephi; from[1].k = ez; from[1].loc = ELEMENT;    from[1].c = 1;
                 from[2].i = er; from[2].j = ephi; from[2].k = ez; from[2].loc = ELEMENT;    from[2].c = 2;
-                DMStagVecGetValuesStencil(dmC,C,3,from,valFrom);
-                DMStagVecSetValuesStencil(dmC,C2,3,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(dmC,C,3,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmC,C2,3,from,valFrom,INSERT_VALUES));
             }
         }
     }
-    VecAssemblyBegin(C2);
-    VecAssemblyEnd(C2);
+    PetscCall(VecAssemblyBegin(C2));
+    PetscCall(VecAssemblyEnd(C2));
 
     DMStagVecSplitToDMDA(dmC,C2,ELEMENT,-3,&daC,&vecC); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecC,"Cell_center_coordinates");
+    PetscCall(PetscObjectSetName((PetscObject)vecC,"Cell_center_coordinates"));
 
     char filename[PETSC_MAX_PATH_LEN];
-    PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecC.m", user->input_folder);
-    PetscPrintf(PETSC_COMM_WORLD,"Before opening %s file\n", filename);
+    PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecC.m", user->input_folder));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Before opening %s file\n", filename));
     PetscViewer viewerD;
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD,filename,&viewerD);
-    PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB);
-    VecView(vecC,viewerD);
+    PetscCall(PetscViewerASCIIOpen(PETSC_COMM_WORLD,filename,&viewerD));
+    PetscCall(PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB));
+    PetscCall(VecView(vecC,viewerD));
 
-    PetscViewerPopFormat(viewerD);
+    PetscCall(PetscViewerPopFormat(viewerD));
 
-    PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecFr.m", user->input_folder);
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD);
+    PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecFr.m", user->input_folder));
+    PetscCall(PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD));
     //PetscViewerBinaryOpen(PETSC_COMM_WORLD,"vecFr.m",FILE_MODE_WRITE,&viewerD);
     //PetscViewerPushFormat(viewerD,PETSC_VIEWER_BINARY_MATLAB);
-    PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB);
-    VecView(vecFr,viewerD);
-    PetscViewerPopFormat(viewerD);
+    PetscCall(PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB));
+    PetscCall(VecView(vecFr,viewerD));
+    PetscCall(PetscViewerPopFormat(viewerD));
 
-    PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecFphi.m", user->input_folder);
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD);
-    PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB);
-    VecView(vecFphi,viewerD);
-    PetscViewerPopFormat(viewerD);
+    PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecFphi.m", user->input_folder));
+    PetscCall(PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD));
+    PetscCall(PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB));
+    PetscCall(VecView(vecFphi,viewerD));
+    PetscCall(PetscViewerPopFormat(viewerD));
 
-    PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecFz.m", user->input_folder);
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD);
-    PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB);
-    VecView(vecFz,viewerD);
-    PetscViewerPopFormat(viewerD);
+    PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecFz.m", user->input_folder));
+    PetscCall(PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD));
+    PetscCall(PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB));
+    PetscCall(VecView(vecFz,viewerD));
+    PetscCall(PetscViewerPopFormat(viewerD));
 
-    PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecEr.m", user->input_folder);
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD);
-    PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB);
-    VecView(vecEr,viewerD);
-    PetscViewerPopFormat(viewerD);
+    PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecEr.m", user->input_folder));
+    PetscCall(PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD));
+    PetscCall(PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB));
+    PetscCall(VecView(vecEr,viewerD));
+    PetscCall(PetscViewerPopFormat(viewerD));
 
-    PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecEphi.m", user->input_folder);
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD);
-    PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB);
-    VecView(vecEphi,viewerD);
-    PetscViewerPopFormat(viewerD);
+    PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecEphi.m", user->input_folder));
+    PetscCall(PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD));
+    PetscCall(PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB));
+    PetscCall(VecView(vecEphi,viewerD));
+    PetscCall(PetscViewerPopFormat(viewerD));
 
-    PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecEz.m", user->input_folder);
-    PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD);
-    PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB);
-    VecView(vecEz,viewerD);
-    PetscViewerPopFormat(viewerD);
+    PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecEz.m", user->input_folder));
+    PetscCall(PetscViewerASCIIOpen(PETSC_COMM_WORLD, filename, &viewerD));
+    PetscCall(PetscViewerPushFormat(viewerD,PETSC_VIEWER_ASCII_MATLAB));
+    PetscCall(VecView(vecEz,viewerD));
+    PetscCall(PetscViewerPopFormat(viewerD));
 
-    PetscBarrier((PetscObject)viewerD);
-    PetscViewerDestroy(&viewerD);
+    PetscCall(PetscBarrier((PetscObject)viewerD));
+    PetscCall(PetscViewerDestroy(&viewerD));
 
-    DMDestroy(&dmFr);
-    DMDestroy(&dmFphi);
-    DMDestroy(&dmFz);
-    DMDestroy(&dmEr);
-    DMDestroy(&dmEphi);
-    DMDestroy(&dmEz);
-    DMDestroy(&dmC);
+    PetscCall(DMDestroy(&dmFr));
+    PetscCall(DMDestroy(&dmFphi));
+    PetscCall(DMDestroy(&dmFz));
+    PetscCall(DMDestroy(&dmEr));
+    PetscCall(DMDestroy(&dmEphi));
+    PetscCall(DMDestroy(&dmEz));
+    PetscCall(DMDestroy(&dmC));
 
-    DMDestroy(&daFr);
-    DMDestroy(&daFphi);
-    DMDestroy(&daFz);
-    DMDestroy(&daEr);
-    DMDestroy(&daEphi);
-    DMDestroy(&daEz);
-    DMDestroy(&daC);
+    PetscCall(DMDestroy(&daFr));
+    PetscCall(DMDestroy(&daFphi));
+    PetscCall(DMDestroy(&daFz));
+    PetscCall(DMDestroy(&daEr));
+    PetscCall(DMDestroy(&daEphi));
+    PetscCall(DMDestroy(&daEz));
+    PetscCall(DMDestroy(&daC));
 
-    VecDestroy(&vecC);
-    VecDestroy(&vecEr);
-    VecDestroy(&vecEphi);
-    VecDestroy(&vecEz);
-    VecDestroy(&vecFr);
-    VecDestroy(&vecFphi);
-    VecDestroy(&vecFz);
+    PetscCall(VecDestroy(&vecC));
+    PetscCall(VecDestroy(&vecEr));
+    PetscCall(VecDestroy(&vecEphi));
+    PetscCall(VecDestroy(&vecEz));
+    PetscCall(VecDestroy(&vecFr));
+    PetscCall(VecDestroy(&vecFphi));
+    PetscCall(VecDestroy(&vecFz));
 
-    VecDestroy(&C2);
-    VecDestroy(&E_r2);
-    VecDestroy(&E_phi2);
-    VecDestroy(&E_z2);
-    VecDestroy(&F_r2);
-    VecDestroy(&F_phi2);
-    VecDestroy(&F_z2);
+    PetscCall(VecDestroy(&C2));
+    PetscCall(VecDestroy(&E_r2));
+    PetscCall(VecDestroy(&E_phi2));
+    PetscCall(VecDestroy(&E_z2));
+    PetscCall(VecDestroy(&F_r2));
+    PetscCall(VecDestroy(&F_phi2));
+    PetscCall(VecDestroy(&F_z2));
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-  return(0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 #line 2264
 
 PetscErrorCode CellToVertexProjectionScalar(TS ts, Vec C, Vec V, void *ptr)
 {
+  PetscFunctionBeginUser;
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("CellToVertexProjectionScalar",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("CellToVertexProjectionScalar",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -773,12 +776,12 @@ PetscErrorCode CellToVertexProjectionScalar(TS ts, Vec C, Vec V, void *ptr)
 
     PetscErrorCode ierr = 0;
 
-    VecZeroEntries(V);
-    TSGetDM(ts, & da);
-    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-    DMGetLocalVector(da,&CLocal);
-    DMGlobalToLocal(da,C,INSERT_VALUES,CLocal);
+    PetscCall(VecZeroEntries(V));
+    PetscCall(TSGetDM(ts, & da));
+    PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+    PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+    PetscCall(DMGetLocalVector(da,&CLocal));
+    PetscCall(DMGlobalToLocal(da,C,INSERT_VALUES,CLocal));
 
     /* Loop over all local elements */
     for (ez = startz; ez < startz + nz; ++ez) {
@@ -828,25 +831,25 @@ PetscErrorCode CellToVertexProjectionScalar(TS ts, Vec C, Vec V, void *ptr)
           from[7].k = ez-1;
           from[7].loc = ELEMENT;
           from[7].c = 0;
-          DMStagVecGetValuesStencil(da, CLocal, 8, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, CLocal, 8, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
           to[0].loc = BACK_DOWN_LEFT;
           to[0].c = 0;
           valTo[0] = 0.125 * (valFrom[0] + valFrom[1] + valFrom[2] + valFrom[3] + valFrom[4] + valFrom[5] + valFrom[6] + valFrom[7]);
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
         }
       }
     }
-    VecAssemblyBegin(V);
-    VecAssemblyEnd(V);
-    DMRestoreLocalVector(da,&CLocal);
+    PetscCall(VecAssemblyBegin(V));
+    PetscCall(VecAssemblyEnd(V));
+    PetscCall(DMRestoreLocalVector(da,&CLocal));
 
-    PetscLogEventEnd(USER_EVENT,0,0,0,0);
+    PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-    return(0);
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 #line 2543
@@ -857,12 +860,13 @@ PetscErrorCode CellToVertexProjectionScalar(TS ts, Vec C, Vec V, void *ptr)
 
 PetscErrorCode VertexToEdgeReconstruction(TS ts, Vec V, Vec E, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("VertexToEdgeReconstruction",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("VertexToEdgeReconstruction",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -872,12 +876,12 @@ PetscErrorCode VertexToEdgeReconstruction(TS ts, Vec V, Vec E, void *ptr)
 
     PetscErrorCode ierr = 0;
 
-    VecZeroEntries(E);
-    TSGetDM(ts, & da);
-    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-    DMGetLocalVector(da,&VLocal);
-    DMGlobalToLocal(da,V,INSERT_VALUES,VLocal);
+    PetscCall(VecZeroEntries(E));
+    PetscCall(TSGetDM(ts, & da));
+    PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+    PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+    PetscCall(DMGetLocalVector(da,&VLocal));
+    PetscCall(DMGlobalToLocal(da,V,INSERT_VALUES,VLocal));
 
     /* Loop over all local elements */
     for (ez = startz; ez < startz + nz; ++ez) {
@@ -1006,7 +1010,7 @@ PetscErrorCode VertexToEdgeReconstruction(TS ts, Vec V, Vec E, void *ptr)
           from[23].k = ez;
           from[23].loc = BACK_DOWN_RIGHT;
           from[23].c = 2;
-          DMStagVecGetValuesStencil(da, VLocal, 24, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, VLocal, 24, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -1079,29 +1083,30 @@ PetscErrorCode VertexToEdgeReconstruction(TS ts, Vec V, Vec E, void *ptr)
           to[11].loc = DOWN_LEFT;
           to[11].c = 0;
           valTo[11] = 0.5 * (valFrom[18] + valFrom[22]);
-          DMStagVecSetValuesStencil(da, E, 12, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, E, 12, to, valTo, INSERT_VALUES));
 
         }
       }
     }
-    VecAssemblyBegin(E);
-    VecAssemblyEnd(E);
-    DMRestoreLocalVector(da,&VLocal);
+    PetscCall(VecAssemblyBegin(E));
+    PetscCall(VecAssemblyEnd(E));
+    PetscCall(DMRestoreLocalVector(da,&VLocal));
 
-    PetscLogEventEnd(USER_EVENT,0,0,0,0);
-    return(0);
+    PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 #line 3416
 
 PetscErrorCode VertexToFaceReconstruction(TS ts, Vec V, Vec F, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("VertexToFaceReconstruction",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("VertexToFaceReconstruction",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -1111,12 +1116,12 @@ PetscErrorCode VertexToFaceReconstruction(TS ts, Vec V, Vec F, void *ptr)
 
     PetscErrorCode ierr = 0;
 
-    VecZeroEntries(F);
-    TSGetDM(ts, & da);
-    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-    DMGetLocalVector(da,&VLocal);
-    DMGlobalToLocal(da,V,INSERT_VALUES,VLocal);
+    PetscCall(VecZeroEntries(F));
+    PetscCall(TSGetDM(ts, & da));
+    PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+    PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+    PetscCall(DMGetLocalVector(da,&VLocal));
+    PetscCall(DMGlobalToLocal(da,V,INSERT_VALUES,VLocal));
 
     /* Loop over all local elements */
     for (ez = startz; ez < startz + nz; ++ez) {
@@ -1245,7 +1250,7 @@ PetscErrorCode VertexToFaceReconstruction(TS ts, Vec V, Vec F, void *ptr)
           from[23].k = ez;
           from[23].loc = BACK_DOWN_RIGHT;
           from[23].c = 2;
-          DMStagVecGetValuesStencil(da, VLocal, 24, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, VLocal, 24, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -1282,29 +1287,30 @@ PetscErrorCode VertexToFaceReconstruction(TS ts, Vec V, Vec F, void *ptr)
           to[5].loc = FRONT;
           to[5].c = 0;
           valTo[5] = 0.25 * (valFrom[16] + valFrom[17] + valFrom[18] + valFrom[19]);
-          DMStagVecSetValuesStencil(da, F, 6, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, F, 6, to, valTo, INSERT_VALUES));
 
         }
       }
     }
-    VecAssemblyBegin(F);
-    VecAssemblyEnd(F);
-    DMRestoreLocalVector(da,&VLocal);
+    PetscCall(VecAssemblyBegin(F));
+    PetscCall(VecAssemblyEnd(F));
+    PetscCall(DMRestoreLocalVector(da,&VLocal));
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
-    return(0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 #line 3864
 
 PetscErrorCode EdgeToCellReconstruction_r(TS ts, Vec E, Vec C, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("EdgeToCellReconstruction_r",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("EdgeToCellReconstruction_r",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -1314,12 +1320,12 @@ PetscErrorCode EdgeToCellReconstruction_r(TS ts, Vec E, Vec C, void *ptr)
 
     PetscErrorCode ierr = 0;
 
-    VecZeroEntries(C);
-    TSGetDM(ts, & da);
-    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-    DMGetLocalVector(da,&ELocal);
-    DMGlobalToLocal(da,E,INSERT_VALUES,ELocal);
+    PetscCall(VecZeroEntries(C));
+    PetscCall(TSGetDM(ts, & da));
+    PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+    PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+    PetscCall(DMGetLocalVector(da,&ELocal));
+    PetscCall(DMGlobalToLocal(da,E,INSERT_VALUES,ELocal));
 
     /* Loop over all local elements */
     for (ez = startz; ez < startz + nz; ++ez) {
@@ -1348,35 +1354,36 @@ PetscErrorCode EdgeToCellReconstruction_r(TS ts, Vec E, Vec C, void *ptr)
           from[3].k = ez;
           from[3].loc = BACK_DOWN;
           from[3].c = 0;
-          DMStagVecGetValuesStencil(da, ELocal, 4, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, ELocal, 4, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
           to[0].loc = ELEMENT;
           to[0].c = 0;
           valTo[0] = 0.25 * (valFrom[0] + valFrom[1] + valFrom[2] + valFrom[3]);
-          DMStagVecSetValuesStencil(da, C, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, C, 1, to, valTo, INSERT_VALUES));
 
         }
       }
     }
-    VecAssemblyBegin(C);
-    VecAssemblyEnd(C);
-    DMRestoreLocalVector(da,&ELocal);
+    PetscCall(VecAssemblyBegin(C));
+    PetscCall(VecAssemblyEnd(C));
+    PetscCall(DMRestoreLocalVector(da,&ELocal));
 
-    PetscLogEventEnd(USER_EVENT,0,0,0,0);
+    PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-    return(0);
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode EdgeToCellReconstruction_phi(TS ts, Vec E, Vec C, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("EdgeToCellReconstruction_phi",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("EdgeToCellReconstruction_phi",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -1386,12 +1393,12 @@ PetscErrorCode EdgeToCellReconstruction_phi(TS ts, Vec E, Vec C, void *ptr)
 
     PetscErrorCode ierr = 0;
 
-    VecZeroEntries(C);
-    TSGetDM(ts, & da);
-    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-    DMGetLocalVector(da,&ELocal);
-    DMGlobalToLocal(da,E,INSERT_VALUES,ELocal);
+    PetscCall(VecZeroEntries(C));
+    PetscCall(TSGetDM(ts, & da));
+    PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+    PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+    PetscCall(DMGetLocalVector(da,&ELocal));
+    PetscCall(DMGlobalToLocal(da,E,INSERT_VALUES,ELocal));
 
     /* Loop over all local elements */
     for (ez = startz; ez < startz + nz; ++ez) {
@@ -1420,35 +1427,36 @@ PetscErrorCode EdgeToCellReconstruction_phi(TS ts, Vec E, Vec C, void *ptr)
           from[3].k = ez;
           from[3].loc = BACK_RIGHT;
           from[3].c = 0;
-          DMStagVecGetValuesStencil(da, ELocal, 4, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, ELocal, 4, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
           to[0].loc = ELEMENT;
           to[0].c = 0;
           valTo[0] = 0.25 * (valFrom[0] + valFrom[1] + valFrom[2] + valFrom[3]);
-          DMStagVecSetValuesStencil(da, C, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, C, 1, to, valTo, INSERT_VALUES));
 
         }
       }
     }
-    VecAssemblyBegin(C);
-    VecAssemblyEnd(C);
-    DMRestoreLocalVector(da,&ELocal);
+    PetscCall(VecAssemblyBegin(C));
+    PetscCall(VecAssemblyEnd(C));
+    PetscCall(DMRestoreLocalVector(da,&ELocal));
 
-    PetscLogEventEnd(USER_EVENT,0,0,0,0);
+    PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-    return(0);
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode EdgeToCellReconstruction_z(TS ts, Vec E, Vec C, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("EdgeToCellReconstruction_z",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("EdgeToCellReconstruction_z",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -1458,12 +1466,12 @@ PetscErrorCode EdgeToCellReconstruction_z(TS ts, Vec E, Vec C, void *ptr)
 
     PetscErrorCode ierr = 0;
 
-    VecZeroEntries(C);
-    TSGetDM(ts, & da);
-    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-    DMGetLocalVector(da,&ELocal);
-    DMGlobalToLocal(da,E,INSERT_VALUES,ELocal);
+    PetscCall(VecZeroEntries(C));
+    PetscCall(TSGetDM(ts, & da));
+    PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+    PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+    PetscCall(DMGetLocalVector(da,&ELocal));
+    PetscCall(DMGlobalToLocal(da,E,INSERT_VALUES,ELocal));
 
     /* Loop over all local elements */
     for (ez = startz; ez < startz + nz; ++ez) {
@@ -1492,25 +1500,25 @@ PetscErrorCode EdgeToCellReconstruction_z(TS ts, Vec E, Vec C, void *ptr)
           from[3].k = ez;
           from[3].loc = DOWN_RIGHT;
           from[3].c = 0;
-          DMStagVecGetValuesStencil(da, ELocal, 4, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, ELocal, 4, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
           to[0].loc = ELEMENT;
           to[0].c = 0;
           valTo[0] = 0.25 * (valFrom[0] + valFrom[1] + valFrom[2] + valFrom[3]);
-          DMStagVecSetValuesStencil(da, C, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, C, 1, to, valTo, INSERT_VALUES));
 
         }
       }
     }
-    VecAssemblyBegin(C);
-    VecAssemblyEnd(C);
-    DMRestoreLocalVector(da,&ELocal);
+    PetscCall(VecAssemblyBegin(C));
+    PetscCall(VecAssemblyEnd(C));
+    PetscCall(DMRestoreLocalVector(da,&ELocal));
 
-    PetscLogEventEnd(USER_EVENT,0,0,0,0);
+    PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-    return(0);
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 #line 4219
@@ -1519,12 +1527,13 @@ PetscErrorCode EdgeToCellReconstruction_z(TS ts, Vec E, Vec C, void *ptr)
 
 PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("FaceToVertexProjection",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("FaceToVertexProjection",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -1534,12 +1543,12 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
 
     PetscErrorCode ierr = 0;
 
-    VecZeroEntries(V);
-    TSGetDM(ts, & da);
-    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-    DMGetLocalVector(da,&FLocal);
-    DMGlobalToLocal(da,F,INSERT_VALUES,FLocal);
+    PetscCall(VecZeroEntries(V));
+    PetscCall(TSGetDM(ts, & da));
+    PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+    PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+    PetscCall(DMGetLocalVector(da,&FLocal));
+    PetscCall(DMGlobalToLocal(da,F,INSERT_VALUES,FLocal));
 
     /* Loop over all local elements */
     for (ez = startz; ez < startz + nz; ++ez) {
@@ -1589,7 +1598,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -1604,7 +1613,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
           else{
             valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
           from[0].i = er;
           from[0].j = ephi;
@@ -1646,7 +1655,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -1661,7 +1670,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
           else{
             valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
           from[0].i = er;
           from[0].j = ephi;
@@ -1703,7 +1712,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -1718,7 +1727,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
           else{
             valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
           if(er==N[0]-1){
           from[0].i = er;
@@ -1735,7 +1744,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -1750,7 +1759,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
           else{
             valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
           from[0].i = er;
           from[0].j = ephi;
@@ -1766,7 +1775,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -1781,7 +1790,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
           else{
             valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
           from[0].i = er;
           from[0].j = ephi;
@@ -1823,7 +1832,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -1838,7 +1847,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
           else{
             valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(ez==N[2]-1){
@@ -1856,7 +1865,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -1871,7 +1880,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -1887,7 +1896,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -1902,7 +1911,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -1944,7 +1953,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -1959,7 +1968,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(ephi==N[1]-1 && !user->phibtype){
@@ -2003,7 +2012,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2018,7 +2027,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2034,7 +2043,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2049,7 +2058,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2065,7 +2074,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2080,7 +2089,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(er==N[0]-1 && ephi==N[1]-1 && !user->phibtype){
@@ -2098,7 +2107,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2110,7 +2119,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2126,7 +2135,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2141,7 +2150,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2149,7 +2158,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[0].loc = BACK;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2164,7 +2173,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(ez==N[2]-1 && ephi==N[1]-1 && !user->phibtype){
@@ -2182,7 +2191,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2197,7 +2206,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2213,7 +2222,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2228,7 +2237,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2236,7 +2245,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[0].loc = LEFT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2251,7 +2260,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(er==N[0]-1 && ez==N[2]-1){
@@ -2261,7 +2270,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[0].loc = DOWN;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2276,7 +2285,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2292,7 +2301,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2307,7 +2316,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2323,7 +2332,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2338,7 +2347,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(er==N[0]-1 && ez==N[2]-1 && ephi==N[1]-1 && !user->phibtype){
@@ -2348,7 +2357,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[0].loc = FRONT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2363,7 +2372,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2371,7 +2380,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[0].loc = RIGHT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2386,7 +2395,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2394,7 +2403,7 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             from[0].loc = UP;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, FLocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2409,17 +2418,17 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
             else{
               valTo[0] = 0.25 * (valFrom[1] + valFrom[0] + valFrom[2] + valFrom[3]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
         }
       }
     }
-    VecAssemblyBegin(V);
-    VecAssemblyEnd(V);
-    DMRestoreLocalVector(da,&FLocal);
+    PetscCall(VecAssemblyBegin(V));
+    PetscCall(VecAssemblyEnd(V));
+    PetscCall(DMRestoreLocalVector(da,&FLocal));
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
-    return(0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 #line 6088
@@ -2428,12 +2437,13 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
 
 PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("EdgeToVertexProjection",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("EdgeToVertexProjection",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -2443,12 +2453,12 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
 
     PetscErrorCode ierr = 0;
 
-    VecZeroEntries(V);
-    TSGetDM(ts, & da);
-    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-    DMGetLocalVector(da,&ELocal);
-    DMGlobalToLocal(da,E,INSERT_VALUES,ELocal);
+    PetscCall(VecZeroEntries(V));
+    PetscCall(TSGetDM(ts, & da));
+    PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+    PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+    PetscCall(DMGetLocalVector(da,&ELocal));
+    PetscCall(DMGlobalToLocal(da,E,INSERT_VALUES,ELocal));
 
     /* Loop over all local elements */
     for (ez = startz; ez < startz + nz; ++ez) {
@@ -2472,7 +2482,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -2484,7 +2494,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
           from[0].i = er;
           from[0].j = ephi;
@@ -2500,7 +2510,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -2512,7 +2522,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
           from[0].i = er;
           from[0].j = ephi;
@@ -2528,7 +2538,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -2540,7 +2550,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
           if(er==N[0]-1){
           from[0].i = er;
@@ -2557,7 +2567,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -2569,7 +2579,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
           from[0].i = er;
           from[0].j = ephi;
@@ -2585,7 +2595,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -2597,7 +2607,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
           from[0].i = er;
           from[0].j = ephi;
@@ -2605,7 +2615,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
           from[0].loc = BACK_DOWN;
           from[0].c = 0;
           nEntries = 1;
-          DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -2617,7 +2627,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(ez==N[2]-1){
@@ -2635,7 +2645,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2647,7 +2657,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2663,7 +2673,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2675,7 +2685,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2683,7 +2693,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = DOWN_LEFT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2695,7 +2705,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(ephi==N[1]-1 && !user->phibtype){
@@ -2705,7 +2715,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = BACK_LEFT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2717,7 +2727,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2733,7 +2743,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2745,7 +2755,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2761,7 +2771,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[1].c = 0;
             nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2773,7 +2783,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(er==N[0]-1 && ephi==N[1]-1 && !user->phibtype){
@@ -2783,7 +2793,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = BACK_RIGHT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2795,7 +2805,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2803,7 +2813,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = BACK_UP;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2815,7 +2825,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2831,7 +2841,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2843,7 +2853,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(ez==N[2]-1 && ephi==N[1]-1 && !user->phibtype){
@@ -2853,7 +2863,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = FRONT_LEFT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2865,7 +2875,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2873,7 +2883,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = UP_LEFT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2885,7 +2895,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2901,7 +2911,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2913,7 +2923,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(er==N[0]-1 && ez==N[2]-1){
@@ -2931,7 +2941,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
               from[1].c = 0;
               nEntries = 2;
             }
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2943,7 +2953,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2951,7 +2961,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = FRONT_DOWN;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2963,7 +2973,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -2971,7 +2981,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = DOWN_RIGHT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -2983,7 +2993,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
 
           if(er==N[0]-1 && ez==N[2]-1 && ephi==N[1]-1 && !user->phibtype){
@@ -2993,7 +3003,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = UP_RIGHT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -3005,7 +3015,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -3013,7 +3023,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = FRONT_UP;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -3025,7 +3035,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
 
             from[0].i = er;
             from[0].j = ephi;
@@ -3033,7 +3043,7 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             from[0].loc = FRONT_RIGHT;
             from[0].c = 0;
             nEntries = 1;
-            DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, ELocal, nEntries, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -3045,17 +3055,17 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
             else{
               valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
             }
-            DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, V, 1, to, valTo, INSERT_VALUES));
           }
         }
       }
     }
-    VecAssemblyBegin(V);
-    VecAssemblyEnd(V);
-    DMRestoreLocalVector(da,&ELocal);
+    PetscCall(VecAssemblyBegin(V));
+    PetscCall(VecAssemblyEnd(V));
+    PetscCall(DMRestoreLocalVector(da,&ELocal));
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
-    return(0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 #line 7714
@@ -3064,12 +3074,13 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
 
 PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("CellToFaceProjection",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("CellToFaceProjection",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -3079,12 +3090,12 @@ PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
 
     PetscErrorCode ierr = 0;
 
-    VecZeroEntries(F);
-    TSGetDM(ts, & da);
-    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-    DMGetLocalVector(da,&CLocal);
-    DMGlobalToLocal(da,C,INSERT_VALUES,CLocal);
+    PetscCall(VecZeroEntries(F));
+    PetscCall(TSGetDM(ts, & da));
+    PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+    PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+    PetscCall(DMGetLocalVector(da,&CLocal));
+    PetscCall(DMGlobalToLocal(da,C,INSERT_VALUES,CLocal));
 
     /* Loop over all local elements */
     for (ez = startz; ez < startz + nz; ++ez) {
@@ -3116,14 +3127,14 @@ PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
 
           nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom));
           if(nEntries==1){
             valTo[0] = 0.5 * valFrom[0];
           }
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES));
 
           to[0].i = er;
           to[0].j = ephi;
@@ -3147,14 +3158,14 @@ PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
 
           nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom));
           if(nEntries==1){
             valTo[0] = 0.5 * valFrom[0];
           }
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES));
 
           to[0].i = er;
           to[0].j = ephi;
@@ -3178,14 +3189,14 @@ PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
 
           nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom));
           if(nEntries==1){
             valTo[0] = 0.5 * valFrom[0];
           }
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES));
 
           to[0].i = er;
           to[0].j = ephi;
@@ -3209,14 +3220,14 @@ PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
 
           nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom));
           if(nEntries==1){
             valTo[0] = 0.5 * valFrom[0];
           }
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES));
 
           to[0].i = er;
           to[0].j = ephi;
@@ -3240,14 +3251,14 @@ PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
 
           nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom));
           if(nEntries==1){
             valTo[0] = 0.5 * valFrom[0];
           }
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES));
 
           to[0].i = er;
           to[0].j = ephi;
@@ -3271,35 +3282,36 @@ PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
 
           nEntries = 2;
           }
-          DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, CLocal, nEntries, from, valFrom));
           if(nEntries==1){
             valTo[0] = 0.5 * valFrom[0];
           }
           else{
             valTo[0] = 0.5 * (valFrom[1] + valFrom[0]);
           }
-          DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, F, 1, to, valTo, INSERT_VALUES));
 
         }
       }
     }
-    VecAssemblyBegin(F);
-    VecAssemblyEnd(F);
-    DMRestoreLocalVector(da,&CLocal);
+    PetscCall(VecAssemblyBegin(F));
+    PetscCall(VecAssemblyEnd(F));
+    PetscCall(DMRestoreLocalVector(da,&CLocal));
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-    return(0);
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("VertexCrossProduct",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("VertexCrossProduct",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -3309,14 +3321,14 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
 
     PetscErrorCode ierr = 0;
 
-    VecZeroEntries(C);
-    TSGetDM(ts, & da);
-    DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-    DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-    DMGetLocalVector(da,&ALocal);
-    DMGlobalToLocal(da,A,INSERT_VALUES,ALocal);
-    DMGetLocalVector(da,&BLocal);
-    DMGlobalToLocal(da,B,INSERT_VALUES,BLocal);
+    PetscCall(VecZeroEntries(C));
+    PetscCall(TSGetDM(ts, & da));
+    PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+    PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+    PetscCall(DMGetLocalVector(da,&ALocal));
+    PetscCall(DMGlobalToLocal(da,A,INSERT_VALUES,ALocal));
+    PetscCall(DMGetLocalVector(da,&BLocal));
+    PetscCall(DMGlobalToLocal(da,B,INSERT_VALUES,BLocal));
 
     /* Loop over all local elements */
     for (ez = startz; ez < startz + nz; ++ez) {
@@ -3341,7 +3353,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
           fromA[2].k = ez;
           fromA[2].loc = BACK_DOWN_LEFT;
           fromA[2].c = 2;
-          DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA);
+          PetscCall(DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA));
           fromB[0].i = er;
           fromB[0].j = ephi;
           fromB[0].k = ez;
@@ -3357,7 +3369,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
           fromB[2].k = ez;
           fromB[2].loc = BACK_DOWN_LEFT;
           fromB[2].c = 2;
-          DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB);
+          PetscCall(DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
@@ -3376,7 +3388,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
           to[2].loc = BACK_DOWN_LEFT;
           to[2].c = 2;
           valTo[2] = valFromA[0] * valFromB[1] - valFromA[1] * valFromB[0];
-          DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES));
 
           if(er==N[0]-1){
             fromA[0].i = er;
@@ -3394,7 +3406,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromA[2].k = ez;
             fromA[2].loc = BACK_DOWN_RIGHT;
             fromA[2].c = 2;
-            DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA);
+            PetscCall(DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA));
             fromB[0].i = er;
             fromB[0].j = ephi;
             fromB[0].k = ez;
@@ -3410,7 +3422,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromB[2].k = ez;
             fromB[2].loc = BACK_DOWN_RIGHT;
             fromB[2].c = 2;
-            DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB);
+            PetscCall(DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -3429,7 +3441,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             to[2].loc = BACK_DOWN_RIGHT;
             to[2].c = 2;
             valTo[2] = valFromA[0] * valFromB[1] - valFromA[1] * valFromB[0];
-            DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES));
           }
 
           if(ez==N[2]-1){
@@ -3448,7 +3460,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromA[2].k = ez;
             fromA[2].loc = FRONT_DOWN_LEFT;
             fromA[2].c = 2;
-            DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA);
+            PetscCall(DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA));
             fromB[0].i = er;
             fromB[0].j = ephi;
             fromB[0].k = ez;
@@ -3464,7 +3476,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromB[2].k = ez;
             fromB[2].loc = FRONT_DOWN_LEFT;
             fromB[2].c = 2;
-            DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB);
+            PetscCall(DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -3483,7 +3495,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             to[2].loc = FRONT_DOWN_LEFT;
             to[2].c = 2;
             valTo[2] = valFromA[0] * valFromB[1] - valFromA[1] * valFromB[0];
-            DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES));
           }
 
           if(ephi==N[1]-1 && !user->phibtype){
@@ -3502,7 +3514,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromA[2].k = ez;
             fromA[2].loc = BACK_UP_LEFT;
             fromA[2].c = 2;
-            DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA);
+            PetscCall(DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA));
             fromB[0].i = er;
             fromB[0].j = ephi;
             fromB[0].k = ez;
@@ -3518,7 +3530,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromB[2].k = ez;
             fromB[2].loc = BACK_UP_LEFT;
             fromB[2].c = 2;
-            DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB);
+            PetscCall(DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -3537,7 +3549,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             to[2].loc = BACK_UP_LEFT;
             to[2].c = 2;
             valTo[2] = valFromA[0] * valFromB[1] - valFromA[1] * valFromB[0];
-            DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES));
           }
 
           if(er==N[0]-1 && ephi==N[1]-1 && !user->phibtype){
@@ -3556,7 +3568,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromA[2].k = ez;
             fromA[2].loc = BACK_UP_RIGHT;
             fromA[2].c = 2;
-            DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA);
+            PetscCall(DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA));
             fromB[0].i = er;
             fromB[0].j = ephi;
             fromB[0].k = ez;
@@ -3572,7 +3584,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromB[2].k = ez;
             fromB[2].loc = BACK_UP_RIGHT;
             fromB[2].c = 2;
-            DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB);
+            PetscCall(DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -3591,7 +3603,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             to[2].loc = BACK_UP_RIGHT;
             to[2].c = 2;
             valTo[2] = valFromA[0] * valFromB[1] - valFromA[1] * valFromB[0];
-            DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES));
           }
 
           if(ez==N[2]-1 && ephi==N[1]-1 && !user->phibtype){
@@ -3610,7 +3622,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromA[2].k = ez;
             fromA[2].loc = FRONT_UP_LEFT;
             fromA[2].c = 2;
-            DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA);
+            PetscCall(DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA));
             fromB[0].i = er;
             fromB[0].j = ephi;
             fromB[0].k = ez;
@@ -3626,7 +3638,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromB[2].k = ez;
             fromB[2].loc = FRONT_UP_LEFT;
             fromB[2].c = 2;
-            DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB);
+            PetscCall(DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -3645,7 +3657,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             to[2].loc = FRONT_UP_LEFT;
             to[2].c = 2;
             valTo[2] = valFromA[0] * valFromB[1] - valFromA[1] * valFromB[0];
-            DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES));
           }
 
           if(er==N[0]-1 && ez==N[2]-1){
@@ -3664,7 +3676,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromA[2].k = ez;
             fromA[2].loc = FRONT_DOWN_RIGHT;
             fromA[2].c = 2;
-            DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA);
+            PetscCall(DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA));
             fromB[0].i = er;
             fromB[0].j = ephi;
             fromB[0].k = ez;
@@ -3680,7 +3692,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromB[2].k = ez;
             fromB[2].loc = FRONT_DOWN_RIGHT;
             fromB[2].c = 2;
-            DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB);
+            PetscCall(DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -3699,7 +3711,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             to[2].loc = FRONT_DOWN_RIGHT;
             to[2].c = 2;
             valTo[2] = valFromA[0] * valFromB[1] - valFromA[1] * valFromB[0];
-            DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES));
           }
 
           if(er==N[0]-1 && ez==N[2]-1 && ephi==N[1]-1 && !user->phibtype){
@@ -3718,7 +3730,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromA[2].k = ez;
             fromA[2].loc = FRONT_UP_RIGHT;
             fromA[2].c = 2;
-            DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA);
+            PetscCall(DMStagVecGetValuesStencil(da, ALocal, nEntries, fromA, valFromA));
             fromB[0].i = er;
             fromB[0].j = ephi;
             fromB[0].k = ez;
@@ -3734,7 +3746,7 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             fromB[2].k = ez;
             fromB[2].loc = FRONT_UP_RIGHT;
             fromB[2].c = 2;
-            DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB);
+            PetscCall(DMStagVecGetValuesStencil(da, BLocal, nEntries, fromB, valFromB));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
@@ -3753,28 +3765,29 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
             to[2].loc = FRONT_UP_RIGHT;
             to[2].c = 2;
             valTo[2] = valFromA[0] * valFromB[1] - valFromA[1] * valFromB[0];
-            DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(da, C, 3, to, valTo, INSERT_VALUES));
           }
         }
       }
     }
-    VecAssemblyBegin(C);
-    VecAssemblyEnd(C);
-    DMRestoreLocalVector(da,&ALocal);
-    DMRestoreLocalVector(da,&BLocal);
+    PetscCall(VecAssemblyBegin(C));
+    PetscCall(VecAssemblyEnd(C));
+    PetscCall(DMRestoreLocalVector(da,&ALocal));
+    PetscCall(DMRestoreLocalVector(da,&BLocal));
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-    return(0);
+    PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, PetscScalar *ge_EZ, void *ptr, int code) {
+  PetscFunctionBeginUser;
     PetscLogEvent  USER_EVENT;
     PetscClassId   classid;
 
-    PetscClassIdRegister("class name",&classid);
-    PetscLogEventRegister("getEJArray",classid,&USER_EVENT);
-    PetscLogEventBegin(USER_EVENT,0,0,0,0);
+    PetscCall(PetscClassIdRegister("class name",&classid));
+    PetscCall(PetscLogEventRegister("getEJArray",classid,&USER_EVENT));
+    PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
     DM             da, coordDA = user->coorda;
@@ -3786,11 +3799,11 @@ PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, 
     const PetscScalar *array;
     int            len;
 
-    TSGetDM(ts,&da);
-    VecDuplicate(X, & F);
-    VecZeroEntries(F);
-    VecDuplicate(X, & C);
-    VecZeroEntries(C);
+    PetscCall(TSGetDM(ts,&da));
+    PetscCall(VecDuplicate(X, & F));
+    PetscCall(VecZeroEntries(F));
+    PetscCall(VecDuplicate(X, & C));
+    PetscCall(VecZeroEntries(C));
     //NEED TO CREATE VEC C AND RECONSTRUCT FROM EDGES TO CELLS THE THREE COMPONENTS OF E BEFORE CALLING THE SCATTERING
     if (code == 0)
       FormElectricField(ts, X, F, user);
@@ -3802,105 +3815,105 @@ PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, 
     //DumpSolution_Cell(ts, 0, C, user);
 
     DMStagCreateCompatibleDMStag(da,0,0,0,1,&dmEr); /* 1 dof per cell */
-    DMSetUp(dmEr);
-    DMStagSetUniformCoordinatesExplicit(dmEr,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmEr,&E_r2);
+    PetscCall(DMSetUp(dmEr));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmEr,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmEr,&E_r2));
 
     DMStagCreateCompatibleDMStag(da,0,0,0,1,&dmEphi); /* 1 dof per cell */
-    DMSetUp(dmEphi);
-    DMStagSetUniformCoordinatesExplicit(dmEphi,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmEphi,&E_phi2);
+    PetscCall(DMSetUp(dmEphi));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmEphi,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmEphi,&E_phi2));
 
     DMStagCreateCompatibleDMStag(da,0,0,0,1,&dmEz); /* 1 dof per cell */
-    DMSetUp(dmEz);
-    DMStagSetUniformCoordinatesExplicit(dmEz,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax);
-    DMCreateGlobalVector(dmEz,&E_z2);
+    PetscCall(DMSetUp(dmEz));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(dmEz,user->rmin,user->rmax,user->phimin,user->phimax,user->zmin,user->zmax));
+    PetscCall(DMCreateGlobalVector(dmEz,&E_z2));
 
-    DMGetLocalVector(da, & XLocal);
-    DMGlobalToLocalBegin(da, C, INSERT_VALUES, XLocal);
-    DMGlobalToLocalEnd(da, C, INSERT_VALUES, XLocal);
+    PetscCall(DMGetLocalVector(da, & XLocal));
+    PetscCall(DMGlobalToLocalBegin(da, C, INSERT_VALUES, XLocal));
+    PetscCall(DMGlobalToLocalEnd(da, C, INSERT_VALUES, XLocal));
 
     //PetscPrintf(PETSC_COMM_WORLD,"Before copying E_r values\n");
-    DMStagGetCorners(dmEr,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmEr,&N[0],&N[1],&N[2]);
+    PetscCall(DMStagGetCorners(dmEr,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmEr,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
                 DMStagStencil from[1];
                 PetscScalar   valFrom[1];
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = ELEMENT;    from[0].c = 0;
-                DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom);
-                DMStagVecSetValuesStencil(dmEr,E_r2,1,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmEr,E_r2,1,from,valFrom,INSERT_VALUES));
             }
         }
     }
-    VecAssemblyBegin(E_r2);
-    VecAssemblyEnd(E_r2);
+    PetscCall(VecAssemblyBegin(E_r2));
+    PetscCall(VecAssemblyEnd(E_r2));
 
     DMStagVecSplitToDMDA(dmEr,E_r2,ELEMENT,-1,&daEr,&vecEr); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecEr,"r_component_cell_center_values");
+    PetscCall(PetscObjectSetName((PetscObject)vecEr,"r_component_cell_center_values"));
     //VecView(vecEr, PETSC_VIEWER_STDOUT_WORLD);
-    DMRestoreLocalVector(da, & XLocal);
+    PetscCall(DMRestoreLocalVector(da, & XLocal));
 
 
-    VecZeroEntries(C);
+    PetscCall(VecZeroEntries(C));
     EdgeToCellReconstruction_phi(ts,F,C,user);
     //DumpSolution_Cell(ts, 1, C, user);
-    DMGetLocalVector(da, & XLocal);
-    DMGlobalToLocalBegin(da, C, INSERT_VALUES, XLocal);
-    DMGlobalToLocalEnd(da, C, INSERT_VALUES, XLocal);
+    PetscCall(DMGetLocalVector(da, & XLocal));
+    PetscCall(DMGlobalToLocalBegin(da, C, INSERT_VALUES, XLocal));
+    PetscCall(DMGlobalToLocalEnd(da, C, INSERT_VALUES, XLocal));
 
     //PetscPrintf(PETSC_COMM_WORLD,"Before copying E_phi values\n");
-    DMStagGetCorners(dmEphi,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmEphi,&N[0],&N[1],&N[2]);
+    PetscCall(DMStagGetCorners(dmEphi,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmEphi,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
                 DMStagStencil from[1];
                 PetscScalar   valFrom[1];
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = ELEMENT;    from[0].c = 0;
-                DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom);
-                DMStagVecSetValuesStencil(dmEphi,E_phi2,1,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmEphi,E_phi2,1,from,valFrom,INSERT_VALUES));
             }
         }
     }
-    VecAssemblyBegin(E_phi2);
-    VecAssemblyEnd(E_phi2);
+    PetscCall(VecAssemblyBegin(E_phi2));
+    PetscCall(VecAssemblyEnd(E_phi2));
 
     DMStagVecSplitToDMDA(dmEphi,E_phi2,ELEMENT,-1,&daEphi,&vecEphi); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecEphi,"phi_component_cell_center_values");
+    PetscCall(PetscObjectSetName((PetscObject)vecEphi,"phi_component_cell_center_values"));
     //VecView(vecEphi, PETSC_VIEWER_STDOUT_WORLD);
-    DMRestoreLocalVector(da, & XLocal);
+    PetscCall(DMRestoreLocalVector(da, & XLocal));
 
 
-    VecZeroEntries(C);
+    PetscCall(VecZeroEntries(C));
     EdgeToCellReconstruction_z(ts,F,C,user);
     //DumpSolution_Cell(ts, 2, C, user);
-    DMGetLocalVector(da, & XLocal);
-    DMGlobalToLocalBegin(da, C, INSERT_VALUES, XLocal);
-    DMGlobalToLocalEnd(da, C, INSERT_VALUES, XLocal);
+    PetscCall(DMGetLocalVector(da, & XLocal));
+    PetscCall(DMGlobalToLocalBegin(da, C, INSERT_VALUES, XLocal));
+    PetscCall(DMGlobalToLocalEnd(da, C, INSERT_VALUES, XLocal));
 
     //PetscPrintf(PETSC_COMM_WORLD,"Before copying E_z values\n");
-    DMStagGetCorners(dmEz,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL);
-    DMStagGetGlobalSizes(dmEz,&N[0],&N[1],&N[2]);
+    PetscCall(DMStagGetCorners(dmEz,&startr,&startphi,&startz,&nr,&nphi,&nz,NULL,NULL,NULL));
+    PetscCall(DMStagGetGlobalSizes(dmEz,&N[0],&N[1],&N[2]));
     for (ez = startz; ez<startz+nz; ++ez) {
         for (ephi = startphi; ephi<startphi+nphi; ++ephi) {
             for (er = startr; er<startr+nr; ++er) {
                 DMStagStencil from[1];
                 PetscScalar   valFrom[1];
                 from[0].i = er; from[0].j = ephi; from[0].k = ez; from[0].loc = ELEMENT;    from[0].c = 0;
-                DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom);
-                DMStagVecSetValuesStencil(dmEz,E_z2,1,from,valFrom,INSERT_VALUES);
+                PetscCall(DMStagVecGetValuesStencil(da,XLocal,1,from,valFrom));
+                PetscCall(DMStagVecSetValuesStencil(dmEz,E_z2,1,from,valFrom,INSERT_VALUES));
             }
         }
     }
-    VecAssemblyBegin(E_z2);
-    VecAssemblyEnd(E_z2);
+    PetscCall(VecAssemblyBegin(E_z2));
+    PetscCall(VecAssemblyEnd(E_z2));
 
     DMStagVecSplitToDMDA(dmEz,E_z2,ELEMENT,-1,&daEz,&vecEz); /* note -3 : pad with zero */
-    PetscObjectSetName((PetscObject)vecEz,"z_component_cell_center_values");
+    PetscCall(PetscObjectSetName((PetscObject)vecEz,"z_component_cell_center_values"));
     //VecView(vecEz, PETSC_VIEWER_STDOUT_WORLD);
-    DMRestoreLocalVector(da, & XLocal);
+    PetscCall(DMRestoreLocalVector(da, & XLocal));
 
 
     PetscMPIInt rank;
@@ -3922,16 +3935,16 @@ PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, 
     /* Only rank == 0 has the entries of the patch, so run code only at that rank */
     if (rank == 0 || 1) {
       PetscInt sizeX;
-      VecGetSize(Xseq, &sizeX);
+      PetscCall(VecGetSize(Xseq, &sizeX));
       //PetscPrintf(PETSC_COMM_SELF,"The size of Xseq is %d, and the grid size is %d\n",sizeX,user->Nphi*(user->Nr)*user->Nz);
-      VecGetArrayRead(Xseq, &array);
+      PetscCall(VecGetArrayRead(Xseq, &array));
       memcpy(ge_ER, array, user->Nr*user->Nz*user->Nphi*(sizeof(PetscScalar)));
-      VecRestoreArrayRead(Xseq, &array);
+      PetscCall(VecRestoreArrayRead(Xseq, &array));
     }
 
-    VecDestroy(&Xseq);
+    PetscCall(VecDestroy(&Xseq));
     VecScatterDestroy(&scat);
-    VecDestroy(&naturalX);
+    PetscCall(VecDestroy(&naturalX));
 
 
     DMDACreateNaturalVector(daEphi,&naturalX);
@@ -3948,16 +3961,16 @@ PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, 
     /* Only rank == 0 has the entries of the patch, so run code only at that rank */
     if (rank == 0 || 1) {
       PetscInt sizeX;
-      VecGetSize(Xseq, &sizeX);
+      PetscCall(VecGetSize(Xseq, &sizeX));
       //PetscPrintf(PETSC_COMM_SELF,"The size of Xseq is %d, and the grid size is %d\n",sizeX,(user->Nphi)*user->Nr*user->Nz);
-      VecGetArrayRead(Xseq, &array);
+      PetscCall(VecGetArrayRead(Xseq, &array));
       memcpy(ge_EP, array, user->Nphi*user->Nz*user->Nr*(sizeof(PetscScalar)));
-      VecRestoreArrayRead(Xseq, &array);
+      PetscCall(VecRestoreArrayRead(Xseq, &array));
     }
 
-    VecDestroy(&Xseq);
+    PetscCall(VecDestroy(&Xseq));
     VecScatterDestroy(&scat);
-    VecDestroy(&naturalX);
+    PetscCall(VecDestroy(&naturalX));
 
 
     DMDACreateNaturalVector(daEz,&naturalX);
@@ -3974,38 +3987,38 @@ PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, 
     /* Only rank == 0 has the entries of the patch, so run code only at that rank */
     if (rank == 0 || 1) {
       PetscInt sizeX;
-      VecGetSize(Xseq, &sizeX);
+      PetscCall(VecGetSize(Xseq, &sizeX));
       //PetscPrintf(PETSC_COMM_SELF,"The size of Xseq is %d, and the grid size is %d\n",sizeX,user->Nphi*user->Nr*(user->Nz));
-      VecGetArrayRead(Xseq, &array);
+      PetscCall(VecGetArrayRead(Xseq, &array));
       memcpy(ge_EZ, array, (user->Nz)*user->Nphi*user->Nr*(sizeof(PetscScalar)));
-      VecRestoreArrayRead(Xseq, &array);
+      PetscCall(VecRestoreArrayRead(Xseq, &array));
     }
 
-    VecDestroy(&Xseq);
+    PetscCall(VecDestroy(&Xseq));
     VecScatterDestroy(&scat);
-    VecDestroy(&naturalX);
-    VecDestroy(&F);
-    VecDestroy(&C);
+    PetscCall(VecDestroy(&naturalX));
+    PetscCall(VecDestroy(&F));
+    PetscCall(VecDestroy(&C));
 
-    DMDestroy(&dmEr);
-    DMDestroy(&dmEphi);
-    DMDestroy(&dmEz);
+    PetscCall(DMDestroy(&dmEr));
+    PetscCall(DMDestroy(&dmEphi));
+    PetscCall(DMDestroy(&dmEz));
 
-    DMDestroy(&daEr);
-    DMDestroy(&daEphi);
-    DMDestroy(&daEz);
+    PetscCall(DMDestroy(&daEr));
+    PetscCall(DMDestroy(&daEphi));
+    PetscCall(DMDestroy(&daEz));
 
-    VecDestroy(&vecEr);
-    VecDestroy(&vecEphi);
-    VecDestroy(&vecEz);
+    PetscCall(VecDestroy(&vecEr));
+    PetscCall(VecDestroy(&vecEphi));
+    PetscCall(VecDestroy(&vecEz));
 
-    VecDestroy(&E_r2);
-    VecDestroy(&E_phi2);
-    VecDestroy(&E_z2);
+    PetscCall(VecDestroy(&E_r2));
+    PetscCall(VecDestroy(&E_phi2));
+    PetscCall(VecDestroy(&E_z2));
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-  return(0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 /* Recovers global V from Petsc DMStag (vertices)
@@ -4020,12 +4033,13 @@ PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, 
 
 PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("getVArray",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("getVArray",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
   User           *user = (User*)ptr;
   DM             da, dmV, daV;
@@ -4035,16 +4049,16 @@ PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
   const PetscScalar *array;
   int            len;
 
-  TSGetDM(ts,& da);
+  PetscCall(TSGetDM(ts,& da));
 
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmV); /* 3 dofs per element */
-  DMSetUp(dmV);
-  DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
-  DMCreateGlobalVector(dmV, & V);
-  DMGetLocalVector(da, & X_local);
-  DMGlobalToLocal(da, X, INSERT_VALUES, X_local);
+  PetscCall(DMSetUp(dmV));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMCreateGlobalVector(dmV, & V));
+  PetscCall(DMGetLocalVector(da, & X_local));
+  PetscCall(DMGlobalToLocal(da, X, INSERT_VALUES, X_local));
 
-  DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
 
   for (ez = startz; ez < startz + nz; ++ez)
   {
@@ -4073,7 +4087,7 @@ PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
           from[7 + comp*8].loc = FRONT_UP_RIGHT;
         }
 
-        DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom);
+        PetscCall(DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom));
 
         for (PetscInt comp = 0; comp < 3; ++comp)
         {
@@ -4088,15 +4102,15 @@ PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
           valTo[comp] /= 8.0;
         }
 
-        DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(V);
-  VecAssemblyEnd(V);
+  PetscCall(VecAssemblyBegin(V));
+  PetscCall(VecAssemblyEnd(V));
 
   DMStagVecSplitToDMDA(dmV, V, ELEMENT, -3, & daV, & vecV); /* note -3 : pad with zero in 2D case */
-  PetscObjectSetName((PetscObject) vecV, "Velocity");
+  PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity"));
 
   PetscMPIInt rank;
   MPI_Comm    comm;
@@ -4118,35 +4132,36 @@ PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
   /* Only rank == 0 has the entries of the patch, so run code only at that rank */
   if (rank == 0 || 1) {
     PetscInt sizeX;
-    VecGetSize(Xseq, &sizeX);
+    PetscCall(VecGetSize(Xseq, &sizeX));
     //PetscPrintf(PETSC_COMM_SELF,"The size of Xseq is %d, and the grid size is %d\n",sizeX,user->Nphi*(user->Nr+1)*user->Nz);
-    VecGetArrayRead(Xseq, &array);
+    PetscCall(VecGetArrayRead(Xseq, &array));
     memcpy(gf_V, array, 3*user->Nr*user->Nz*user->Nphi*(sizeof(PetscScalar)));
-    VecRestoreArrayRead(Xseq, &array);
+    PetscCall(VecRestoreArrayRead(Xseq, &array));
   }
 
-  VecDestroy(&naturalX);
+  PetscCall(VecDestroy(&naturalX));
 
 
   /* Destroy DMDAs and Vecs */
-  VecDestroy( & vecV);
-  DMDestroy( & daV);
-  VecDestroy( & V);
-  DMDestroy( & dmV);
+  PetscCall(VecDestroy( & vecV));
+  PetscCall(DMDestroy( & daV));
+  PetscCall(VecDestroy( & V));
+  PetscCall(DMDestroy( & dmV));
 
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-  return(0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode getJArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr) {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("getVArray",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("getVArray",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
   User           *user = (User*)ptr;
   DM             da, dmV, daV;
@@ -4156,16 +4171,16 @@ PetscErrorCode getJArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr) {
   const PetscScalar *array;
   int            len;
 
-  TSGetDM(ts,& da);
+  PetscCall(TSGetDM(ts,& da));
 
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmV); /* 3 dofs per element */
-  DMSetUp(dmV);
-  DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
-  DMCreateGlobalVector(dmV, & V);
-  DMGetLocalVector(da, & X_local);
-  DMGlobalToLocal(da, X, INSERT_VALUES, X_local);
+  PetscCall(DMSetUp(dmV));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMCreateGlobalVector(dmV, & V));
+  PetscCall(DMGetLocalVector(da, & X_local));
+  PetscCall(DMGlobalToLocal(da, X, INSERT_VALUES, X_local));
 
-  DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
 
   for (ez = startz; ez < startz + nz; ++ez)
   {
@@ -4194,7 +4209,7 @@ PetscErrorCode getJArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr) {
           from[7 + comp*8].loc = FRONT_UP_RIGHT;
         }
 
-        DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom);
+        PetscCall(DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom));
 
         for (PetscInt comp = 0; comp < 3; ++comp)
         {
@@ -4209,15 +4224,15 @@ PetscErrorCode getJArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr) {
           valTo[comp] /= 8.0;
         }
 
-        DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(V);
-  VecAssemblyEnd(V);
+  PetscCall(VecAssemblyBegin(V));
+  PetscCall(VecAssemblyEnd(V));
 
   DMStagVecSplitToDMDA(dmV, V, ELEMENT, -3, & daV, & vecV); /* note -3 : pad with zero in 2D case */
-  PetscObjectSetName((PetscObject) vecV, "Velocity");
+  PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity"));
 
   PetscMPIInt rank;
   MPI_Comm    comm;
@@ -4239,37 +4254,38 @@ PetscErrorCode getJArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr) {
   /* Only rank == 0 has the entries of the patch, so run code only at that rank */
   if (rank == 0 || 1) {
     PetscInt sizeX;
-    VecGetSize(Xseq, &sizeX);
+    PetscCall(VecGetSize(Xseq, &sizeX));
     //PetscPrintf(PETSC_COMM_SELF,"The size of Xseq is %d, and the grid size is %d\n",sizeX,user->Nphi*(user->Nr+1)*user->Nz);
-    VecGetArrayRead(Xseq, &array);
+    PetscCall(VecGetArrayRead(Xseq, &array));
     memcpy(gf_V, array, 3*user->Nr*user->Nz*user->Nphi*(sizeof(PetscScalar)));
-    VecRestoreArrayRead(Xseq, &array);
+    PetscCall(VecRestoreArrayRead(Xseq, &array));
   }
 
-  VecDestroy(&naturalX);
+  PetscCall(VecDestroy(&naturalX));
 
 
   /* Destroy DMDAs and Vecs */
-  VecDestroy( & vecV);
-  DMDestroy( & daV);
-  VecDestroy( & V);
-  DMDestroy( & dmV);
+  PetscCall(VecDestroy( & vecV));
+  PetscCall(DMDestroy( & daV));
+  PetscCall(VecDestroy( & V));
+  PetscCall(DMDestroy( & dmV));
 
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-  return(0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 
 PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivative)
 {
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("UpdateBArray",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("UpdateBArray",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
   User           *user = (User*)ptr;
   DM             da, dmCoord, dmB, daB;
@@ -4279,7 +4295,7 @@ PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivat
   const PetscScalar *array;
   int            len,i;
 
-  TSGetDM(ts, & da);
+  PetscCall(TSGetDM(ts, & da));
 
   PetscCall(DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmB)); /* 3 dofs per element */
   PetscCall(DMSetUp(dmB));
@@ -4385,9 +4401,9 @@ PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivat
   PetscCall(DMDestroy( & dmB));
 
 
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
-  return(0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 
@@ -4398,12 +4414,13 @@ PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivat
 #line 10053
 
 int isInDomain(const double * R, const double * Z, void * ptr){
+  PetscFunctionBeginUser;
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
-  PetscClassIdRegister("class name",&classid);
-  PetscLogEventRegister("isInDomain",classid,&USER_EVENT);
-  PetscLogEventBegin(USER_EVENT,0,0,0,0);
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("isInDomain",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
   int value = -3;
   int loopbr = 0;
@@ -4414,20 +4431,20 @@ int isInDomain(const double * R, const double * Z, void * ptr){
   Vec coordaLocal;
   PetscScalar ** ** arrCoord;
 
-  DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-  DMGetCoordinateDM(coordDA, & dmCoorda);
-  DMGetCoordinatesLocal(coordDA, & coordaLocal);
-  DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord);
+  PetscCall(DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+  PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
+  PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
+  PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord));
   for (d = 0; d < 3; ++d) {
     /* Face coordinates */
-    DMStagGetLocationSlot(dmCoorda, LEFT, d, & icBrm[d]);
-    DMStagGetLocationSlot(dmCoorda, DOWN, d, & icBphim[d]);
-    DMStagGetLocationSlot(dmCoorda, BACK, d, & icBzm[d]);
-    DMStagGetLocationSlot(dmCoorda, RIGHT, d, & icBrp[d]);
-    DMStagGetLocationSlot(dmCoorda, UP, d, & icBphip[d]);
-    DMStagGetLocationSlot(dmCoorda, FRONT, d, & icBzp[d]);
+    PetscCall(DMStagGetLocationSlot(dmCoorda, LEFT, d, & icBrm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, DOWN, d, & icBphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK, d, & icBzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, RIGHT, d, & icBrp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, UP, d, & icBphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT, d, & icBzp[d]));
   }
-  DMStagGetGlobalSizes(user -> coorda, & N[0], & N[1], & N[2]);
+  PetscCall(DMStagGetGlobalSizes(user -> coorda, & N[0], & N[1], & N[2]));
 
   for (ez = startz; ez < startz + nz; ++ez) {
     if(loopbr){
@@ -4444,9 +4461,9 @@ int isInDomain(const double * R, const double * Z, void * ptr){
   }
 
   if(value == -3){
-    PetscPrintf(PETSC_COMM_WORLD, "cell indices not found for (R,Z) = (%f,%f)\n", *R,*Z);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "cell indices not found for (R,Z) = (%f,%f)\n", *R,*Z));
   }
-  PetscLogEventEnd(USER_EVENT,0,0,0,0);
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
   return value;
 }

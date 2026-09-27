@@ -53,19 +53,40 @@ void view3d_zero(view3d_t v);
 
 void subview_exclude_d1(view4d_t v4, view3d_t v);
 
+/* Failure handler behind the MHD_CHECK macro in mhd.h.
+ *
+ * Prints the failing call with its source location, then aborts the whole job.
+ * Aborting rather than returning is deliberate: the public entry points sit at
+ * the top of the coupled timestep and there is no recovery path for a failed
+ * field solve. PetscError is called first so that PETSc's own traceback, which
+ * usually names the underlying cause, is emitted before the abort. */
+void mhd_fail(const char *expr, const char *file, int line, int code) {
+  PetscError(PETSC_COMM_SELF, line, "mhd_fail", file, (PetscErrorCode)code,
+             PETSC_ERROR_REPEAT, " ");
+  PetscPrintf(PETSC_COMM_SELF,
+              "CRITICAL: %s returned %d at %s:%d -- aborting\n",
+              expr, code, file, line);
+  (void)PetscFinalize();
+  MPI_Abort(MPI_COMM_WORLD, code);
+}
+
 int mhd_PetscInit(int * argc, char *** argv, User** user) {
+  PetscFunctionBeginUser;
   // feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
-  PetscErrorCode ierr = PetscInitialize( argc, argv, (char * ) 0, help);
+  /* Cannot use PetscCall here: PETSc is not initialized yet, so its error
+   * handler is unavailable. Report with plain stdio and return the code. */
+  PetscErrorCode ierr = PetscInitialize(argc, argv, (char *) 0, help);
   if (ierr) {
-    printf("CRITICAL: PetscInitialize returned error, aborting mhd_initialize\n");
-    return 1;
+    fprintf(stderr, "CRITICAL: PetscInitialize returned %d, aborting mhd_PetscInit\n", ierr);
+    return ierr;
   }
 
   *user = (User*) calloc(1, sizeof(User));
-  return 0;
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 int mhd_initialize(User* user) {
+  PetscFunctionBeginUser;
   KSP ksp, dummyksp, dummykspB, dummykspn, dummykspEP; /* scalable linear equations solver */
   //char              *prefix[2];
   PC dummypc, dummypcB, dummypcn, dummypcEP; /* preconditioner context */
@@ -73,7 +94,6 @@ int mhd_initialize(User* user) {
   Vec dummyX; /* solution and right-hand side vectors */
   Mat J, Jpre, dummyJ, dummyJn;
   //,Jmf = NULL;       /* jacobian matrix */
-  PetscErrorCode ierr = 0;
   SNES snes;
   PetscReal time, ftime;
 
@@ -88,11 +108,7 @@ int mhd_initialize(User* user) {
   // Some of these probably need to be separated out to separate statements with a default argument.
   PetscCall(default_petsc_options());
 
-  ierr = AppCtxView(PETSC_COMM_WORLD, user);
-  if (ierr) {
-    printf("CRITICAL: AppCtxView returned error, aborting mhd_initialize\n");
-    return 1;
-  }
+  PetscCall(AppCtxView(PETSC_COMM_WORLD, user));
 
   char filename[PETSC_MAX_PATH_LEN];
 
@@ -105,7 +121,7 @@ int mhd_initialize(User* user) {
    * A mismatch means the grid and the data disagree, which previously produced
    * silent out-of-bounds reads rather than an error.
    */
-  PetscSNPrintf(filename, sizeof(filename), "%s/veceta_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz);
+  PetscCall(PetscSNPrintf(filename, sizeof(filename), "%s/veceta_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz));
   PetscCall(ReadInitialData( & (user->dataC), & (user->numC), filename));
   PetscCheck(user->numC == user->Nr * user->Nphi * user->Nz, PETSC_COMM_WORLD,
              PETSC_ERR_FILE_UNEXPECTED,
@@ -119,7 +135,7 @@ int mhd_initialize(User* user) {
    * the regression harness never touch them, and the files only exist at the
    * one production resolution, so do not require them otherwise. */
   if (user->ictype == 9 || user->ictype == 15) {
-    PetscSNPrintf(filename, sizeof(filename), "%s/vecpsi_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "%s/vecpsi_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz));
     PetscCall(ReadInitialData( & (user->datapsi), & (user->numpsi), filename));
     PetscCheck(user->numpsi == (user->Nr + 1) * user->Nphi * (user->Nz + 1),
                PETSC_COMM_WORLD, PETSC_ERR_FILE_UNEXPECTED,
@@ -128,7 +144,7 @@ int mhd_initialize(User* user) {
                filename, user->numpsi, user->Nr, user->Nphi, user->Nz,
                (user->Nr + 1) * user->Nphi * (user->Nz + 1));
 
-    PetscSNPrintf(filename, sizeof(filename), "%s/vecg_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "%s/vecg_grid%.3Dx%.2Dx%.3D.txt", user->input_folder, user->Nr, user->Nphi, user->Nz));
     PetscCall(ReadInitialData( & (user->datag), & (user->numg), filename));
     PetscCheck(user->numg == user->Nr * (user->Nphi + 1) * user->Nz,
                PETSC_COMM_WORLD, PETSC_ERR_FILE_UNEXPECTED,
@@ -137,7 +153,7 @@ int mhd_initialize(User* user) {
                filename, user->numg, user->Nr, user->Nphi, user->Nz,
                user->Nr * (user->Nphi + 1) * user->Nz);
 
-    PetscPrintf(PETSC_COMM_WORLD, "Read initial data from g and psi input!\n");
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Read initial data from g and psi input!\n"));
   } else {
     PetscPrintf(PETSC_COMM_WORLD,
                 "ictype %" PetscInt_FMT ": manufactured initial condition, "
@@ -156,69 +172,69 @@ int mhd_initialize(User* user) {
     PetscInt nr = 0, nphi = 0, nz = 0;
 
     if (user->phibtype) {
-      DMStagCreate3d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, DM_BOUNDARY_PERIODIC, DM_BOUNDARY_NONE, user->Nr, user->Nphi, user->Nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, dof0, dof1, dof2, dof3, DMSTAG_STENCIL_BOX, stencilWidth, NULL, NULL, NULL, & user->da);
+      PetscCall(DMStagCreate3d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, DM_BOUNDARY_PERIODIC, DM_BOUNDARY_NONE, user->Nr, user->Nphi, user->Nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, dof0, dof1, dof2, dof3, DMSTAG_STENCIL_BOX, stencilWidth, NULL, NULL, NULL, & user->da));
     } else {
-      DMStagCreate3d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, DM_BOUNDARY_NONE, DM_BOUNDARY_NONE, user->Nr, user->Nphi, user->Nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, dof0, dof1, dof2, dof3, DMSTAG_STENCIL_BOX, stencilWidth, NULL, NULL, NULL, & user->da);
+      PetscCall(DMStagCreate3d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, DM_BOUNDARY_NONE, DM_BOUNDARY_NONE, user->Nr, user->Nphi, user->Nz, PETSC_DECIDE, PETSC_DECIDE, PETSC_DECIDE, dof0, dof1, dof2, dof3, DMSTAG_STENCIL_BOX, stencilWidth, NULL, NULL, NULL, & user->da));
     }
-    DMSetFromOptions(user->da);
-    DMSetUp(user->da);
+    PetscCall(DMSetFromOptions(user->da));
+    PetscCall(DMSetUp(user->da));
 
-    DMStagGetNumRanks(user->da, & nr, & nphi, & nz);
+    PetscCall(DMStagGetNumRanks(user->da, & nr, & nphi, & nz));
 
     if (user->phibtype) {
-      DMStagCreate3d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, DM_BOUNDARY_PERIODIC, DM_BOUNDARY_NONE, user->Nr, user->Nphi, user->Nz, nr, nphi, nz, 4, 1, 1, 1, DMSTAG_STENCIL_BOX, stencilWidth, NULL, NULL, NULL, & (user->coorda));
+      PetscCall(DMStagCreate3d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, DM_BOUNDARY_PERIODIC, DM_BOUNDARY_NONE, user->Nr, user->Nphi, user->Nz, nr, nphi, nz, 4, 1, 1, 1, DMSTAG_STENCIL_BOX, stencilWidth, NULL, NULL, NULL, & (user->coorda)));
     } else {
-      DMStagCreate3d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, DM_BOUNDARY_NONE, DM_BOUNDARY_NONE, user->Nr, user->Nphi, user->Nz, nr, nphi, nz, 4, 1, 1, 1, DMSTAG_STENCIL_BOX, stencilWidth, NULL, NULL, NULL, & (user->coorda));
+      PetscCall(DMStagCreate3d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, DM_BOUNDARY_NONE, DM_BOUNDARY_NONE, user->Nr, user->Nphi, user->Nz, nr, nphi, nz, 4, 1, 1, 1, DMSTAG_STENCIL_BOX, stencilWidth, NULL, NULL, NULL, & (user->coorda)));
     }
 
-    DMSetFromOptions(user->coorda);
-    DMSetUp(user->coorda);
-    DMStagSetUniformCoordinatesExplicit(user->da, user->rmin/user->L0, user->rmax/user->L0, user->phimin, user->phimax, user->zmin/user->L0, user->zmax/user->L0);
-    DMStagSetUniformCoordinatesExplicit(user->coorda, user->rmin/user->L0, user->rmax/user->L0, user->phimin, user->phimax, user->zmin/user->L0, user->zmax/user->L0);
+    PetscCall(DMSetFromOptions(user->coorda));
+    PetscCall(DMSetUp(user->coorda));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(user->da, user->rmin/user->L0, user->rmax/user->L0, user->phimin, user->phimax, user->zmin/user->L0, user->zmax/user->L0));
+    PetscCall(DMStagSetUniformCoordinatesExplicit(user->coorda, user->rmin/user->L0, user->rmax/user->L0, user->phimin, user->phimax, user->zmin/user->L0, user->zmax/user->L0));
 
     DM dmCoorda;
     Vec coordaLocal;
 
-    DMGetCoordinateDM(user->coorda, & dmCoorda);
-    DMGetCoordinatesLocal(user->coorda, & coordaLocal);
-    DMStagVecGetArrayRead(dmCoorda, coordaLocal, &user->arrCoord);
+    PetscCall(DMGetCoordinateDM(user->coorda, & dmCoorda));
+    PetscCall(DMGetCoordinatesLocal(user->coorda, & coordaLocal));
+    PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, &user->arrCoord));
 
     DMSetApplicationContext(user->da, user);
-    DMCreateGlobalVector(user->da, & user->X0);
-    DMCreateGlobalVector(user->da, & user->X);
+    PetscCall(DMCreateGlobalVector(user->da, & user->X0));
+    PetscCall(DMCreateGlobalVector(user->da, & user->X));
   }
   /* Print out some info */
   {
     PetscInt N[3];
-    DMStagGetGlobalSizes(user->da, & N[0], & N[1], & N[2]);
+    PetscCall(DMStagGetGlobalSizes(user->da, & N[0], & N[1], & N[2]));
     /* PetscInt must be printed with PetscInt_FMT; the old %D specifier was
      * removed in PETSc 3.16 and is now just an unrecognised conversion. */
-    PetscPrintf(PETSC_COMM_WORLD, "Using a %" PetscInt_FMT " x %" PetscInt_FMT " x %" PetscInt_FMT " mesh\n", N[0], N[1], N[2]);
-    PetscPrintf(PETSC_COMM_WORLD, "dr: %g\n", user->dr);
-    PetscPrintf(PETSC_COMM_WORLD, "dphi: %g\n", user->dphi);
-    PetscPrintf(PETSC_COMM_WORLD, "dz: %g\n", user->dz);
-    PetscPrintf(PETSC_COMM_WORLD, "normalized dt: %g\n", user->dt);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Using a %" PetscInt_FMT " x %" PetscInt_FMT " x %" PetscInt_FMT " mesh\n", N[0], N[1], N[2]));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "dr: %g\n", user->dr));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "dphi: %g\n", user->dphi));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "dz: %g\n", user->dz));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "normalized dt: %g\n", user->dt));
     PetscPrintf(PETSC_COMM_WORLD, "non-normalized dt: %g\n", user->dt * user->L0/user->V_A); // Alfven time := L0 / V_A
     PetscPrintf(PETSC_COMM_WORLD, "Characteristic resistive time: %g\n", user->L0*user->L0*user->mu0/user->etaplasma); // tau_eta := mu0 L0^2 / non_normalized_eta
-    PetscPrintf(PETSC_COMM_WORLD, "Reynolds parameter for viscosity: %g\n", user->Re);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Reynolds parameter for viscosity: %g\n", user->Re));
     PetscPrintf(PETSC_COMM_WORLD, "Lundquist number: %g\n", user->eta0 / user->etaplasma); // tau_eta / Alfven time = mu0 L0 V_A / non_normalized_eta
-    PetscPrintf(PETSC_COMM_WORLD, "Resistivity inside the plasma chamber (in Ohm.meter): %g\n",user->etaplasma);
-    PetscPrintf(PETSC_COMM_WORLD, "Resistivity outside the vacuum vessel (in Ohm.meter): %g\n", user->etaout );
-    PetscPrintf(PETSC_COMM_WORLD, "Resistivity inside the vacuum vessel (in Ohm.meter): %g\n", user->etaVV );
-    PetscPrintf(PETSC_COMM_WORLD, "Resistivity inside the blanket module (in Ohm.meter): %g\n", user->etawall );
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Resistivity inside the plasma chamber (in Ohm.meter): %g\n",user->etaplasma));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Resistivity outside the vacuum vessel (in Ohm.meter): %g\n", user->etaout ));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Resistivity inside the vacuum vessel (in Ohm.meter): %g\n", user->etaVV ));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Resistivity inside the blanket module (in Ohm.meter): %g\n", user->etawall ));
     //PetscPrintf(PETSC_COMM_WORLD, "CFL value: %g\n", user->dt / PetscMin(user->dr,user->dz));
   }
 
-  VecZeroEntries(user->X);
+  PetscCall(VecZeroEntries(user->X));
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Create timestepping solver context
   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-  TSCreate(PETSC_COMM_WORLD, & user->ts);
-  TSSetDM(user->ts, user->da);
+  PetscCall(TSCreate(PETSC_COMM_WORLD, & user->ts));
+  PetscCall(TSSetDM(user->ts, user->da));
 
   if (user->savecoords) {
     SaveCoordinates(user->ts, user);
-    return (0);
+    PetscFunctionReturn(PETSC_SUCCESS);
   }
 
   //DMSetMatrixPreallocateOnly(user->da,PETSC_TRUE);
@@ -247,7 +263,7 @@ int mhd_initialize(User* user) {
     break;
   case 5:
     //TSSetProblemType(user->ts,TS_NONLINEAR);
-    TSSetType(user->ts,TSROSW);
+    PetscCall(TSSetType(user->ts,TSROSW));
     break;
   case 6:
     TSSetType(user->ts, TSBDF); /* Backward differentiation formula of order 2*/
@@ -262,64 +278,64 @@ int mhd_initialize(User* user) {
     break;
   }
 
-  TSGetSNES(user->ts, & snes);
+  PetscCall(TSGetSNES(user->ts, & snes));
   if (user->tstype > 1) {
-    PetscOptionsGetBool(NULL, NULL, "-snes_mf", & matrix_free, NULL);
-    PetscOptionsGetBool(NULL, NULL, "-snes_mf_operator", & matrix_free_FDprec, NULL);
-    PetscOptionsGetBool(NULL, NULL, "-removezero", &removezero, NULL);
+    PetscCall(PetscOptionsGetBool(NULL, NULL, "-snes_mf", & matrix_free, NULL));
+    PetscCall(PetscOptionsGetBool(NULL, NULL, "-snes_mf_operator", & matrix_free_FDprec, NULL));
+    PetscCall(PetscOptionsGetBool(NULL, NULL, "-removezero", &removezero, NULL));
     if (matrix_free) { //matrix_free mode without any preconditioning matrix
-      PetscPrintf(PETSC_COMM_WORLD, "======use matrix-free evaluation and no preconditioning======\n");
+      PetscCall(PetscPrintf(PETSC_COMM_WORLD, "======use matrix-free evaluation and no preconditioning======\n"));
     } else if (matrix_free_FDprec) { //matrix_free mode with colored finite difference jacobian for preconditioning
-      DMCreateMatrix(user->da, & J);
-      TSSetIJacobian(user->ts, J, J, TSComputeIJacobianDefaultColor, NULL);
-      PetscPrintf(PETSC_COMM_WORLD, "======use matrix-free evaluation and FD coloring Jacobian for preconditioning======\n");
+      PetscCall(DMCreateMatrix(user->da, & J));
+      PetscCall(TSSetIJacobian(user->ts, J, J, TSComputeIJacobianDefaultColor, NULL));
+      PetscCall(PetscPrintf(PETSC_COMM_WORLD, "======use matrix-free evaluation and FD coloring Jacobian for preconditioning======\n"));
     } else {
-      DMCreateMatrix(user->da, & J);
-      DMCreateMatrix(user->da, & Jpre);
+      PetscCall(DMCreateMatrix(user->da, & J));
+      PetscCall(DMCreateMatrix(user->da, & Jpre));
       if (user->jtype == 0) {
         TSSetIJacobian(user->ts, J, Jpre, FormIJacobian_BImplicit, user); /* use user provided Jacobian evaluation routine */
-        PetscPrintf(PETSC_COMM_WORLD, "======use Analytical Jacobian======\n");
+        PetscCall(PetscPrintf(PETSC_COMM_WORLD, "======use Analytical Jacobian======\n"));
       } else {
         /* use finite difference Jacobian J as preconditioner and '-snes_mf_operator' for Mat*vec */
         /*MatCreateSNESMF(snes,&Jmf);*/
         if (user->jtype == 1) {
           /* slow finite difference J; */
-          SNESSetJacobian(snes, J, J, SNESComputeJacobianDefault, PETSC_NULLPTR);
-          PetscPrintf(PETSC_COMM_WORLD, "======use FD Jacobian======\n");
+          PetscCall(SNESSetJacobian(snes, J, J, SNESComputeJacobianDefault, PETSC_NULLPTR));
+          PetscCall(PetscPrintf(PETSC_COMM_WORLD, "======use FD Jacobian======\n"));
         } else if (user->jtype == 2) {
           /* Use coloring to compute finite difference J efficiently */
-          TSSetIJacobian(user->ts, J, J, TSComputeIJacobianDefaultColor, PETSC_NULLPTR);
-          PetscPrintf(PETSC_COMM_WORLD, "======use FD coloring Jacobian======\n");
+          PetscCall(TSSetIJacobian(user->ts, J, J, TSComputeIJacobianDefaultColor, PETSC_NULLPTR));
+          PetscCall(PetscPrintf(PETSC_COMM_WORLD, "======use FD coloring Jacobian======\n"));
         } else {
           SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_SUP, "This jtype is not supported");
         }
       }
     }
     //TSSetIFunction(user->ts, NULL, FormIFunction_DampingV, user);
-    TSSetIFunction(user->ts, NULL, FormIFunction_Vperp_viscosity, user);
-    TSSetRHSFunction(user->ts, NULL, FormRHSFunction_BImplicit, user);
+    PetscCall(TSSetIFunction(user->ts, NULL, FormIFunction_Vperp_viscosity, user));
+    PetscCall(TSSetRHSFunction(user->ts, NULL, FormRHSFunction_BImplicit, user));
   } else {
-    TSSetRHSFunction(user->ts, NULL, FormRHSFunction_BImplicit, user);
+    PetscCall(TSSetRHSFunction(user->ts, NULL, FormRHSFunction_BImplicit, user));
   }
-  SNESSetFromOptions(snes);
+  PetscCall(SNESSetFromOptions(snes));
 
-  TSSetTime(user->ts, user->itime);
+  PetscCall(TSSetTime(user->ts, user->itime));
   ftime = user->ftime;
-  TSSetMaxTime(user->ts, ftime);
-  TSSetExactFinalTime(user->ts, TS_EXACTFINALTIME_STEPOVER);
-  TSSetSolution(user->ts, user->X);
-  TSSetTimeStep(user->ts, user->dt);
+  PetscCall(TSSetMaxTime(user->ts, ftime));
+  PetscCall(TSSetExactFinalTime(user->ts, TS_EXACTFINALTIME_STEPOVER));
+  PetscCall(TSSetSolution(user->ts, user->X));
+  PetscCall(TSSetTimeStep(user->ts, user->dt));
 
-  TSSetFromOptions(user->ts);
-  TSSetUp(user->ts);
+  PetscCall(TSSetFromOptions(user->ts));
+  PetscCall(TSSetUp(user->ts));
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Set index sets
     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
   IS isEPBVndup, isEPtauVndup, isEPtauBVdup, istauBVndup, isndup, isEPdup, isBdup, istaudup;
 
-  DMCreateGlobalVector(user->da, & dummyX);
-  VecCopy(user->X, dummyX);
-  DMCreateMatrix(user->da, & dummyJ);
+  PetscCall(DMCreateGlobalVector(user->da, & dummyX));
+  PetscCall(VecCopy(user->X, dummyX));
+  PetscCall(DMCreateMatrix(user->da, & dummyJ));
 
   if (user->tstype > 1 && matrix_free_FDprec) {
     PetscRandom rctx;
@@ -332,39 +348,31 @@ int mhd_initialize(User* user) {
     if (removezero) PetscCall(TSPruneIJacobianColor(user->ts, J, J));
   }
 
-  KSPCreate(PETSC_COMM_WORLD, & dummykspEP);
-  KSPSetOptionsPrefix(dummykspEP, "sepKSP_");
+  PetscCall(KSPCreate(PETSC_COMM_WORLD, & dummykspEP));
+  PetscCall(KSPSetOptionsPrefix(dummykspEP, "sepKSP_"));
   FormDummyIJacobian4(user->ts,dummyX, dummyX, 1.0 / user->dt, dummyJ, dummyJ, user);
-  KSPSetOperators(dummykspEP, dummyJ, dummyJ);
-  KSPGetPC(dummykspEP, & dummypcEP);
-  PCSetType(dummypcEP, PCFIELDSPLIT);
+  PetscCall(KSPSetOperators(dummykspEP, dummyJ, dummyJ));
+  PetscCall(KSPGetPC(dummykspEP, & dummypcEP));
+  PetscCall(PCSetType(dummypcEP, PCFIELDSPLIT));
   PCFieldSplitSetDetectSaddlePoint(dummypcEP, PETSC_TRUE);
-  PCSetUp(dummypcEP);
-  PCFieldSplitSetType(dummypcEP, PC_COMPOSITE_SCHUR);
+  PetscCall(PCSetUp(dummypcEP));
+  PetscCall(PCFieldSplitSetType(dummypcEP, PC_COMPOSITE_SCHUR));
   PCFieldSplitSetSchurFactType(dummypcEP, PC_FIELDSPLIT_SCHUR_FACT_FULL);
   PCFieldSplitSetSchurPre(dummypcEP, PC_FIELDSPLIT_SCHUR_PRE_SELFP, NULL);
-  KSPSetUp(dummykspEP);
+  PetscCall(KSPSetUp(dummykspEP));
   KSPSetTolerances(dummykspEP, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT, 1); //use 1 outer iteration for the dummy solve
-  PCFieldSplitGetSubKSP(dummypcEP, & n, & subksp);
-  ierr = KSPGetPC(subksp[1], & (subpc[1]));
-  if (ierr) {
-    printf("CRITICAL: KSPGetPC returned error, aborting mhd_initialize\n");
-    return 1;
-  }
+  PetscCall(PCFieldSplitGetSubKSP(dummypcEP, & n, & subksp));
+  PetscCall(KSPGetPC(subksp[1], & (subpc[1])));
   KSPSetTolerances(subksp[1], PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT, 1); //use 1 inner iteration maximum for the dummy solve
-  ierr = KSPSolve(dummykspEP, dummyX, dummyX);
-  if (ierr) {
-    printf("CRITICAL: KSPSolve returned error, aborting mhd_initialize\n");
-    return 1;
-  }
+  PetscCall(KSPSolve(dummykspEP, dummyX, dummyX));
   //ISDuplicate(isBdup, & user->isB);
   PCFieldSplitGetISByIndex(dummypcEP, 0, & isEPdup);
-  ISDuplicate(isEPdup, & user->isEP);
+  PetscCall(ISDuplicate(isEPdup, & user->isEP));
 
 
-  VecDestroy( & dummyX);
-  KSPDestroy( & dummykspEP);
-  MatDestroy( & dummyJ);
+  PetscCall(VecDestroy( & dummyX));
+  PetscCall(KSPDestroy( & dummykspEP));
+  PetscCall(MatDestroy( & dummyJ));
 
 
   char ** namelist;
@@ -372,64 +380,56 @@ int mhd_initialize(User* user) {
   IS ISV;
 
   PetscInt len, d = 0;
-  ierr = DMCreateFieldDecomposition(user->da, & len, & namelist, & islist, NULL);
-  if (ierr) {
-    printf("CRITICAL: DMCreateFieldDecomposition returned error, aborting mhd_initialize\n");
-    return 1;
-  }
-  PetscPrintf(PETSC_COMM_WORLD, "The number of subproblems in the field decomposition is: %g\n", (double)(len));
+  PetscCall(DMCreateFieldDecomposition(user->da, & len, & namelist, & islist, NULL));
+  PetscCall(PetscPrintf(PETSC_COMM_WORLD, "The number of subproblems in the field decomposition is: %g\n", (double)(len)));
   for (d = 0; d < len; ++d) {
-    PetscPrintf(PETSC_COMM_WORLD, "The name of field number %d is: %s.\n", d, namelist[d]);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "The name of field number %d is: %s.\n", d, namelist[d]));
     //PetscPrintf(PETSC_COMM_WORLD, "The global indices for field number %d are as follows.\n", d);
     //ISView(islist[d],PETSC_VIEWER_STDOUT_SELF);
   }
   PetscBool flagV = PETSC_FALSE, flagE = PETSC_FALSE, flagF = PETSC_FALSE, flagC = PETSC_FALSE;
-  ISDifference(islist[0], user->isEP, & user->isV);
+  PetscCall(ISDifference(islist[0], user->isEP, & user->isV));
 
-  ISDuplicate(islist[1], & user->istau);
-  ISDuplicate(islist[2], & user->isB);
-  ISDuplicate(islist[3], & user->isni);
+  PetscCall(ISDuplicate(islist[1], & user->istau));
+  PetscCall(ISDuplicate(islist[2], & user->isB));
+  PetscCall(ISDuplicate(islist[3], & user->isni));
 
   const IS islist2[5] = {user->isV, user->isEP, user->istau, user->isB, user->isni};
 
-  ISConcatenate(PETSC_COMM_WORLD,5,islist2,&isALL);
-  ISDifference(isALL, user->isV, & isALL_V);
-  ISDestroy( & isALL);
+  PetscCall(ISConcatenate(PETSC_COMM_WORLD,5,islist2,&isALL));
+  PetscCall(ISDifference(isALL, user->isV, & isALL_V));
+  PetscCall(ISDestroy( & isALL));
 
   const IS islist3[5] = {user->isV, user->isB};
-  ISConcatenate(PETSC_COMM_WORLD,2,islist3,&isBV);
-  ISDestroy( & isBV);
+  PetscCall(ISConcatenate(PETSC_COMM_WORLD,2,islist3,&isBV));
+  PetscCall(ISDestroy( & isBV));
 
   for (d = 0; d < len; ++d) {
-    ISDestroy( & islist[d]);
+    PetscCall(ISDestroy( & islist[d]));
   }
-  PetscFree(islist);
-  PetscFree(namelist);
+  PetscCall(PetscFree(islist));
+  PetscCall(PetscFree(namelist));
 
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Set preconditioner options
   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-  SNESGetKSP(snes, & ksp);
-  ierr = KSPGetPC(ksp, &pc);
-  if (ierr) {
-    printf("CRITICAL: KSPGetPC, second occurance returned error, aborting mhd_initialize\n");
-    return 1;
-  }
+  PetscCall(SNESGetKSP(snes, & ksp));
+  PetscCall(KSPGetPC(ksp, &pc));
   /* Set a user-defined "shell" preconditioner if desired */
-  PetscOptionsGetBool(NULL,NULL,"-user_defined_pc",&user_defined_pc,NULL);
+  PetscCall(PetscOptionsGetBool(NULL,NULL,"-user_defined_pc",&user_defined_pc,NULL));
   if (user_defined_pc) {
     /* (Required) Indicate to PETSc that we're using a "shell" preconditioner */
-    PCSetType(pc,PCSHELL);
-    PCShellSetContext(pc,user);
+    PetscCall(PCSetType(pc,PCSHELL));
+    PetscCall(PCShellSetContext(pc,user));
 
     /* Do any setup required for the preconditioner */
-    PCShellSetSetUp(pc,SampleShellPCSetUp);
+    PetscCall(PCShellSetSetUp(pc,SampleShellPCSetUp));
 
     /* (Required) Set the user-defined routine for applying the preconditioner */
-    PCShellSetApply(pc,SampleShellPCApply);
+    PetscCall(PCShellSetApply(pc,SampleShellPCApply));
 
     /* (Optional) Set user-defined function to free objects used by custom preconditioner */
-    PCShellSetDestroy(pc,SampleShellPCDestroy);
+    PetscCall(PCShellSetDestroy(pc,SampleShellPCDestroy));
 
     /* (Optional) Set a name for the preconditioner, used for PCView() */
     PCShellSetName(pc,"ShellPrec");
@@ -658,7 +658,7 @@ int mhd_initialize(User* user) {
 
   // Decrese reference count of jacobian
   if (user->tstype > 1) {
-    MatDestroy( & J);
+    PetscCall(MatDestroy( & J));
   }
   /* Set the initial condition.
    *
@@ -674,37 +674,36 @@ int mhd_initialize(User* user) {
   } else {
     PetscCall(FormInitialSolution(user->ts, user->X, user));
   }
-  return 0;
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 int mhd_step(User* user) {
+  PetscFunctionBeginUser;
   Vec X;
-  TSGetSolution(user->ts, &X);
+  PetscCall(TSGetSolution(user->ts, &X));
   // Backup solition state
-  VecCopy(X, user->X0);
+  PetscCall(VecCopy(X, user->X0));
 
   // Do one step
-  PetscErrorCode ierr = TSStep(user->ts);
-  if (ierr) {
-    printf("CRITICAL: TSSolve, second occurance returned error, aborting mhd_initialize\n");
-    return 1;
-  }
+  /* The previous message here named TSSolve and mhd_initialize; the call is
+   * TSStep and the function is mhd_step. PetscCall reports accurately. */
+  PetscCall(TSStep(user->ts));
 
   /* update internal time */
   PetscReal t = 0;
-  TSGetTime(user->ts, &t);
+  PetscCall(TSGetTime(user->ts, &t));
   t += user->dt;
-  TSSetTime(user->ts, t);
+  PetscCall(TSSetTime(user->ts, t));
 
   if (user->savesol) {
     SaveSolution(user->ts,user->X,user);
   }
 
   PetscReal ftime;
-  TSGetSolveTime(user->ts, & ftime);
+  PetscCall(TSGetSolveTime(user->ts, & ftime));
 
   PetscInt steps;
-  TSGetStepNumber(user->ts, & steps);
+  PetscCall(TSGetStepNumber(user->ts, & steps));
 
   /* Run the per-step diagnostics, if enabled.
    *
@@ -725,39 +724,41 @@ int mhd_step(User* user) {
   if (user->monitor) {
     Vec Xnow;
     PetscReal tnow;
-    TSGetSolution(user->ts, & Xnow);
-    TSGetTime(user->ts, & tnow);
+    PetscCall(TSGetSolution(user->ts, & Xnow));
+    PetscCall(TSGetTime(user->ts, & tnow));
     PetscCall(Monitor(user->ts, steps, tnow, Xnow, user));
   }
 
   TSConvergedReason reason;
-  TSGetConvergedReason(user->ts, & reason);
-  PetscPrintf(PETSC_COMM_WORLD, "%s at time %g after %" PetscInt_FMT " steps\n", TSConvergedReasons[reason], (double) ftime, steps);
-  return 0;
+  PetscCall(TSGetConvergedReason(user->ts, & reason));
+  PetscCall(PetscPrintf(PETSC_COMM_WORLD, "%s at time %g after %" PetscInt_FMT " steps\n", TSConvergedReasons[reason], (double) ftime, steps));
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 int mhd_resetState(User* user) {
+  PetscFunctionBeginUser;
   Vec X;
-  TSGetSolution(user->ts, &X);
+  PetscCall(TSGetSolution(user->ts, &X));
   // Backup solition state
-  VecCopy(user->X0, X);
-  TSSetSolution(user->ts, X);
+  PetscCall(VecCopy(user->X0, X));
+  PetscCall(TSSetSolution(user->ts, X));
 
   /* update internal time */
   PetscReal t = 0;
-  TSGetTime(user->ts, &t);
+  PetscCall(TSGetTime(user->ts, &t));
   t -= user->dt;
-  TSSetTime(user->ts, t);
+  PetscCall(TSSetTime(user->ts, t));
 
-  return 0;
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 int mhd_getF(User* user, field_id fid, view3d_t v) {
+  PetscFunctionBeginUser;
   Vec X;
-  TSGetSolution(user->ts, &X);
+  PetscCall(TSGetSolution(user->ts, &X));
 
   DM da;
-  TSGetDM(user->ts,&da);
+  PetscCall(TSGetDM(user->ts,&da));
 
   size_t NR = user->Nr;
   size_t Nphi = user->Nphi;
@@ -795,7 +796,7 @@ int mhd_getF(User* user, field_id fid, view3d_t v) {
       v.data[i * v.stride0 + j * v.stride1 + k * v.stride2] =
         jre.data[i * jre.stride0 + j * jre.stride1 + k * jre.stride2];
     free(v4.data);
-    return 0;
+    PetscFunctionReturn(PETSC_SUCCESS);
   }
   else if (fid == fid_J)
     getEJArray(user->ts, X,
@@ -808,39 +809,39 @@ int mhd_getF(User* user, field_id fid, view3d_t v) {
   else if (fid == fid_GradB)
     getBArray(user->ts, X, v4.data, user, 1);
   else {
-    PetscPrintf(PETSC_COMM_WORLD, "ERROR: Wrong field id\n");
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "ERROR: Wrong field id\n"));
     free(v4.data);
     return 1;
   }
 
   subview_exclude_d1(v4, v);
   free(v4.data);
-  return 0;
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 int mhd_destroy(User* user) {
-  PetscErrorCode ierr = 0;
+  PetscFunctionBeginUser;
   // Free work space.
-  ISDestroy( & user->isALL_V);
+  PetscCall(ISDestroy( & user->isALL_V));
 
   {
     DM dmCoorda;
     Vec coordaLocal;
 
-    DMGetCoordinateDM(user->coorda, & dmCoorda);
-    DMGetCoordinatesLocal(user->coorda, & coordaLocal);
-    DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & user->arrCoord);
+    PetscCall(DMGetCoordinateDM(user->coorda, & dmCoorda));
+    PetscCall(DMGetCoordinatesLocal(user->coorda, & coordaLocal));
+    PetscCall(DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & user->arrCoord));
   }
 
-  VecDestroy( & user->X);
-  VecDestroy( & user->X0);
-  TSDestroy( & user->ts);
+  PetscCall(VecDestroy( & user->X));
+  PetscCall(VecDestroy( & user->X0));
+  PetscCall(TSDestroy( & user->ts));
 
-  DMDestroy( & user->da);
+  PetscCall(DMDestroy( & user->da));
 
-  PetscFinalize();
+  PetscCall(PetscFinalize());
 
-  return 0;
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 /*
@@ -929,6 +930,7 @@ static PetscErrorCode stag_vec_io(User *user, PetscViewer viewer, Vec X, PetscBo
 
 PetscErrorCode mhd_savesolution(User *user, const char *filename)
 {
+  PetscFunctionBeginUser;
     PetscViewer viewer;
     Vec X;
 
@@ -950,6 +952,7 @@ PetscErrorCode mhd_savesolution(User *user, const char *filename)
 
 PetscErrorCode mhd_loadsolution(User *user, const char *filename)
 {
+  PetscFunctionBeginUser;
     PetscViewer viewer;
     Vec X;
 

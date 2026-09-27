@@ -25,29 +25,30 @@
 
 
 PetscErrorCode DumpVelocity_Cell(TS ts, PetscInt step, Vec X, char* prefix, void * ptr) {
+  PetscFunctionBeginUser;
   User * user = (User * ) ptr;
   DM da, dmC, daC, dmBAvg, daBAvg, dmEAvg, daEAvg, dmJAvg, daJAvg, dmV, daV, dmEP, daEP;
   PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz;
   Vec J, J_local, X_local, vecC, C, vecBAvg, BAvg, vecEAvg, EAvg, vecJAvg, JAvg, vecV, V, vecEP, EP;
   PetscReal time = 0.0;
 
-  TSGetDM(ts, & da);
-  TSGetTime(ts, & time);
+  PetscCall(TSGetDM(ts, & da));
+  PetscCall(TSGetTime(ts, & time));
 
   //PetscPrintf(PETSC_COMM_WORLD,"Current time: t = %f\n", time);
 
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmV); /* 3 dofs per element */
 
-  DMSetUp(dmV);
+  PetscCall(DMSetUp(dmV));
 
-  DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
 
-  DMCreateGlobalVector(dmV, & V);
+  PetscCall(DMCreateGlobalVector(dmV, & V));
 
-  DMGetLocalVector(da, & X_local);
-  DMGlobalToLocal(da, X, INSERT_VALUES, X_local);
+  PetscCall(DMGetLocalVector(da, & X_local));
+  PetscCall(DMGlobalToLocal(da, X, INSERT_VALUES, X_local));
 
-  DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -174,7 +175,7 @@ PetscErrorCode DumpVelocity_Cell(TS ts, PetscInt step, Vec X, char* prefix, void
           from[23].k = ez;
           from[23].loc = FRONT_UP_RIGHT;
           from[23].c = 2;
-          DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom));
 
         to[0].i = er;
         to[0].j = ephi;
@@ -195,25 +196,25 @@ PetscErrorCode DumpVelocity_Cell(TS ts, PetscInt step, Vec X, char* prefix, void
         to[2].c = 2;
         valTo[2] = (valFrom[16]+valFrom[17]+valFrom[18]+valFrom[19]+valFrom[20]+valFrom[21]+valFrom[22]+valFrom[23]) / 8.0;
 
-        DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(V);
-  VecAssemblyEnd(V);
+  PetscCall(VecAssemblyBegin(V));
+  PetscCall(VecAssemblyEnd(V));
 
-  DMRestoreLocalVector(da, & X_local);
+  PetscCall(DMRestoreLocalVector(da, & X_local));
 
   DMStagVecSplitToDMDA(dmV, V, ELEMENT, -3, & daV, & vecV); /* note -3 : pad with zero in 2D case */
 
   if(prefix[0] == 'd'){
-    PetscObjectSetName((PetscObject) vecV, "Velocity time derivative");
+    PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity time derivative"));
   }
   else if(prefix[0] == 'l'){
-    PetscObjectSetName((PetscObject) vecV, "Velocity laplacian");
+    PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity laplacian"));
   }
   else{
-    PetscObjectSetName((PetscObject) vecV, "Velocity");
+    PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity"));
   }
 
   /* Dump element-based fields to a .vtr file and create a .pvd file */
@@ -223,32 +224,33 @@ PetscErrorCode DumpVelocity_Cell(TS ts, PetscInt step, Vec X, char* prefix, void
     FILE * pvdfile;
 
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_%savg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", prefix, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daV), filename, FILE_MODE_WRITE, & viewerV);
-    VecView(vecV, viewerV);
-    PetscViewerDestroy( & viewerV);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_%savg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", prefix, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daV), filename, FILE_MODE_WRITE, & viewerV));
+    PetscCall(VecView(vecV, viewerV));
+    PetscCall(PetscViewerDestroy( & viewerV));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
   }
 
   /* Destroy DMDAs and Vecs */
-  VecDestroy( & vecV);
-  DMDestroy( & daV);
-  VecDestroy( & V);
-  DMDestroy( & dmV);
-  return (0);
+  PetscCall(VecDestroy( & vecV));
+  PetscCall(DMDestroy( & daV));
+  PetscCall(VecDestroy( & V));
+  PetscCall(DMDestroy( & dmV));
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
+  PetscFunctionBeginUser;
   User * user = (User * ) ptr;
   DM da, dmC, daC, dmBAvg, daBAvg, dmEAvg, daEAvg, dmJAvg, daJAvg, dmV, daV, dmEP, daEP;
   PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz;
   Vec J, J_local, X_local, vecC, C, vecBAvg, BAvg, vecEAvg, EAvg, vecJAvg, JAvg, vecV, V, vecEP, EP;
   PetscReal time = 0.0;
 
-  TSGetDM(ts, & da);
-  TSGetTime(ts, & time);
+  PetscCall(TSGetDM(ts, & da));
+  PetscCall(TSGetTime(ts, & time));
 
-  PetscPrintf(PETSC_COMM_WORLD,"Current time: t = %f\n", time);
+  PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Current time: t = %f\n", time));
 
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 1, & dmEP); /* 1 dof per element */
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmV); /* 3 dofs per element */
@@ -257,39 +259,39 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmJAvg); /* 3 dofs per element */
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 1, & dmC); /* 1 dof per element */
 
-  DMSetUp(dmEP);
-  DMSetUp(dmV);
-  DMSetUp(dmBAvg);
-  DMSetUp(dmEAvg);
-  DMSetUp(dmJAvg);
-  DMSetUp(dmC);
+  PetscCall(DMSetUp(dmEP));
+  PetscCall(DMSetUp(dmV));
+  PetscCall(DMSetUp(dmBAvg));
+  PetscCall(DMSetUp(dmEAvg));
+  PetscCall(DMSetUp(dmJAvg));
+  PetscCall(DMSetUp(dmC));
 
-  DMStagSetUniformCoordinatesExplicit(dmEP, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
-  DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
-  DMStagSetUniformCoordinatesExplicit(dmBAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
-  DMStagSetUniformCoordinatesExplicit(dmEAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
-  DMStagSetUniformCoordinatesExplicit(dmJAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
-  DMStagSetUniformCoordinatesExplicit(dmC, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmEP, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmBAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmEAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmJAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmC, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
 
-  DMCreateGlobalVector(dmEP, & EP);
-  DMCreateGlobalVector(dmV, & V);
-  DMCreateGlobalVector(dmBAvg, & BAvg);
-  DMCreateGlobalVector(dmEAvg, & EAvg);
-  DMCreateGlobalVector(dmJAvg, & JAvg);
-  DMCreateGlobalVector(dmC, & C);
+  PetscCall(DMCreateGlobalVector(dmEP, & EP));
+  PetscCall(DMCreateGlobalVector(dmV, & V));
+  PetscCall(DMCreateGlobalVector(dmBAvg, & BAvg));
+  PetscCall(DMCreateGlobalVector(dmEAvg, & EAvg));
+  PetscCall(DMCreateGlobalVector(dmJAvg, & JAvg));
+  PetscCall(DMCreateGlobalVector(dmC, & C));
 
-  DMGetLocalVector(da, & X_local);
-  DMGlobalToLocal(da, X, INSERT_VALUES, X_local);
+  PetscCall(DMGetLocalVector(da, & X_local));
+  PetscCall(DMGlobalToLocal(da, X, INSERT_VALUES, X_local));
 
   // Compute \tilde{J}:= curl(\tilde{B})
-  VecDuplicate(X,&J);
-  VecCopy(X, J);
+  PetscCall(VecDuplicate(X,&J));
+  PetscCall(VecCopy(X, J));
   FormDerivedCurlnomp(ts, X, J, user);
-  VecScale(J, 1.0/user->L0);
-  DMGetLocalVector(da, & J_local);
-  DMGlobalToLocal(da, J, INSERT_VALUES, J_local);
+  PetscCall(VecScale(J, 1.0/user->L0));
+  PetscCall(DMGetLocalVector(da, & J_local));
+  PetscCall(DMGlobalToLocal(da, J, INSERT_VALUES, J_local));
 
-  DMStagGetCorners(dmEP, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmEP, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -336,7 +338,7 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
         from[7].k = ez;
         from[7].loc = FRONT_UP_RIGHT;
         from[7].c = 3;
-        DMStagVecGetValuesStencil(da, X_local, 8, from, valFrom);
+        PetscCall(DMStagVecGetValuesStencil(da, X_local, 8, from, valFrom));
 
         to[0].i = er;
         to[0].j = ephi;
@@ -345,15 +347,15 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
         to[0].c = 0;
         valTo[0] = (valFrom[0]+valFrom[1]+valFrom[2]+valFrom[3]+valFrom[4]+valFrom[5]+valFrom[6]+valFrom[7]) / 8.0;
 
-        DMStagVecSetValuesStencil(dmEP, EP, 1, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmEP, EP, 1, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(EP);
-  VecAssemblyEnd(EP);
+  PetscCall(VecAssemblyBegin(EP));
+  PetscCall(VecAssemblyEnd(EP));
   // PetscPrintf(PETSC_COMM_WORLD,"line 340");
 
-  DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -480,7 +482,7 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
           from[23].k = ez;
           from[23].loc = FRONT_UP_RIGHT;
           from[23].c = 2;
-          DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom));
 
         to[0].i = er;
         to[0].j = ephi;
@@ -501,14 +503,14 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
         to[2].c = 2;
         valTo[2] = (valFrom[16]+valFrom[17]+valFrom[18]+valFrom[19]+valFrom[20]+valFrom[21]+valFrom[22]+valFrom[23]) / 8.0;
 
-        DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(V);
-  VecAssemblyEnd(V);
+  PetscCall(VecAssemblyBegin(V));
+  PetscCall(VecAssemblyEnd(V));
     // PetscPrintf(PETSC_COMM_WORLD,"line 496");
-  DMStagGetCorners(dmBAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmBAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -546,7 +548,7 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
         from[5].loc = BACK;
         from[5].c = 0;
 
-        DMStagVecGetValuesStencil(da, X_local, 6, from, valFrom);
+        PetscCall(DMStagVecGetValuesStencil(da, X_local, 6, from, valFrom));
 
         to[0].i = er;
         to[0].j = ephi;
@@ -567,14 +569,14 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
         to[2].c = 2;
         valTo[2] = 0.5 * (valFrom[4] + valFrom[5]);
 
-        DMStagVecSetValuesStencil(dmBAvg, BAvg, 3, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmBAvg, BAvg, 3, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(BAvg);
-  VecAssemblyEnd(BAvg);
+  PetscCall(VecAssemblyBegin(BAvg));
+  PetscCall(VecAssemblyEnd(BAvg));
   // PetscPrintf(PETSC_COMM_WORLD,"line 562");
-  DMStagGetCorners(dmEAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmEAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -641,7 +643,7 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
         from[11].k = ez;
         from[11].loc = DOWN_LEFT;
         from[11].c = 0;
-        DMStagVecGetValuesStencil(da, X_local, 12, from, valFrom);
+        PetscCall(DMStagVecGetValuesStencil(da, X_local, 12, from, valFrom));
         to[0].i = er;
         to[0].j = ephi;
         to[0].k = ez;
@@ -660,14 +662,14 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
         to[2].loc = ELEMENT;
         to[2].c = 2;
         valTo[2] = 0.25 * (valFrom[8] + valFrom[9] + valFrom[10] + valFrom[11]);
-        DMStagVecSetValuesStencil(dmEAvg, EAvg, 3, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmEAvg, EAvg, 3, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(EAvg);
-  VecAssemblyEnd(EAvg);
+  PetscCall(VecAssemblyBegin(EAvg));
+  PetscCall(VecAssemblyEnd(EAvg));
 
-  DMStagGetCorners(dmJAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmJAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -734,7 +736,7 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
         from[11].k = ez;
         from[11].loc = DOWN_LEFT;
         from[11].c = 0;
-        DMStagVecGetValuesStencil(da, J_local, 12, from, valFrom);
+        PetscCall(DMStagVecGetValuesStencil(da, J_local, 12, from, valFrom));
         to[0].i = er;
         to[0].j = ephi;
         to[0].k = ez;
@@ -753,14 +755,14 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
         to[2].loc = ELEMENT;
         to[2].c = 2;
         valTo[2] = 0.25 * (valFrom[8] + valFrom[9] + valFrom[10] + valFrom[11]);
-        DMStagVecSetValuesStencil(dmJAvg, JAvg, 3, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmJAvg, JAvg, 3, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(JAvg);
-  VecAssemblyEnd(JAvg);
+  PetscCall(VecAssemblyBegin(JAvg));
+  PetscCall(VecAssemblyEnd(JAvg));
 
-  DMStagGetCorners(dmC, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmC, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -772,22 +774,22 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
           from[0].k = ez;
           from[0].loc = ELEMENT;
           from[0].c = 0;
-          DMStagVecGetValuesStencil(da, X_local, 1, from, valFrom);
+          PetscCall(DMStagVecGetValuesStencil(da, X_local, 1, from, valFrom));
           to[0].i = er;
           to[0].j = ephi;
           to[0].k = ez;
           to[0].loc = ELEMENT;
           to[0].c = 0;
           valTo[0] = valFrom[0];
-          DMStagVecSetValuesStencil(dmC, C, 1, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(dmC, C, 1, to, valTo, INSERT_VALUES));
         }
       }
     }
-    VecAssemblyBegin(C);
-    VecAssemblyEnd(C);
+    PetscCall(VecAssemblyBegin(C));
+    PetscCall(VecAssemblyEnd(C));
 
-  DMRestoreLocalVector(da, & X_local);
-  DMRestoreLocalVector(da, & J_local);
+  PetscCall(DMRestoreLocalVector(da, & X_local));
+  PetscCall(DMRestoreLocalVector(da, & J_local));
   // PetscPrintf(PETSC_COMM_WORLD,"line 777");
   DMStagVecSplitToDMDA(dmEP, EP, ELEMENT, -1, & daEP, & vecEP); /* note -3 : pad with zero in 2D case */
   DMStagVecSplitToDMDA(dmV, V, ELEMENT, -3, & daV, & vecV); /* note -3 : pad with zero in 2D case */
@@ -796,12 +798,12 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
   DMStagVecSplitToDMDA(dmJAvg, JAvg, ELEMENT, -3, & daJAvg, & vecJAvg); /* note -3 : pad with zero in 2D case */
   DMStagVecSplitToDMDA(dmC, C, ELEMENT, -1, & daC, & vecC); /* note -3 : pad with zero in 2D case */
 
-  PetscObjectSetName((PetscObject) vecEP, "Electrostatic Potential");
-  PetscObjectSetName((PetscObject) vecV, "Velocity");
-  PetscObjectSetName((PetscObject) vecBAvg, "Magnetic Field");
-  PetscObjectSetName((PetscObject) vecEAvg, "Divergence-free part of Electric Field");
-  PetscObjectSetName((PetscObject) vecJAvg, "Curl of Magnetic Field");
-  PetscObjectSetName((PetscObject) vecC, "Number Density of Ions");
+  PetscCall(PetscObjectSetName((PetscObject) vecEP, "Electrostatic Potential"));
+  PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity"));
+  PetscCall(PetscObjectSetName((PetscObject) vecBAvg, "Magnetic Field"));
+  PetscCall(PetscObjectSetName((PetscObject) vecEAvg, "Divergence-free part of Electric Field"));
+  PetscCall(PetscObjectSetName((PetscObject) vecJAvg, "Curl of Magnetic Field"));
+  PetscCall(PetscObjectSetName((PetscObject) vecC, "Number Density of Ions"));
 
   /* Dump element-based fields to a .vtr file and create a .pvd file */
   {
@@ -809,145 +811,146 @@ PetscErrorCode DumpSolution_Cell(TS ts, PetscInt step, Vec X, void * ptr) {
     char filename[PETSC_MAX_PATH_LEN];
     FILE * pvdfile;
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D.pvd", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D.pvd", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz));
     if (time == 0.0) {
-      PetscFOpen(PETSC_COMM_WORLD, filename, "a", & pvdfile);
+      PetscCall(PetscFOpen(PETSC_COMM_WORLD, filename, "a", & pvdfile));
       //pvdfile = fopen(filename, "a");
       //pvdfile.open (filename, ios::out | ios::app);
-      PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "<\?xml version=\"1.0\"?>\n");
+      PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "<\?xml version=\"1.0\"?>\n"));
       //pvdfile << "<\?xml version=\"1.0\"?>\n";
-      PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "<VTKFile type=\"Collection\" version=\"0.1\" byte_order=\"LittleEndian\" compressor=\"vtkZLibDataCompressor\">\n");
+      PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "<VTKFile type=\"Collection\" version=\"0.1\" byte_order=\"LittleEndian\" compressor=\"vtkZLibDataCompressor\">\n"));
       //pvdfile << "<VTKFile type=\"Collection\" version=\"0.1\" byte_order=\"LittleEndian\" compressor=\"vtkZLibDataCompressor\">\n";
-      PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "  <Collection>\n");
+      PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "  <Collection>\n"));
       //pvdfile << "  <Collection>\n";
-      PetscFClose(PETSC_COMM_WORLD, pvdfile);
+      PetscCall(PetscFClose(PETSC_COMM_WORLD, pvdfile));
       //fclose(pvdfile);
       //pvdfile.close();
     }
 
-    PetscFOpen(PETSC_COMM_WORLD, filename, "a", & pvdfile);
-    PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"0\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_vavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"1\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_bavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"2\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_tavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"3\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_navg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"4\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_javg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"5\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_lvlset_ic%.1D_grid%.2Dx%.2Dx%.2D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> Nr, user -> Nphi, user -> Nz);
-    PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"6\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_epavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscFClose(PETSC_COMM_WORLD, pvdfile);
+    PetscCall(PetscFOpen(PETSC_COMM_WORLD, filename, "a", & pvdfile));
+    PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"0\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_vavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"1\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_bavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"2\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_tavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"3\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_navg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"4\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_javg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"5\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_lvlset_ic%.1D_grid%.2Dx%.2Dx%.2D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> Nr, user -> Nphi, user -> Nz));
+    PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "    <DataSet timestep=\"%f\" group=\"\" part=\"6\" file=\"mfd_data_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D/mfd_epavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr\"/>\n", time, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscFClose(PETSC_COMM_WORLD, pvdfile));
 
     if (time >= user -> ftime) {
-      PetscFOpen(PETSC_COMM_WORLD, filename, "a", & pvdfile);
-      PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "  </Collection>\n");
-      PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "</VTKFile>\n");
-      PetscFClose(PETSC_COMM_WORLD, pvdfile);
+      PetscCall(PetscFOpen(PETSC_COMM_WORLD, filename, "a", & pvdfile));
+      PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "  </Collection>\n"));
+      PetscCall(PetscFPrintf(PETSC_COMM_WORLD, pvdfile, "</VTKFile>\n"));
+      PetscCall(PetscFClose(PETSC_COMM_WORLD, pvdfile));
     }
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_epavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daEP), filename, FILE_MODE_WRITE, & viewerEP);
-    VecView(vecEP, viewerEP);
-    PetscViewerDestroy( & viewerEP);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_epavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daEP), filename, FILE_MODE_WRITE, & viewerEP));
+    PetscCall(VecView(vecEP, viewerEP));
+    PetscCall(PetscViewerDestroy( & viewerEP));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_vavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daV), filename, FILE_MODE_WRITE, & viewerV);
-    VecView(vecV, viewerV);
-    PetscViewerDestroy( & viewerV);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_vavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daV), filename, FILE_MODE_WRITE, & viewerV));
+    PetscCall(VecView(vecV, viewerV));
+    PetscCall(PetscViewerDestroy( & viewerV));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_bavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daBAvg), filename, FILE_MODE_WRITE, & viewerB);
-    VecView(vecBAvg, viewerB);
-    PetscViewerDestroy( & viewerB);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_bavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daBAvg), filename, FILE_MODE_WRITE, & viewerB));
+    PetscCall(VecView(vecBAvg, viewerB));
+    PetscCall(PetscViewerDestroy( & viewerB));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_tavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daEAvg), filename, FILE_MODE_WRITE, & viewerE);
-    VecView(vecEAvg, viewerE);
-    PetscViewerDestroy( & viewerE);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_tavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daEAvg), filename, FILE_MODE_WRITE, & viewerE));
+    PetscCall(VecView(vecEAvg, viewerE));
+    PetscCall(PetscViewerDestroy( & viewerE));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_javg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daJAvg), filename, FILE_MODE_WRITE, & viewerJ);
-    VecView(vecJAvg, viewerJ);
-    PetscViewerDestroy( & viewerJ);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_javg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daJAvg), filename, FILE_MODE_WRITE, & viewerJ));
+    PetscCall(VecView(vecJAvg, viewerJ));
+    PetscCall(PetscViewerDestroy( & viewerJ));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_navg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daC), filename, FILE_MODE_WRITE, & viewerC);
-    VecView(vecC, viewerC);
-    PetscViewerDestroy( & viewerC);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_navg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daC), filename, FILE_MODE_WRITE, & viewerC));
+    PetscCall(VecView(vecC, viewerC));
+    PetscCall(PetscViewerDestroy( & viewerC));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
   }
 
   /* Destroy DMDAs and Vecs */
-  VecDestroy( & vecEP);
-  DMDestroy( & daEP);
-  VecDestroy( & EP);
-  DMDestroy( & dmEP);
+  PetscCall(VecDestroy( & vecEP));
+  PetscCall(DMDestroy( & daEP));
+  PetscCall(VecDestroy( & EP));
+  PetscCall(DMDestroy( & dmEP));
 
-  VecDestroy( & vecV);
-  DMDestroy( & daV);
-  VecDestroy( & V);
-  DMDestroy( & dmV);
+  PetscCall(VecDestroy( & vecV));
+  PetscCall(DMDestroy( & daV));
+  PetscCall(VecDestroy( & V));
+  PetscCall(DMDestroy( & dmV));
 
-  VecDestroy( & vecBAvg);
-  DMDestroy( & daBAvg);
-  VecDestroy( & BAvg);
-  DMDestroy( & dmBAvg);
+  PetscCall(VecDestroy( & vecBAvg));
+  PetscCall(DMDestroy( & daBAvg));
+  PetscCall(VecDestroy( & BAvg));
+  PetscCall(DMDestroy( & dmBAvg));
 
-  VecDestroy( & vecEAvg);
-  DMDestroy( & daEAvg);
-  VecDestroy( & EAvg);
-  DMDestroy( & dmEAvg);
+  PetscCall(VecDestroy( & vecEAvg));
+  PetscCall(DMDestroy( & daEAvg));
+  PetscCall(VecDestroy( & EAvg));
+  PetscCall(DMDestroy( & dmEAvg));
 
-  VecDestroy( & vecJAvg);
-  DMDestroy( & daJAvg);
-  VecDestroy( & JAvg);
-  DMDestroy( & dmJAvg);
+  PetscCall(VecDestroy( & vecJAvg));
+  PetscCall(DMDestroy( & daJAvg));
+  PetscCall(VecDestroy( & JAvg));
+  PetscCall(DMDestroy( & dmJAvg));
 
-  VecDestroy( & vecC);
-  DMDestroy( & daC);
-  VecDestroy( & C);
-  DMDestroy( & dmC);
+  PetscCall(VecDestroy( & vecC));
+  PetscCall(DMDestroy( & daC));
+  PetscCall(VecDestroy( & C));
+  PetscCall(DMDestroy( & dmC));
 
-  VecDestroy( & J);
+  PetscCall(VecDestroy( & J));
 
-  return (0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 #line 1762
 
 PetscErrorCode DumpError(TS ts, PetscInt step, Vec X, void * ptr) {
+  PetscFunctionBeginUser;
   User * user = (User * ) ptr;
   DM da, dmC, daC, dmBAvg, daBAvg, dmEAvg, daEAvg, dmV, daV;
   PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz;
   Vec X_local, vecC, C, vecBAvg, BAvg, vecEAvg, EAvg, vecV, V;
 
-  TSGetDM(ts, & da);
+  PetscCall(TSGetDM(ts, & da));
   DMStagCreateCompatibleDMStag(da, 3, 0, 0, 0, & dmV); /* 3 dofs per vertex */
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmEAvg); /* 3 dof per element */
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmBAvg); /* 3 dof per element */
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 1, & dmC); /* 1 dof per element */
 
-  DMSetUp(dmC);
-  DMSetUp(dmBAvg);
-  DMSetUp(dmEAvg);
-  DMSetUp(dmV);
+  PetscCall(DMSetUp(dmC));
+  PetscCall(DMSetUp(dmBAvg));
+  PetscCall(DMSetUp(dmEAvg));
+  PetscCall(DMSetUp(dmV));
 
-  DMStagSetUniformCoordinatesExplicit(dmC, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
-  DMStagSetUniformCoordinatesExplicit(dmBAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
-  DMStagSetUniformCoordinatesExplicit(dmEAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
-  DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmC, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmBAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmEAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
 
-  DMCreateGlobalVector(dmC, & C);
-  DMCreateGlobalVector(dmBAvg, & BAvg);
-  DMCreateGlobalVector(dmEAvg, & EAvg);
-  DMCreateGlobalVector(dmV, & V);
+  PetscCall(DMCreateGlobalVector(dmC, & C));
+  PetscCall(DMCreateGlobalVector(dmBAvg, & BAvg));
+  PetscCall(DMCreateGlobalVector(dmEAvg, & EAvg));
+  PetscCall(DMCreateGlobalVector(dmV, & V));
 
-  DMGetLocalVector(da, & X_local);
-  DMGlobalToLocal(da, X, INSERT_VALUES, X_local);
+  PetscCall(DMGetLocalVector(da, & X_local));
+  PetscCall(DMGlobalToLocal(da, X, INSERT_VALUES, X_local));
 
-    DMStagGetCorners(dmC, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+    PetscCall(DMStagGetCorners(dmC, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
     for (ez = startz; ez < startz + nz; ++ez) {
       for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
         for (er = startr; er < startr + nr; ++er) {
@@ -959,21 +962,21 @@ PetscErrorCode DumpError(TS ts, PetscInt step, Vec X, void * ptr) {
             from[0].k = ez;
             from[0].loc = ELEMENT;
             from[0].c = 0;
-            DMStagVecGetValuesStencil(da, X_local, 1, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, X_local, 1, from, valFrom));
             to[0].i = er;
             to[0].j = ephi;
             to[0].k = ez;
             to[0].loc = ELEMENT;
             to[0].c = 0;
             valTo[0] = valFrom[0];
-            DMStagVecSetValuesStencil(dmC, C, 1, to, valTo, INSERT_VALUES);
+            PetscCall(DMStagVecSetValuesStencil(dmC, C, 1, to, valTo, INSERT_VALUES));
           }
         }
       }
-      VecAssemblyBegin(C);
-      VecAssemblyEnd(C);
+      PetscCall(VecAssemblyBegin(C));
+      PetscCall(VecAssemblyEnd(C));
 
-  DMStagGetCorners(dmBAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmBAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -1010,7 +1013,7 @@ PetscErrorCode DumpError(TS ts, PetscInt step, Vec X, void * ptr) {
         from[5].k = ez;
         from[5].loc = BACK;
         from[5].c = 0;
-        DMStagVecGetValuesStencil(da, X_local, 6, from, valFrom);
+        PetscCall(DMStagVecGetValuesStencil(da, X_local, 6, from, valFrom));
         to[0].i = er;
         to[0].j = ephi;
         to[0].k = ez;
@@ -1029,14 +1032,14 @@ PetscErrorCode DumpError(TS ts, PetscInt step, Vec X, void * ptr) {
         to[2].loc = ELEMENT;
         to[2].c = 2;
         valTo[2] = 0.5 * (valFrom[4] + valFrom[5]);
-        DMStagVecSetValuesStencil(dmBAvg, BAvg, 3, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmBAvg, BAvg, 3, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(BAvg);
-  VecAssemblyEnd(BAvg);
+  PetscCall(VecAssemblyBegin(BAvg));
+  PetscCall(VecAssemblyEnd(BAvg));
 
-  DMStagGetCorners(dmEAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmEAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -1103,7 +1106,7 @@ PetscErrorCode DumpError(TS ts, PetscInt step, Vec X, void * ptr) {
         from[11].k = ez;
         from[11].loc = DOWN_LEFT;
         from[11].c = 0;
-        DMStagVecGetValuesStencil(da, X_local, 12, from, valFrom);
+        PetscCall(DMStagVecGetValuesStencil(da, X_local, 12, from, valFrom));
         to[0].i = er;
         to[0].j = ephi;
         to[0].k = ez;
@@ -1122,14 +1125,14 @@ PetscErrorCode DumpError(TS ts, PetscInt step, Vec X, void * ptr) {
         to[2].loc = ELEMENT;
         to[2].c = 2;
         valTo[2] = 0.25 * (valFrom[8] + valFrom[9] + valFrom[10] + valFrom[11]);
-        DMStagVecSetValuesStencil(dmEAvg, EAvg, 3, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmEAvg, EAvg, 3, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(EAvg);
-  VecAssemblyEnd(EAvg);
+  PetscCall(VecAssemblyBegin(EAvg));
+  PetscCall(VecAssemblyEnd(EAvg));
 
-    DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+    PetscCall(DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
     for (ez = startz; ez < startz + nz; ++ez) {
       for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
         for (er = startr; er < startr + nr; ++er) {
@@ -1256,7 +1259,7 @@ PetscErrorCode DumpError(TS ts, PetscInt step, Vec X, void * ptr) {
             from[23].k = ez;
             from[23].loc = FRONT_UP_RIGHT;
             from[23].c = 2;
-            DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom);
+            PetscCall(DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom));
 
           to[0].i = er;
           to[0].j = ephi;
@@ -1405,80 +1408,81 @@ PetscErrorCode DumpError(TS ts, PetscInt step, Vec X, void * ptr) {
           to[23].c = 2;
           valTo[23] = valFrom[23];
 
-          DMStagVecSetValuesStencil(dmV, V, 24, to, valTo, INSERT_VALUES);
+          PetscCall(DMStagVecSetValuesStencil(dmV, V, 24, to, valTo, INSERT_VALUES));
         }
       }
     }
-    VecAssemblyBegin(V);
-    VecAssemblyEnd(V);
+    PetscCall(VecAssemblyBegin(V));
+    PetscCall(VecAssemblyEnd(V));
 
-  DMRestoreLocalVector(da, & X_local);
+  PetscCall(DMRestoreLocalVector(da, & X_local));
 
   DMStagVecSplitToDMDA(dmC, C, ELEMENT, -1, & daC, & vecC); /* note -3 : pad with zero in 2D case */
   DMStagVecSplitToDMDA(dmBAvg, BAvg, ELEMENT, -3, & daBAvg, & vecBAvg); /* note -3 : pad with zero in 2D case */
   DMStagVecSplitToDMDA(dmEAvg, EAvg, ELEMENT, -3, & daEAvg, & vecEAvg); /* note -3 : pad with zero in 2D case */
   DMStagVecSplitToDMDA(dmV, V, BACK_DOWN_LEFT, -3, & daV, & vecV); /* note -3 : pad with zero in 2D case */
 
-  PetscObjectSetName((PetscObject) vecV, "Velocity Error");
-  PetscObjectSetName((PetscObject) vecBAvg, "Magnetic Field Error (Averaged)");
-  PetscObjectSetName((PetscObject) vecEAvg, "Electric Field Error (Averaged)");
-  PetscObjectSetName((PetscObject) vecC, "Ions' Number Density Error");
+  PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity Error"));
+  PetscCall(PetscObjectSetName((PetscObject) vecBAvg, "Magnetic Field Error (Averaged)"));
+  PetscCall(PetscObjectSetName((PetscObject) vecEAvg, "Electric Field Error (Averaged)"));
+  PetscCall(PetscObjectSetName((PetscObject) vecC, "Ions' Number Density Error"));
 
   /* Dump element-based fields to a .vtr file */
   {
     PetscViewer viewerC, viewerB, viewerE, viewerV;
     char filename[PETSC_MAX_PATH_LEN];
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_nerravg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daC), filename, FILE_MODE_WRITE, & viewerC);
-    VecView(vecC, viewerC);
-    PetscViewerDestroy( & viewerC);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_nerravg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daC), filename, FILE_MODE_WRITE, & viewerC));
+    PetscCall(VecView(vecC, viewerC));
+    PetscCall(PetscViewerDestroy( & viewerC));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_berravg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daBAvg), filename, FILE_MODE_WRITE, & viewerB);
-    VecView(vecBAvg, viewerB);
-    PetscViewerDestroy( & viewerB);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_berravg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daBAvg), filename, FILE_MODE_WRITE, & viewerB));
+    PetscCall(VecView(vecBAvg, viewerB));
+    PetscCall(PetscViewerDestroy( & viewerB));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_eerravg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daEAvg), filename, FILE_MODE_WRITE, & viewerE);
-    VecView(vecEAvg, viewerE);
-    PetscViewerDestroy( & viewerE);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_eerravg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daEAvg), filename, FILE_MODE_WRITE, & viewerE));
+    PetscCall(VecView(vecEAvg, viewerE));
+    PetscCall(PetscViewerDestroy( & viewerE));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_verravg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daV), filename, FILE_MODE_WRITE, & viewerV);
-    VecView(vecV, viewerV);
-    PetscViewerDestroy( & viewerV);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_verravg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daV), filename, FILE_MODE_WRITE, & viewerV));
+    PetscCall(VecView(vecV, viewerV));
+    PetscCall(PetscViewerDestroy( & viewerV));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
   }
 
   /* Destroy DMDAs and Vecs */
-  VecDestroy( & vecV);
-  DMDestroy( & daV);
-  VecDestroy( & V);
-  DMDestroy( & dmV);
+  PetscCall(VecDestroy( & vecV));
+  PetscCall(DMDestroy( & daV));
+  PetscCall(VecDestroy( & V));
+  PetscCall(DMDestroy( & dmV));
 
-  VecDestroy( & vecBAvg);
-  DMDestroy( & daBAvg);
-  VecDestroy( & BAvg);
-  DMDestroy( & dmBAvg);
+  PetscCall(VecDestroy( & vecBAvg));
+  PetscCall(DMDestroy( & daBAvg));
+  PetscCall(VecDestroy( & BAvg));
+  PetscCall(DMDestroy( & dmBAvg));
 
-  VecDestroy( & vecEAvg);
-  DMDestroy( & daEAvg);
-  VecDestroy( & EAvg);
-  DMDestroy( & dmEAvg);
+  PetscCall(VecDestroy( & vecEAvg));
+  PetscCall(DMDestroy( & daEAvg));
+  PetscCall(VecDestroy( & EAvg));
+  PetscCall(DMDestroy( & dmEAvg));
 
-  VecDestroy( & vecC);
-  DMDestroy( & daC);
-  VecDestroy( & C);
-  DMDestroy( & dmC);
+  PetscCall(VecDestroy( & vecC));
+  PetscCall(DMDestroy( & daC));
+  PetscCall(VecDestroy( & C));
+  PetscCall(DMDestroy( & dmC));
 
-  return (0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode DumpDivergence(TS ts, DM newda, PetscInt step, Vec X, void * ptr) {
+  PetscFunctionBeginUser;
   User * user = (User * ) ptr;
   DM dmBAvg, daBAvg;
   PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz;
@@ -1486,16 +1490,16 @@ PetscErrorCode DumpDivergence(TS ts, DM newda, PetscInt step, Vec X, void * ptr)
 
   DMStagCreateCompatibleDMStag(newda, 0, 0, 0, 1, & dmBAvg); /* 3 dof per element */
 
-  DMSetUp(dmBAvg);
+  PetscCall(DMSetUp(dmBAvg));
 
-  DMStagSetUniformCoordinatesExplicit(dmBAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmBAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
 
-  DMCreateGlobalVector(dmBAvg, & BAvg);
+  PetscCall(DMCreateGlobalVector(dmBAvg, & BAvg));
 
-  DMGetLocalVector(newda, & X_local);
-  DMGlobalToLocal(newda, X, INSERT_VALUES, X_local);
+  PetscCall(DMGetLocalVector(newda, & X_local));
+  PetscCall(DMGlobalToLocal(newda, X, INSERT_VALUES, X_local));
 
-  DMStagGetCorners(dmBAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmBAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -1507,67 +1511,68 @@ PetscErrorCode DumpDivergence(TS ts, DM newda, PetscInt step, Vec X, void * ptr)
         from[0].k = ez;
         from[0].loc = ELEMENT;
         from[0].c = 0;
-        DMStagVecGetValuesStencil(newda, X_local, 1, from, valFrom);
+        PetscCall(DMStagVecGetValuesStencil(newda, X_local, 1, from, valFrom));
         to[0].i = er;
         to[0].j = ephi;
         to[0].k = ez;
         to[0].loc = ELEMENT;
         to[0].c = 0;
         valTo[0] = valFrom[0];
-        DMStagVecSetValuesStencil(dmBAvg, BAvg, 1, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmBAvg, BAvg, 1, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(BAvg);
-  VecAssemblyEnd(BAvg);
+  PetscCall(VecAssemblyBegin(BAvg));
+  PetscCall(VecAssemblyEnd(BAvg));
 
-  DMRestoreLocalVector(newda, & X_local);
+  PetscCall(DMRestoreLocalVector(newda, & X_local));
 
   DMStagVecSplitToDMDA(dmBAvg, BAvg, ELEMENT, -1, & daBAvg, & vecBAvg); /* note -3 : pad with zero in 2D case */
 
   //DMStagVecSplitToDMDA(newda,X,ELEMENT,-1,&daBAvg,&vecBAvg); /* note -3 : pad with zero in 2D case */
 
-  PetscObjectSetName((PetscObject) vecBAvg, "Divergence of Magnetic Field");
+  PetscCall(PetscObjectSetName((PetscObject) vecBAvg, "Divergence of Magnetic Field"));
 
   /* Dump element-based fields to a .vtr file */
   {
     PetscViewer viewerB;
     char filename[PETSC_MAX_PATH_LEN];
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_divb_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daBAvg), filename, FILE_MODE_WRITE, & viewerB);
-    VecView(vecBAvg, viewerB);
-    PetscViewerDestroy( & viewerB);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_divb_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daBAvg), filename, FILE_MODE_WRITE, & viewerB));
+    PetscCall(VecView(vecBAvg, viewerB));
+    PetscCall(PetscViewerDestroy( & viewerB));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
   }
 
   /* Destroy DMDAs and Vecs */
-  VecDestroy( & vecBAvg);
-  DMDestroy( & daBAvg);
-  VecDestroy( & BAvg);
-  DMDestroy( & dmBAvg);
+  PetscCall(VecDestroy( & vecBAvg));
+  PetscCall(DMDestroy( & daBAvg));
+  PetscCall(VecDestroy( & BAvg));
+  PetscCall(DMDestroy( & dmBAvg));
 
-  return (0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode DumpLevelSet(TS ts, void * ptr) {
+  PetscFunctionBeginUser;
   User * user = (User * ) ptr;
   DM da, dmBAvg, daBAvg;
   PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz, N[3];
   Vec vecBAvg, BAvg;
 
-  TSGetDM(ts, & da);
-  DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
+  PetscCall(TSGetDM(ts, & da));
+  PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
 
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 1, & dmBAvg); /* 1 dof per element */
 
-  DMSetUp(dmBAvg);
+  PetscCall(DMSetUp(dmBAvg));
 
-  DMStagSetUniformCoordinatesExplicit(dmBAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmBAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
 
-  DMCreateGlobalVector(dmBAvg, & BAvg);
+  PetscCall(DMCreateGlobalVector(dmBAvg, & BAvg));
 
-  DMStagGetCorners(dmBAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmBAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -1580,54 +1585,56 @@ PetscErrorCode DumpLevelSet(TS ts, void * ptr) {
         to[0].loc = ELEMENT;
         to[0].c = 0;
         valTo[0] = user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]];
-        DMStagVecSetValuesStencil(dmBAvg, BAvg, 1, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmBAvg, BAvg, 1, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(BAvg);
-  VecAssemblyEnd(BAvg);
+  PetscCall(VecAssemblyBegin(BAvg));
+  PetscCall(VecAssemblyEnd(BAvg));
 
   DMStagVecSplitToDMDA(dmBAvg, BAvg, ELEMENT, -1, & daBAvg, & vecBAvg); /* note -3 : pad with zero in 2D case */
 
-  PetscObjectSetName((PetscObject) vecBAvg, "Levelset function");
+  PetscCall(PetscObjectSetName((PetscObject) vecBAvg, "Levelset function"));
 
   /* Dump element-based fields to a .vtr file */
   {
     PetscViewer viewerB;
     char filename[PETSC_MAX_PATH_LEN];
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_lvlset_ic%.1D_grid%.2Dx%.2Dx%.2D.vtr", user -> ictype, user -> Nr, user -> Nphi, user -> Nz);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daBAvg), filename, FILE_MODE_WRITE, & viewerB);
-    VecView(vecBAvg, viewerB);
-    PetscViewerDestroy( & viewerB);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_lvlset_ic%.1D_grid%.2Dx%.2Dx%.2D.vtr", user -> ictype, user -> Nr, user -> Nphi, user -> Nz));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daBAvg), filename, FILE_MODE_WRITE, & viewerB));
+    PetscCall(VecView(vecBAvg, viewerB));
+    PetscCall(PetscViewerDestroy( & viewerB));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
   }
 
   /* Destroy DMDAs and Vecs */
-  VecDestroy( & vecBAvg);
-  DMDestroy( & daBAvg);
-  VecDestroy( & BAvg);
-  DMDestroy( & dmBAvg);
+  PetscCall(VecDestroy( & vecBAvg));
+  PetscCall(DMDestroy( & daBAvg));
+  PetscCall(VecDestroy( & BAvg));
+  PetscCall(DMDestroy( & dmBAvg));
 
-  return (0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode SaveIntermediateSolution(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) {
+  PetscFunctionBeginUser;
   User * user = (User * ) ptr;
   char filename[PETSC_MAX_PATH_LEN];
   PetscViewer viewerX;
 
   /* Write X in binary for later use */
-  PetscSNPrintf(filename, sizeof(filename), "%s/X_ic%.2D_grid%.2Dx%.2Dx%.2D_step%.3D_time%5.7f.dat", user->input_folder, user -> ictype, user -> Nr, user -> Nphi, user -> Nz, (int) step, (double) time);
-  PetscPrintf(PETSC_COMM_WORLD, "Writing X vector into file %s ...\n", filename);
-  PetscViewerBinaryOpen(PETSC_COMM_WORLD, filename, FILE_MODE_WRITE, & viewerX);
-  VecView(X, viewerX);
-  PetscViewerDestroy( & viewerX);
-  PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
-  return(0);
+  PetscCall(PetscSNPrintf(filename, sizeof(filename), "%s/X_ic%.2D_grid%.2Dx%.2Dx%.2D_step%.3D_time%5.7f.dat", user->input_folder, user -> ictype, user -> Nr, user -> Nphi, user -> Nz, (int) step, (double) time));
+  PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Writing X vector into file %s ...\n", filename));
+  PetscCall(PetscViewerBinaryOpen(PETSC_COMM_WORLD, filename, FILE_MODE_WRITE, & viewerX));
+  PetscCall(VecView(X, viewerX));
+  PetscCall(PetscViewerDestroy( & viewerX));
+  PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 PetscErrorCode ComputeCurrent(TS ts, Vec X, void * ptr) {
+  PetscFunctionBeginUser;
   User * user = (User * ) ptr;
   DM da;
   PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz;
@@ -1637,54 +1644,54 @@ PetscErrorCode ComputeCurrent(TS ts, Vec X, void * ptr) {
   Vec xLocal, JLocal, J, GradEP, GradEPLocal;
   PetscScalar ** ** arrGradEP, ** ** arrJ, ** ** arrX, Javg, I1, I2, I3;
 
-  TSGetDM(ts, & da);
-  DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]);
-  VecDuplicate(X, & J);
-  VecCopy(X, J);
+  PetscCall(TSGetDM(ts, & da));
+  PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+  PetscCall(VecDuplicate(X, & J));
+  PetscCall(VecCopy(X, J));
 
   /* Edge locations */
-  DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm);
-  DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm);
-  DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm);
-  DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm);
-  DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim);
-  DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim);
-  DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip);
-  DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip);
-  DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp);
-  DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp);
-  DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp);
-  DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp);
+  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm));
+  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim));
+  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim));
+  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip));
+  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp));
 
   // Compute J:= (1/mu0) curl(B)
   FormDerivedCurlnores(ts, X, J, user);
   // Multiply J by B_0/L_0
-  VecScale(J, user->B0/user->L0);
+  PetscCall(VecScale(J, user->B0/user->L0));
 
-  DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
 
   if(0){
-  DMGetLocalVector(da, & xLocal);
-  DMGlobalToLocalBegin(da, X, INSERT_VALUES, xLocal);
-  DMGlobalToLocalEnd(da, X, INSERT_VALUES, xLocal);
-  DMStagVecGetArray(da, xLocal, & arrX);
+  PetscCall(DMGetLocalVector(da, & xLocal));
+  PetscCall(DMGlobalToLocalBegin(da, X, INSERT_VALUES, xLocal));
+  PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, xLocal));
+  PetscCall(DMStagVecGetArray(da, xLocal, & arrX));
 
-  DMGetLocalVector(da, & JLocal);
-  DMStagVecGetArray(da, JLocal, & arrJ);
+  PetscCall(DMGetLocalVector(da, & JLocal));
+  PetscCall(DMStagVecGetArray(da, JLocal, & arrJ));
   {
   // Compute Grad(EP)
     Mat G;
     /* Compute the gradient of EP */
-    VecDuplicate(X, & GradEP);
-    VecCopy(X, GradEP);
-    DMCreateMatrix(da, & G);
-    MatZeroEntries(G);
+    PetscCall(VecDuplicate(X, & GradEP));
+    PetscCall(VecCopy(X, GradEP));
+    PetscCall(DMCreateMatrix(da, & G));
+    PetscCall(MatZeroEntries(G));
     FormDiscreteGradientEP(ts, G, X, GradEP, user);
-    MatDestroy( & G);
-    DMGetLocalVector(da, & GradEPLocal);
-    DMGlobalToLocalBegin(da, GradEP, INSERT_VALUES, GradEPLocal);
-    DMGlobalToLocalEnd(da, GradEP, INSERT_VALUES, GradEPLocal);
-    DMStagVecGetArrayRead(da, GradEPLocal, & arrGradEP);
+    PetscCall(MatDestroy( & G));
+    PetscCall(DMGetLocalVector(da, & GradEPLocal));
+    PetscCall(DMGlobalToLocalBegin(da, GradEP, INSERT_VALUES, GradEPLocal));
+    PetscCall(DMGlobalToLocalEnd(da, GradEP, INSERT_VALUES, GradEPLocal));
+    PetscCall(DMStagVecGetArrayRead(da, GradEPLocal, & arrGradEP));
   }
 
   // Compute J:= (1/resistivity) * (tau - Grad(EP))
@@ -1720,22 +1727,22 @@ PetscErrorCode ComputeCurrent(TS ts, Vec X, void * ptr) {
     }
   }
 
-  DMStagVecRestoreArray(da, JLocal, & arrJ);
-  DMLocalToGlobal(da, JLocal, INSERT_VALUES, J);
+  PetscCall(DMStagVecRestoreArray(da, JLocal, & arrJ));
+  PetscCall(DMLocalToGlobal(da, JLocal, INSERT_VALUES, J));
 
-  DMStagVecRestoreArray(da, xLocal, & arrX);
-  DMRestoreLocalVector(da, & xLocal);
+  PetscCall(DMStagVecRestoreArray(da, xLocal, & arrX));
+  PetscCall(DMRestoreLocalVector(da, & xLocal));
 
-  DMStagVecRestoreArrayRead(da, GradEPLocal, & arrGradEP);
-  DMRestoreLocalVector(da, & GradEPLocal);
+  PetscCall(DMStagVecRestoreArrayRead(da, GradEPLocal, & arrGradEP));
+  PetscCall(DMRestoreLocalVector(da, & GradEPLocal));
 
-  VecDestroy( & GradEP);
+  PetscCall(VecDestroy( & GradEP));
   }
 
-  DMGetLocalVector(da, & JLocal);
-  DMGlobalToLocalBegin(da, J, INSERT_VALUES, JLocal);
-  DMGlobalToLocalEnd(da, J, INSERT_VALUES, JLocal);
-  DMStagVecGetArray(da, JLocal, & arrJ);
+  PetscCall(DMGetLocalVector(da, & JLocal));
+  PetscCall(DMGlobalToLocalBegin(da, J, INSERT_VALUES, JLocal));
+  PetscCall(DMGlobalToLocalEnd(da, J, INSERT_VALUES, JLocal));
+  PetscCall(DMStagVecGetArray(da, JLocal, & arrJ));
 
   user -> Iphi1 = 0.0;
   user -> Iphi2 = 0.0;
@@ -1772,8 +1779,8 @@ PetscErrorCode ComputeCurrent(TS ts, Vec X, void * ptr) {
   I3 *= user->L0 * user->L0;
 
   if (user -> debug) {
-    PetscPrintf(PETSC_COMM_SELF, "Local Current intensity inside plasma = %g\n", I1);
-    PetscPrintf(PETSC_COMM_SELF, "Local Current intensity outside plasma = %g\n", I2);
+    PetscCall(PetscPrintf(PETSC_COMM_SELF, "Local Current intensity inside plasma = %g\n", I1));
+    PetscCall(PetscPrintf(PETSC_COMM_SELF, "Local Current intensity outside plasma = %g\n", I2));
   }
 
   MPI_Reduce( & I1, & (user -> Iphi1), 1, MPI_DOUBLE, MPI_SUM, 0,
@@ -1786,42 +1793,43 @@ PetscErrorCode ComputeCurrent(TS ts, Vec X, void * ptr) {
     PETSC_COMM_WORLD);
 
   if (user -> debug) {
-    PetscPrintf(PETSC_COMM_WORLD, "Current intensity inside plasma = %g\n", user -> Iphi1);
-    PetscPrintf(PETSC_COMM_WORLD, "Current intensity outside plasma = %g\n", user -> Iphi2);
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Current intensity inside plasma = %g\n", user -> Iphi1));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Current intensity outside plasma = %g\n", user -> Iphi2));
   }
 
-  DMStagVecRestoreArray(da, JLocal, & arrJ);
-  DMRestoreLocalVector(da, & JLocal);
-  VecDestroy( & J);
-  return (0);
+  PetscCall(DMStagVecRestoreArray(da, JLocal, & arrJ));
+  PetscCall(DMRestoreLocalVector(da, & JLocal));
+  PetscCall(VecDestroy( & J));
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 #line 2996
 
 PetscErrorCode DumpEdgeField(TS ts, PetscInt step, Vec X, void * ptr) {
+  PetscFunctionBeginUser;
   User * user = (User * ) ptr;
   DM da, dmC, daC, dmBAvg, daBAvg, dmEAvg, daEAvg, dmJAvg, daJAvg, dmV, daV, dmEP, daEP;
   PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz;
   Vec X_local, vecC, C, vecBAvg, BAvg, vecEAvg, EAvg, vecJAvg, JAvg, vecV, V, vecEP, EP;
   PetscReal time = 0.0;
 
-  TSGetDM(ts, & da);
-  TSGetTime(ts, & time);
+  PetscCall(TSGetDM(ts, & da));
+  PetscCall(TSGetTime(ts, & time));
 
   // PetscPrintf(PETSC_COMM_WORLD,"Current time: t = %f\n", time);
 
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmEAvg); /* 3 dof per element */
 
-  DMSetUp(dmEAvg);
+  PetscCall(DMSetUp(dmEAvg));
 
-  DMStagSetUniformCoordinatesExplicit(dmEAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax);
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmEAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
 
-  DMCreateGlobalVector(dmEAvg, & EAvg);
+  PetscCall(DMCreateGlobalVector(dmEAvg, & EAvg));
 
-  DMGetLocalVector(da, & X_local);
-  DMGlobalToLocal(da, X, INSERT_VALUES, X_local);
+  PetscCall(DMGetLocalVector(da, & X_local));
+  PetscCall(DMGlobalToLocal(da, X, INSERT_VALUES, X_local));
 
-  DMStagGetCorners(dmEAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
+  PetscCall(DMStagGetCorners(dmEAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   for (ez = startz; ez < startz + nz; ++ez) {
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
@@ -1888,7 +1896,7 @@ PetscErrorCode DumpEdgeField(TS ts, PetscInt step, Vec X, void * ptr) {
         from[11].k = ez;
         from[11].loc = DOWN_LEFT;
         from[11].c = 0;
-        DMStagVecGetValuesStencil(da, X_local, 12, from, valFrom);
+        PetscCall(DMStagVecGetValuesStencil(da, X_local, 12, from, valFrom));
         to[0].i = er;
         to[0].j = ephi;
         to[0].k = ez;
@@ -1907,18 +1915,18 @@ PetscErrorCode DumpEdgeField(TS ts, PetscInt step, Vec X, void * ptr) {
         to[2].loc = ELEMENT;
         to[2].c = 2;
         valTo[2] = 0.25 * (valFrom[8] + valFrom[9] + valFrom[10] + valFrom[11]);
-        DMStagVecSetValuesStencil(dmEAvg, EAvg, 3, to, valTo, INSERT_VALUES);
+        PetscCall(DMStagVecSetValuesStencil(dmEAvg, EAvg, 3, to, valTo, INSERT_VALUES));
       }
     }
   }
-  VecAssemblyBegin(EAvg);
-  VecAssemblyEnd(EAvg);
+  PetscCall(VecAssemblyBegin(EAvg));
+  PetscCall(VecAssemblyEnd(EAvg));
 
-  DMRestoreLocalVector(da, & X_local);
+  PetscCall(DMRestoreLocalVector(da, & X_local));
 
   DMStagVecSplitToDMDA(dmEAvg, EAvg, ELEMENT, -3, & daEAvg, & vecEAvg); /* note -3 : pad with zero in 2D case */
 
-  PetscObjectSetName((PetscObject) vecEAvg, "Edge Field (Averaged)");
+  PetscCall(PetscObjectSetName((PetscObject) vecEAvg, "Edge Field (Averaged)"));
 
   /* Dump element-based fields to a .vtr file and create a .pvd file */
   {
@@ -1926,20 +1934,20 @@ PetscErrorCode DumpEdgeField(TS ts, PetscInt step, Vec X, void * ptr) {
     char filename[PETSC_MAX_PATH_LEN];
     FILE * pvdfile;
 
-    PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_edgeavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step);
-    PetscViewerVTKOpen(PetscObjectComm((PetscObject) daEAvg), filename, FILE_MODE_WRITE, & viewerE);
-    VecView(vecEAvg, viewerE);
-    PetscViewerDestroy( & viewerE);
-    PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename);
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_edgeavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daEAvg), filename, FILE_MODE_WRITE, & viewerE));
+    PetscCall(VecView(vecEAvg, viewerE));
+    PetscCall(PetscViewerDestroy( & viewerE));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
   }
 
   /* Destroy DMDAs and Vecs */
-  VecDestroy( & vecEAvg);
-  DMDestroy( & daEAvg);
-  VecDestroy( & EAvg);
-  DMDestroy( & dmEAvg);
+  PetscCall(VecDestroy( & vecEAvg));
+  PetscCall(DMDestroy( & daEAvg));
+  PetscCall(VecDestroy( & EAvg));
+  PetscCall(DMDestroy( & dmEAvg));
 
-  return (0);
+  PetscFunctionReturn(PETSC_SUCCESS);
 }
 
 #line 3147

@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
   ParthenonManager pman;
   auto manager_status = pman.ParthenonInitEnv(argc, argv);
 
-  mhd_PetscInit(&argc, &argv, &p_mhd_config);
+  MHD_CHECK(mhd_PetscInit(&argc, &argv, &p_mhd_config));
 
   if (manager_status == ParthenonStatus::complete) {
     pman.ParthenonFinalize();
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
   if (pman.pinput->GetOrAddInteger("Simulation", "dump_raw_fields", 0) == 1) {
     const std::string fname = pman.pinput->GetOrAddString("Simulation", "raw_fields_file", "fields.h5");
     Kinetic::SaveRawFieldData(pman.pmesh.get(), fname.c_str());
-    mhd_destroy(p_mhd_config);
+    MHD_CHECK(mhd_destroy(p_mhd_config));
     pman.ParthenonFinalize();
     return 0;
   }
@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
       p_mhd_config);
   driver.Execute();
 
-  mhd_destroy(p_mhd_config);
+  MHD_CHECK(mhd_destroy(p_mhd_config));
   pman.ParthenonFinalize();
   return 0;
 }

@@ -14,9 +14,9 @@ TaskStatus CommunicateBJV(FieldData_t data, User *p_mhd_config, int component0) 
   auto V_h = Kokkos::subview(field_h, Kokkos::ALL, Kokkos::ALL,
       Kokkos::make_pair(component0 + FieldComponents::E, component0 + FieldComponents::E+3));
 
-  mhd_getF(p_mhd_config, fid_B, wrap_view(B_h));
-  mhd_getF(p_mhd_config, fid_V, wrap_view(V_h));
-  mhd_getF(p_mhd_config, fid_J, wrap_view(J_h));
+  MHD_CHECK(mhd_getF(p_mhd_config, fid_B, wrap_view(B_h)));
+  MHD_CHECK(mhd_getF(p_mhd_config, fid_V, wrap_view(V_h)));
+  MHD_CHECK(mhd_getF(p_mhd_config, fid_J, wrap_view(J_h)));
   data.data.modify_host();
 
   return TaskStatus::complete;

@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
   ParthenonManager pman;
   auto manager_status = pman.ParthenonInitEnv(argc, argv);
 
-  mhd_PetscInit(&argc, &argv, &p_mhd_config);
+  MHD_CHECK(mhd_PetscInit(&argc, &argv, &p_mhd_config));
 
   if (manager_status == ParthenonStatus::complete) {
     pman.ParthenonFinalize();
@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
       p_mhd_config);
   driver.Execute();
 
-  mhd_destroy(p_mhd_config);
+  MHD_CHECK(mhd_destroy(p_mhd_config));
   pman.ParthenonFinalize();
   return 0;
 }

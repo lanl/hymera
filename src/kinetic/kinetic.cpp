@@ -243,10 +243,10 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
     mhd_context -> jre = wrap_view(Jre_mhd.view_host());
 
-    mhd_initialize(mhd_context);
+    MHD_CHECK(mhd_initialize(mhd_context));
 
     /// Do single step before seeding particles
-    mhd_step(mhd_context);
+    MHD_CHECK(mhd_step(mhd_context));
 
   }
 
@@ -1190,7 +1190,7 @@ void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters *
   filename.append(".r");
   filename.append(ext);
 
-  mhd_savesolution(mhd_context, filename.c_str());
+  MHD_CHECK(mhd_savesolution(mhd_context, filename.c_str()));
 
   auto pkg = pm->packages.Get("Deck");
   pkg->UpdateParam("mhd_restart_filename", filename);
@@ -1202,7 +1202,7 @@ void WorkBeforeLoop(Mesh * pm, User* mhd_context) {
     auto pkg = pm->packages.Get("Deck");
     auto filename = pkg -> Param<std::string>("mhd_restart_filename");
 
-    mhd_loadsolution(mhd_context, filename.c_str());
+    MHD_CHECK(mhd_loadsolution(mhd_context, filename.c_str()));
   }
 }
 
