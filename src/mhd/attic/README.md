@@ -222,25 +222,3 @@ this directory.
   over the full mesh, cell by cell, by calling `getHermiteDataFD`.
 - **multiplybyR** -- scales a flat field array by `R` element-wise.
 
-## mhd.c
-
-`mhd_attic.c` contains 2 functions moved verbatim (byte-for-byte identical
-bodies) out of `../mhd.c`. Neither `mhd_save_hdf5` nor `mhd_load_hdf5` is
-declared in `mhd.h`, and neither has any caller anywhere in `src/` or
-`tests/` (confirmed with `grep`/`nm`). Structurally each is byte-identical in
-shape to the live `mhd_savesolution`/`mhd_loadsolution` except for using
-`PetscViewerHDF5Open` (HDF5-backed I/O) in place of `PetscViewerBinaryOpen`
-(binary-file I/O).
-
-- **mhd_save_hdf5** -- saves the current TS solution vector to an HDF5 file
-  via `stag_vec_io`, the HDF5-viewer counterpart of the live
-  `mhd_savesolution`.
-- **mhd_load_hdf5** -- loads a TS solution vector from an HDF5 file via
-  `stag_vec_io`, the HDF5-viewer counterpart of the live `mhd_loadsolution`.
-
-Note: `mhd.c` still `#include`s `<petscviewerhdf5.h>` after this move. That
-include has no other use left in the file (`grep -n 'HDF5\|hdf5' mhd.c` shows
-only the include line itself), but per this task's instructions it was left
-in place -- removing an unused include is a separate concern from moving dead
-functions, and pruning it here could perturb codegen via macro definitions
-pulled in by that header.

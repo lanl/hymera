@@ -977,9 +977,74 @@ PetscErrorCode mhd_loadsolution(User *user, const char *filename)
     PetscFunctionReturn(PETSC_SUCCESS);
 }
 
-#line 997
+/* HDF5 variants of the save/load pair above.
+ *
+ * Same rank-independent stag_vec_io layout as the binary versions, so the two
+ * formats hold the same 11 records in the same order; only the viewer differs.
+ * HDF5 additionally honours the PetscObjectSetName labels that the binary viewer
+ * ignores, which makes these files self-describing where the binary ones are
+ * positional.
+ *
+ * Kept as an alternative to the binary pair rather than the current default.
+ * Note that PETSc must be configured --with-hdf5 for these to work; the Spack
+ * spec in use at the time of writing has --with-hdf5=0, in which case
+ * PetscViewerHDF5Open fails at runtime. The explicit check below turns that into
+ * a message naming the cause instead of a bare PETSc error about an unknown
+ * viewer type.
+ */
+PetscErrorCode mhd_save_hdf5(User *user, const char *filename)
+{
+    PetscViewer viewer;
+    Vec X;
 
-#line 1018
+    PetscFunctionBeginUser;
+
+#if !defined(PETSC_HAVE_HDF5)
+    SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_SUP,
+            "mhd_save_hdf5 requires PETSc configured --with-hdf5; "
+            "use mhd_savesolution for the binary format instead");
+#else
+    PetscCall(TSGetSolution(user->ts, &X));
+
+    PetscCall(PetscViewerHDF5Open(PETSC_COMM_WORLD,
+                                  filename,
+                                  FILE_MODE_WRITE,
+                                  &viewer));
+
+    PetscCall(stag_vec_io(user, viewer, X, PETSC_FALSE));
+
+    PetscCall(PetscViewerDestroy(&viewer));
+
+    PetscFunctionReturn(PETSC_SUCCESS);
+#endif
+}
+
+PetscErrorCode mhd_load_hdf5(User *user, const char *filename)
+{
+    PetscViewer viewer;
+    Vec X;
+
+    PetscFunctionBeginUser;
+
+#if !defined(PETSC_HAVE_HDF5)
+    SETERRQ(PETSC_COMM_WORLD, PETSC_ERR_SUP,
+            "mhd_load_hdf5 requires PETSc configured --with-hdf5; "
+            "use mhd_loadsolution for the binary format instead");
+#else
+    PetscCall(TSGetSolution(user->ts, &X));
+
+    PetscCall(PetscViewerHDF5Open(PETSC_COMM_WORLD,
+                                  filename,
+                                  FILE_MODE_READ,
+                                  &viewer));
+
+    PetscCall(stag_vec_io(user, viewer, X, PETSC_TRUE));
+
+    PetscCall(PetscViewerDestroy(&viewer));
+
+    PetscFunctionReturn(PETSC_SUCCESS);
+#endif
+}
 
 void view4d_zero(view4d_t v) {
   for (size_t i = 0; i < v.dim0 * v.dim1 * v.dim2 * v.dim3; ++i)

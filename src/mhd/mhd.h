@@ -28,8 +28,18 @@ int mhd_step(User* mhd_config);
 int mhd_getF(User* mhd_config, field_id fid, view3d_t v);
 int mhd_resetState(User* mhd_config);
 int mhd_destroy(User* mhd_config);
+/* Checkpoint the solution vector. Both formats write the same 11 records, in the
+ * same order, through the same rank-independent layout, so a file written at one
+ * MPI size can be read at another.
+ *
+ * The binary pair is the default and is what the restart path uses. The HDF5 pair
+ * is an alternative: it honours the record names that the binary viewer ignores,
+ * making those files self-describing, but it requires PETSc configured
+ * --with-hdf5 and returns PETSC_ERR_SUP otherwise. */
 int mhd_savesolution(User* mhd_config, const char* filename);
 int mhd_loadsolution(User* mhd_config, const char* filename);
+int mhd_save_hdf5(User* mhd_config, const char* filename);
+int mhd_load_hdf5(User* mhd_config, const char* filename);
 
 
 #ifdef __cplusplus
