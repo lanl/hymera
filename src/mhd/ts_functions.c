@@ -8531,13 +8531,15 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
 
   // The following will replace the X with something from binary file, if no binary file is specified, the solution will come from efit and relaxation
   if(user->ic_binary_mode == 'l'){ // If loading binary
-    PetscViewer viewerX;
+    PetscViewer viewer;
     PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Reading X vector from file %s ...\n", user->ic_binary_path));
-    PetscCall(PetscViewerBinaryOpen(PETSC_COMM_WORLD, user->ic_binary_path, FILE_MODE_READ, & viewerX));
-    PetscCall(VecLoad(X, viewerX));
+    PetscCall(PetscViewerBinaryOpen(PETSC_COMM_WORLD, user->ic_binary_path, FILE_MODE_READ, & viewer));
+    PetscCall(stag_vec_io(user, viewer, X, PETSC_TRUE));
+    PetscCall(PetscViewerDestroy(&viewer));
+
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Reading from file %s is over.\n", user->ic_binary_path));
     /* Destroy the viewer */
     PetscCall(PetscViewerDestroy( & viewerX));
-    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Reading from file %s is over.\n", user->ic_binary_path));
   }  // If creating the binary
   else if ( (user -> ictype == 9 || user -> ictype == 15) && user -> itime == 0.0) {
     SNES dummysnes;
@@ -8820,11 +8822,10 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
     PetscMPIInt size;
     MPI_Comm_size(PETSC_COMM_WORLD, &size);
     PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Saving solution after relaxation with resitivity %le, MPI size = %d", user->etaplasma, size));
-
-    PetscViewer viewerX;
-    PetscCall(PetscViewerBinaryOpen(PETSC_COMM_WORLD, user->ic_binary_path, FILE_MODE_WRITE, & viewerX));
-    PetscCall(VecView(X, viewerX));
-    PetscCall(PetscViewerDestroy( & viewerX));
+    PetscViewer viewer;
+    PetscCall(PetscViewerBinaryOpen(PETSC_COMM_WORLD, user->ic_binary_path, FILE_MODE_WRITE, & viewer));
+    PetscCall(stag_vec_io(user, viewer, X, PETSC_FALSE));
+    PetscCall(PetscViewerDestroy(&viewer));
 
     SaveIntermediateSolution(dummyts, steps, ftime, X, user);
 
