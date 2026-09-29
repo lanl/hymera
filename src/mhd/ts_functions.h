@@ -48,4 +48,6 @@ PetscErrorCode FormExactSolution_LargeData(PetscReal,TS,Vec*,void*); /* This rou
 PetscErrorCode FormIFunction_InitializeEP_LargeData(TS,PetscReal,Vec,Vec,Vec,void*); /* This is the Ifunction used in the TSSolver that initializes EP and tau. It uses ReadALine instead of ReadInitialData */
 PetscErrorCode FormInitialSolution_psi(TS,Vec,void*); /* This routine sets up the initial solution X_0 from input data files containing G(psi) values on face centers, psi values on edge centers and the levelset function on cell centers */
 
+PetscErrorCode stag_vec_io(User *user, PetscViewer viewer, Vec X, PetscBool load);
+
 #endif /* defined(TS_FUNCTIONS_H) */
