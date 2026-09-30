@@ -9159,7 +9159,9 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
    shares the stag ownership, so indices align 1:1 including the extra
    boundary points on the last rank).
 */
-PetscErrorCode stag_vec_io(User *user, PetscViewer viewer, Vec X, PetscBool load)
+
+PetscErrorCode stag_vec_io(User *user, PetscViewer viewer,
+                           Vec X, PetscBool load)
 {
     DM       stagdm;
     PetscInt dof[4];
@@ -9167,15 +9169,16 @@ PetscErrorCode stag_vec_io(User *user, PetscViewer viewer, Vec X, PetscBool load
     PetscFunctionBeginUser;
 
     PetscCall(TSGetDM(user->ts, &stagdm));
-    PetscCall(DMStagGetDOF(stagdm, &dof[0], &dof[1], &dof[2], &dof[3]));
+    PetscCall(DMStagGetDOF(stagdm, &dof[0], &dof[1],
+                                      &dof[2], &dof[3]));
 
-    /* Canonical 3D storage locations: vertex, 3 edges, 3 faces, element. */
     const DMStagStencilLocation locs[8] = {
-        DMSTAG_BACK_DOWN_LEFT,                                 /* vertices  */
-        DMSTAG_BACK_DOWN, DMSTAG_BACK_LEFT, DMSTAG_DOWN_LEFT,  /* edges     */
-        DMSTAG_LEFT, DMSTAG_DOWN, DMSTAG_BACK,                 /* faces     */
-        DMSTAG_ELEMENT                                         /* elements  */
+        DMSTAG_BACK_DOWN_LEFT,
+        DMSTAG_BACK_DOWN, DMSTAG_BACK_LEFT, DMSTAG_DOWN_LEFT,
+        DMSTAG_LEFT, DMSTAG_DOWN, DMSTAG_BACK,
+        DMSTAG_ELEMENT
     };
+
     const PetscInt ndof[8] = {
         dof[0],
         dof[1], dof[1], dof[1],
@@ -9183,36 +9186,67 @@ PetscErrorCode stag_vec_io(User *user, PetscViewer viewer, Vec X, PetscBool load
         dof[3]
     };
 
+    Vec Xloc = NULL;
+
+    if (load) {
+        /*
+         * The file contains every stratum/component, so rebuild X.
+         */
+        PetscCall(VecZeroEntries(X));
+        PetscCall(DMGetLocalVector(stagdm, &Xloc));
+    }
+
     for (PetscInt s = 0; s < 8; ++s) {
         for (PetscInt c = 0; c < ndof[s]; ++c) {
-            DM   da;
-            Vec  davec;
+            DM  da;
+            Vec davec;
             char name[64];
 
-            PetscCall(PetscSNPrintf(name, sizeof(name), "stag_%d_%d", (int)locs[s], (int)c));
+            PetscCall(PetscSNPrintf(name, sizeof(name),
+                                    "stag_%d_%d",
+                                    (int)locs[s], (int)c));
 
-            /* Builds a DMDA (rank-independent natural ordering) for this
-               stratum/component and copies the current stag values into davec. */
-            PetscCall(DMStagVecSplitToDMDA(stagdm, X, locs[s], c, &da, &davec));
+            PetscCall(DMStagVecSplitToDMDA(stagdm, X, locs[s], c,
+                                           &da, &davec));
             PetscCall(PetscObjectSetName((PetscObject)davec, name));
 
             if (load) {
-                PetscInt      slot, xs, ys, zs, xm, ym, zm;
+                PetscInt slot;
+                PetscInt xs, ys, zs, xm, ym, zm;
                 PetscScalar ****stagarr;
-                PetscScalar  ***daarr;
+                PetscScalar ***daarr;
 
                 PetscCall(VecLoad(davec, viewer));
 
-                PetscCall(DMStagGetLocationSlot(stagdm, locs[s], c, &slot));
-                PetscCall(DMStagVecGetArray(stagdm, X, &stagarr));
+                /*
+                 * Xloc is the ghosted DMStag vector.
+                 */
+                PetscCall(VecZeroEntries(Xloc));
+
+                PetscCall(DMStagGetLocationSlot(stagdm, locs[s],
+                                                c, &slot));
+
+                PetscCall(DMStagVecGetArray(stagdm, Xloc, &stagarr));
                 PetscCall(DMDAVecGetArrayRead(da, davec, &daarr));
-                PetscCall(DMDAGetCorners(da, &xs, &ys, &zs, &xm, &ym, &zm));
+                PetscCall(DMDAGetCorners(da, &xs, &ys, &zs,
+                                             &xm, &ym, &zm));
+
                 for (PetscInt k = zs; k < zs + zm; ++k)
                     for (PetscInt j = ys; j < ys + ym; ++j)
                         for (PetscInt i = xs; i < xs + xm; ++i)
                             stagarr[k][j][i][slot] = daarr[k][j][i];
+
                 PetscCall(DMDAVecRestoreArrayRead(da, davec, &daarr));
-                PetscCall(DMStagVecRestoreArray(stagdm, X, &stagarr));
+                PetscCall(DMStagVecRestoreArray(stagdm, Xloc, &stagarr));
+
+                /*
+                 * Add only the populated owned entries into X.
+                 * The other entries of Xloc are zero.
+                 */
+                PetscCall(DMLocalToGlobalBegin(stagdm, Xloc,
+                                               ADD_VALUES, X));
+                PetscCall(DMLocalToGlobalEnd(stagdm, Xloc,
+                                             ADD_VALUES, X));
             } else {
                 PetscCall(VecView(davec, viewer));
             }
@@ -9222,6 +9256,8 @@ PetscErrorCode stag_vec_io(User *user, PetscViewer viewer, Vec X, PetscBool load
         }
     }
 
+    if (load)
+        PetscCall(DMRestoreLocalVector(stagdm, &Xloc));
+
     PetscFunctionReturn(PETSC_SUCCESS);
 }
-
