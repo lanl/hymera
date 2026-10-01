@@ -222,3 +222,36 @@ this directory.
   over the full mesh, cell by cell, by calling `getHermiteDataFD`.
 - **multiplybyR** -- scales a flat field array by `R` element-wise.
 
+
+## mass_matrix_coefficients.c
+
+`mass_matrix_coefficients_attic.c` contains 10 functions moved verbatim
+(byte-for-byte identical bodies) out of `../mass_matrix_coefficients.c`.
+Each had zero callers anywhere in `src/`, `tests/`, or the built objects
+(verified with `nm -u` over every `mhd_core` object and the `t0_coefficients`
+test binary), confirmed with the same codegen-identity check used elsewhere
+in this directory. Some reference each other (`betaeperp` calls
+`alphaecperp`, `betav` calls `alphavc`, ...); that is fine, since all ten
+moved together.
+
+- **betaeperp** -- edge-located sum of the dead cell coefficient
+  `alphaecperp` over the cells sharing the edge (perpendicular-resistivity
+  variant of the live `betae`/`betae2` edge sums).
+- **betaephi** -- edge-located sum of the live cell coefficient `alphaecphi`
+  (phi-resistivity edge sum alongside the live `betae`/`betae2` and the
+  now-dead `betaeperp`/`betaephi2`).
+- **betaephi2** -- edge-located sum of the dead cell coefficient
+  `alphaecphi2` (second phi-resistivity edge-sum variant).
+- **betav** -- vertex-located sum of the dead cell coefficient `alphavc`
+  over the cells sharing the vertex.
+- **alphaecperp** -- `alphaec`-family cell coefficient using
+  `etawallperp` in place of the live variants' `etawall`/`etawallphi`.
+- **alphaecphi2** -- `alphaec`-family cell coefficient, a second
+  `etawallphi`-weighted variant alongside the live `alphaecphi`.
+- **alphavc** -- vertex-cell mass-matrix coefficient (vertex-located
+  counterpart of the cell/face/edge coefficient families).
+- **alphafc_wmp** -- face coefficient "with material properties"
+  (material-property-weighted variant of the live `alphafc`).
+- **betaf_wmp** -- face mass-matrix coefficient built from `alphafc_wmp`
+  (material-property-weighted variant of the live `betaf`).
+- **alphac** -- cell-centered mass-matrix coefficient.
