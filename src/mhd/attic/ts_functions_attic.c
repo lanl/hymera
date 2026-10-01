@@ -13606,3 +13606,2022 @@ PetscErrorCode SampleShellPCDestroy_Diag(PC pc){
   return 0;
 }
 
+
+PetscErrorCode FormIFunction_Initializepsi(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void * ptr) {
+  PetscFunctionBeginUser;
+
+  PetscLogEvent  USER_EVENT;
+  PetscClassId   classid;
+
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("FormIFunction_Initializepsi",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
+
+
+  User * user = (User * ) ptr;
+  DM da, coordDA = user -> coorda;
+  PetscInt startr, startphi, startz, nr, nphi, nz;
+  PetscScalar dt, cellvolume;
+  Vec fLocal, xLocal, bcLocal, xdotLocal, pLocal;
+  Vec VxBe, VxBeLocal, VxB, Vf, VfLocal, nif, nifLocal, niv, nivLocal, Bv, BvLocal, curlBv, curlBvLocal, GradEP, GradEPLocal, Fcopy, FcopyLocal;
+  Vec x, potential;
+  Vec coordLocal;
+  PetscInt N[3], er, ephi, ez, d;
+
+  PetscInt icp[3];
+  PetscInt icBrp[3], icBphip[3], icBzp[3], icBrm[3], icBphim[3], icBzm[3];
+  PetscInt icErmzm[3], icErmzp[3], icErpzm[3], icErpzp[3];
+
+  PetscInt icEphimzm[3], icEphipzm[3], icEphimzp[3], icEphipzp[3];
+  PetscInt icErmphim[3], icErpphim[3], icErmphip[3], icErpphip[3];
+  PetscInt icrmphimzm[3], icrmphimzp[3], icrmphipzm[3], icrmphipzp[3];
+  PetscInt icrpphimzm[3], icrpphimzp[3], icrpphipzm[3], icrpphipzp[3];
+
+  PetscInt ivn;
+
+  PetscInt ivBrp, ivBphip, ivBzp, ivBrm, ivBphim, ivBzm;
+
+  PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
+  PetscInt ivEphimzm, ivEphipzm, ivEphimzp, ivEphipzp;
+  PetscInt ivErmphim, ivErpphim, ivErmphip, ivErpphip;
+
+  PetscInt ivVrmphimzm[4], ivVrmphimzp[4], ivVrmphipzm[4], ivVrmphipzp[4];
+  PetscInt ivVrpphimzm[4], ivVrpphipzm[4], ivVrpphipzp[4], ivVrpphimzp[4];
+
+  DM dmCoord;
+  DM dmCoorda;
+  Vec coordaLocal;
+  PetscScalar ** ** arrCoorda;
+
+  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrP, ** ** arrx, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrXdot, ** ** arrBv, ** ** arrcurlBv, ** ** arrnif, ** ** arrniv, ** ** arrVf, ** ** arrVxBe, ** ** arrGradEP, ** ** arrFcopy;
+
+  PetscCall(VecZeroEntries(F));
+  PetscCall(TSGetDM(ts, & da));
+
+  PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+  PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+
+  for (d = 0; d < 4; ++d) {
+    /* Vertex locations */
+    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_LEFT, d, & ivVrmphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_RIGHT, d, & ivVrpphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_UP_LEFT, d, & ivVrmphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_UP_RIGHT, d, & ivVrpphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_LEFT, d, & ivVrmphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_RIGHT, d, & ivVrpphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_LEFT, d, & ivVrmphipzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_RIGHT, d, & ivVrpphipzp[d]));
+  }
+  /* Edge locations */
+  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm));
+  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim));
+  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim));
+  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip));
+  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp));
+  /* Face locations */
+  PetscCall(DMStagGetLocationSlot(da, LEFT, 0, & ivBrm));
+  PetscCall(DMStagGetLocationSlot(da, DOWN, 0, & ivBphim));
+  PetscCall(DMStagGetLocationSlot(da, BACK, 0, & ivBzm));
+  PetscCall(DMStagGetLocationSlot(da, RIGHT, 0, & ivBrp));
+  PetscCall(DMStagGetLocationSlot(da, UP, 0, & ivBphip));
+  PetscCall(DMStagGetLocationSlot(da, FRONT, 0, & ivBzp));
+  /* Cell locations */
+  PetscCall(DMStagGetLocationSlot(da, ELEMENT, 0, & ivn));
+
+  PetscCall(DMGetCoordinateDM(da, & dmCoord));
+  PetscCall(DMGetCoordinatesLocal(da, & coordLocal));
+  PetscCall(DMStagVecGetArrayRead(dmCoord, coordLocal, & arrCoord));
+  PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
+  PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
+  PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoorda));
+  for (d = 0; d < 3; ++d) {
+    /* Element coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]));
+    /* Face coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoord, LEFT, d, & icBrm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN, d, & icBphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK, d, & icBzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, RIGHT, d, & icBrp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP, d, & icBphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT, d, & icBzp[d]));
+    /* Edge coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_LEFT, d, & icErmzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_DOWN, d, & icEphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_RIGHT, d, & icErpzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_UP, d, & icEphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_LEFT, d, & icErmphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_RIGHT, d, & icErpphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP_LEFT, d, & icErmphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP_RIGHT, d, & icErpphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_DOWN, d, & icEphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_LEFT, d, & icErmzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_RIGHT, d, & icErpzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & icEphipzp[d]));
+    /* Vertex coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_LEFT, d, & icrmphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_RIGHT, d, & icrpphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_LEFT, d, & icrmphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_RIGHT, d, & icrpphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_LEFT, d, & icrmphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_RIGHT, d, & icrpphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_LEFT, d, & icrmphipzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_RIGHT, d, & icrpphipzp[d]));
+  }
+  /* Compute the source term potential for time-dependent manufactured solution */
+  PetscCall(DMCreateGlobalVector(da, & potential));
+  FormSourceTermPotential(ts, t, potential, user);
+  PetscCall(DMGetLocalVector(da, & pLocal));
+  PetscCall(DMGlobalToLocalBegin(da, potential, INSERT_VALUES, pLocal));
+  PetscCall(DMGlobalToLocalEnd(da, potential, INSERT_VALUES, pLocal));
+  PetscCall(DMStagVecGetArrayRead(da, pLocal, & arrP));
+
+  /* Compute the exact solution to set boundary conditions */
+  PetscCall(DMCreateGlobalVector(da, & x));
+  FormExactSolution(t, ts, & x, user);
+  PetscCall(DMGetLocalVector(da, & bcLocal));
+  PetscCall(DMGlobalToLocalBegin(da, x, INSERT_VALUES, bcLocal));
+  PetscCall(DMGlobalToLocalEnd(da, x, INSERT_VALUES, bcLocal));
+  PetscCall(DMStagVecGetArrayRead(da, bcLocal, & arrx));
+  PetscCall(TSGetTimeStep(ts, & dt));
+
+  /* Compute function over the locally owned part of the grid */
+  /* f1(V,EP,tau,B,ni) = dV/dt; on all vertices
+     f2(V,EP,tau,B,ni) = -(1/r) \Delta^*(EP) + mu_0 * J_0 ; on inner vertices
+     f2(V,EP,tau,B,ni) = EP ; on boundary vertices
+     f3(V,EP,tau,B,ni) = dtau/dt; on all edges
+     f4(V,EP,tau,B,ni) = dB/dt; on all faces
+     f5(V,EP,tau,B,ni) = dni/dt; in all cells */
+  PetscCall(DMGetLocalVector(da, & fLocal));
+  PetscCall(DMGlobalToLocalBegin(da, F, INSERT_VALUES, fLocal));
+  PetscCall(DMGlobalToLocalEnd(da, F, INSERT_VALUES, fLocal));
+  PetscCall(DMStagVecGetArray(da, fLocal, & arrF));
+
+  PetscCall(DMGetLocalVector(da, & xLocal));
+  PetscCall(DMGlobalToLocalBegin(da, X, INSERT_VALUES, xLocal));
+  PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, xLocal));
+  PetscCall(DMStagVecGetArrayRead(da, xLocal, & arrX));
+
+  PetscCall(DMGetLocalVector(da, & xdotLocal));
+  PetscCall(DMGlobalToLocalBegin(da, Xdot, INSERT_VALUES, xdotLocal));
+  PetscCall(DMGlobalToLocalEnd(da, Xdot, INSERT_VALUES, xdotLocal));
+  PetscCall(DMStagVecGetArrayRead(da, xdotLocal, & arrXdot));
+
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          cellvolume = user -> dphi * PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
+        } else {
+          cellvolume = PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) *
+            PetscAbsReal(arrCoord[ez][ephi][er][icBphip[1]] - arrCoord[ez][ephi][er][icBphim[1]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
+        }
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
+        } else {
+          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
+        }
+
+        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
+        } else {
+          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
+        }
+
+        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
+
+        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
+
+        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
+
+        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
+        } else {
+          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
+        }
+
+        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
+        } else {
+          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
+        }
+
+        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
+
+        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+
+        /* f1(V,EP,tau,B,ni) = dV/dt; on all vertices
+           f5(V,EP,tau,B,ni) = dni/dt ; in all cells
+           f3(V,EP,tau,B,ni) = dtau/dt ; on all edges
+           */
+        arrF[ez][ephi][er][ivn] = arrXdot[ez][ephi][er][ivn];
+
+        arrF[ez][ephi][er][ivVrmphimzm[0]] = arrXdot[ez][ephi][er][ivVrmphimzm[0]];
+        arrF[ez][ephi][er][ivVrmphimzm[1]] = arrXdot[ez][ephi][er][ivVrmphimzm[1]];
+        arrF[ez][ephi][er][ivVrmphimzm[2]] = arrXdot[ez][ephi][er][ivVrmphimzm[2]];
+        arrF[ez][ephi][er][ivVrmphimzp[0]] = arrXdot[ez][ephi][er][ivVrmphimzp[0]];
+        arrF[ez][ephi][er][ivVrmphimzp[1]] = arrXdot[ez][ephi][er][ivVrmphimzp[1]];
+        arrF[ez][ephi][er][ivVrmphimzp[2]] = arrXdot[ez][ephi][er][ivVrmphimzp[2]];
+        arrF[ez][ephi][er][ivVrmphipzm[0]] = arrXdot[ez][ephi][er][ivVrmphipzm[0]];
+        arrF[ez][ephi][er][ivVrmphipzm[1]] = arrXdot[ez][ephi][er][ivVrmphipzm[1]];
+        arrF[ez][ephi][er][ivVrmphipzm[2]] = arrXdot[ez][ephi][er][ivVrmphipzm[2]];
+        arrF[ez][ephi][er][ivVrmphipzp[0]] = arrXdot[ez][ephi][er][ivVrmphipzp[0]];
+        arrF[ez][ephi][er][ivVrmphipzp[1]] = arrXdot[ez][ephi][er][ivVrmphipzp[1]];
+        arrF[ez][ephi][er][ivVrmphipzp[2]] = arrXdot[ez][ephi][er][ivVrmphipzp[2]];
+        arrF[ez][ephi][er][ivVrpphimzm[0]] = arrXdot[ez][ephi][er][ivVrpphimzm[0]];
+        arrF[ez][ephi][er][ivVrpphimzm[1]] = arrXdot[ez][ephi][er][ivVrpphimzm[1]];
+        arrF[ez][ephi][er][ivVrpphimzm[2]] = arrXdot[ez][ephi][er][ivVrpphimzm[2]];
+        arrF[ez][ephi][er][ivVrpphimzp[0]] = arrXdot[ez][ephi][er][ivVrpphimzp[0]];
+        arrF[ez][ephi][er][ivVrpphimzp[1]] = arrXdot[ez][ephi][er][ivVrpphimzp[1]];
+        arrF[ez][ephi][er][ivVrpphimzp[2]] = arrXdot[ez][ephi][er][ivVrpphimzp[2]];
+        arrF[ez][ephi][er][ivVrpphipzm[0]] = arrXdot[ez][ephi][er][ivVrpphipzm[0]];
+        arrF[ez][ephi][er][ivVrpphipzm[1]] = arrXdot[ez][ephi][er][ivVrpphipzm[1]];
+        arrF[ez][ephi][er][ivVrpphipzm[2]] = arrXdot[ez][ephi][er][ivVrpphipzm[2]];
+        arrF[ez][ephi][er][ivVrpphipzp[0]] = arrXdot[ez][ephi][er][ivVrpphipzp[0]];
+        arrF[ez][ephi][er][ivVrpphipzp[1]] = arrXdot[ez][ephi][er][ivVrpphipzp[1]];
+        arrF[ez][ephi][er][ivVrpphipzp[2]] = arrXdot[ez][ephi][er][ivVrpphipzp[2]];
+
+        //F3(V,EP,tau,B,ni) = tau - 0 ; on boundary edges
+        if (!(er == 0 || ez == 0)) {
+          arrF[ez][ephi][er][ivErmzm] = arrXdot[ez][ephi][er][ivErmzm];
+        }
+        else{
+          arrF[ez][ephi][er][ivErmzm] = arrX[ez][ephi][er][ivErmzm];
+        }
+        if (!(ez == 0)) {
+          arrF[ez][ephi][er][ivEphimzm] = arrXdot[ez][ephi][er][ivEphimzm];
+        }
+        else {
+          arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm];
+        }
+        if (!(er == 0)) {
+          arrF[ez][ephi][er][ivErmphim] = arrXdot[ez][ephi][er][ivErmphim];
+        }
+        else {
+          arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim];
+        }
+
+        if (er == N[0]-1) {
+          arrF[ez][ephi][er][ivErpzm] = arrX[ez][ephi][er][ivErpzm];
+          arrF[ez][ephi][er][ivErpphim] = arrX[ez][ephi][er][ivErpphim];
+        }
+
+        if (ez == N[2]-1) {
+          arrF[ez][ephi][er][ivErmzp] = arrX[ez][ephi][er][ivErmzp];
+          arrF[ez][ephi][er][ivEphimzp] = arrX[ez][ephi][er][ivEphimzp];
+        }
+
+        if (er == N[0]-1 && ez == N[2]-1) {
+          arrF[ez][ephi][er][ivErpzp] = arrX[ez][ephi][er][ivErpzp];
+        }
+
+        /* f4(V,EP,tau,B,ni) = dB/dt */
+        arrF[ez][ephi][er][ivBrm] = arrXdot[ez][ephi][er][ivBrm]; /* Left face */
+
+        arrF[ez][ephi][er][ivBphim] = arrXdot[ez][ephi][er][ivBphim]; /* Down face */
+
+        arrF[ez][ephi][er][ivBzm] = arrXdot[ez][ephi][er][ivBzm]; /* Back face */
+
+        if (er == N[0] - 1) {
+          arrF[ez][ephi][er][ivBrp] = arrXdot[ez][ephi][er][ivBrp]; /* Right face */
+        }
+
+        if (ephi == N[1] - 1 && !(user -> phibtype)) {
+          arrF[ez][ephi][er][ivBphip] = arrXdot[ez][ephi][er][ivBphip]; /* Up face */
+        }
+
+        if (ez == N[2] - 1) {
+          arrF[ez][ephi][er][ivBzp] = arrXdot[ez][ephi][er][ivBzp]; /* Front face */
+        }
+
+
+      }
+    }
+  }
+  /* End of triple for loop */
+
+  PetscCall(DMStagVecRestoreArray(da, pLocal, & arrP));
+  PetscCall(DMRestoreLocalVector(da, & pLocal));
+  PetscCall(VecDestroy( & potential));
+
+  PetscCall(DMStagVecRestoreArray(da, fLocal, & arrF));
+  PetscCall(DMLocalToGlobal(da, fLocal, INSERT_VALUES, F));
+
+  //f2(V,EP,tau,B,ni) = - (1/r) \Delta^*(EP); on inner vertices
+  ApplyDeltastar2(ts, X, F, user);
+
+  PetscCall(DMGlobalToLocalBegin(da, F, INSERT_VALUES, fLocal));
+  PetscCall(DMGlobalToLocalEnd(da, F, INSERT_VALUES, fLocal));
+  PetscCall(DMStagVecGetArray(da, fLocal, & arrF));
+
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+        //f2(V,EP,tau,B,ni) += mu_0 * J_0 ; on inner vertices
+        if (er > 0 && ez > 0 && fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] + 1.0) < 0.7 && fabs(user -> dataC[er + ephi * N[0] + (ez - 1) * N[1] * N[0]] + 1.0) < 0.7 && fabs(user -> dataC[er - 1 + ephi * N[0] + ez * N[1] * N[0]] + 1.0) < 0.7 && fabs(user -> dataC[er - 1 + ephi * N[0] + (ez - 1) * N[1] * N[0]] + 1.0) < 0.7) {
+          arrF[ez][ephi][er][ivVrmphimzm[3]] += 1.52;
+        }
+      }
+    }
+  }
+
+  PetscCall(DMStagVecRestoreArray(da, fLocal, & arrF));
+  PetscCall(DMLocalToGlobal(da, fLocal, INSERT_VALUES, F));
+  PetscCall(DMGlobalToLocalBegin(da, F, INSERT_VALUES, fLocal));
+  PetscCall(DMGlobalToLocalEnd(da, F, INSERT_VALUES, fLocal));
+  PetscCall(DMStagVecGetArray(da, fLocal, & arrF));
+
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+        /* Set boundary conditions for EP field */
+        /* f2(V,EP,tau,B,ni) = (EP - EPboundarycondition) */
+        //arrF[ez][ephi][er][ivVrmphimzm[3]] = arrX[ez][ephi][er][ivVrmphimzm[3]];
+        if (er == 0 || ez == 0 || (ephi == 0 && !(user -> phibtype))) {
+          arrF[ez][ephi][er][ivVrmphimzm[3]] = arrX[ez][ephi][er][ivVrmphimzm[3]] - 0.0;
+        }
+        if (er == N[0] - 1) {
+          arrF[ez][ephi][er][ivVrpphimzm[3]] = arrX[ez][ephi][er][ivVrpphimzm[3]] - 0.0;
+        }
+        if (ez == N[2] - 1) {
+          arrF[ez][ephi][er][ivVrmphimzp[3]] = arrX[ez][ephi][er][ivVrmphimzp[3]] - 0.0;
+        }
+        if (ephi == N[1] - 1 && !(user -> phibtype)) {
+          arrF[ez][ephi][er][ivVrmphipzm[3]] = arrX[ez][ephi][er][ivVrmphipzm[3]] - 0.0;
+        }
+        if (ez == N[2] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
+          arrF[ez][ephi][er][ivVrmphipzp[3]] = arrX[ez][ephi][er][ivVrmphipzp[3]] - 0.0;
+        }
+        if (er == N[0] - 1 && ez == N[2] - 1) {
+          arrF[ez][ephi][er][ivVrpphimzp[3]] = arrX[ez][ephi][er][ivVrpphimzp[3]] - 0.0;
+        }
+        if (er == N[0] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
+          arrF[ez][ephi][er][ivVrpphipzm[3]] = arrX[ez][ephi][er][ivVrpphipzm[3]] - 0.0;
+        }
+        if (er == N[0] - 1 && ez == N[2] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
+          arrF[ez][ephi][er][ivVrpphipzp[3]] = arrX[ez][ephi][er][ivVrpphipzp[3]] - 0.0;
+        }
+      }
+    }
+  }
+
+  /* Restore vectors */
+  PetscCall(DMStagVecRestoreArray(da, fLocal, & arrF));
+  PetscCall(DMLocalToGlobal(da, fLocal, INSERT_VALUES, F));
+  PetscCall(DMRestoreLocalVector(da, & fLocal));
+  PetscCall(DMStagVecRestoreArrayRead(da, xLocal, & arrX));
+  PetscCall(DMRestoreLocalVector(da, & xLocal));
+  PetscCall(DMStagVecRestoreArrayRead(da, xdotLocal, & arrXdot));
+  PetscCall(DMRestoreLocalVector(da, & xdotLocal));
+  PetscCall(DMStagVecRestoreArrayRead(da, bcLocal, & arrx));
+  PetscCall(DMRestoreLocalVector(da, & bcLocal));
+
+  PetscCall(DMStagVecRestoreArrayRead(dmCoord, coordLocal, & arrCoord));
+  PetscCall(DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoorda));
+  if (user -> debug) {
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F = \n"));
+    PetscCall(VecView(F, PETSC_VIEWER_STDOUT_WORLD));
+  }
+
+  PetscCall(VecDestroy( & x));
+
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+PetscErrorCode FormExactSolution_LargeData(PetscReal time, TS ts, Vec * X, void * ptr) {
+  PetscFunctionBeginUser;
+  User * user = (User * ) ptr;
+  DM da;
+  PetscInt startr, startphi, startz, nr, nphi, nz;
+
+  Vec xLocal;
+  Vec coordLocal;
+  PetscInt N[3], er, ephi, ez, d;
+
+  PetscInt icBrp[3], icBphip[3], icBzp[3], icBrm[3], icBphim[3], icBzm[3];
+
+  PetscInt icErmzm[3], icErmzp[3], icErpzm[3], icErpzp[3];
+  PetscInt icEphimzm[3], icEphipzm[3], icEphimzp[3], icEphipzp[3];
+  PetscInt icErmphim[3], icErpphim[3], icErmphip[3], icErpphip[3];
+
+  PetscInt ivn;
+
+  PetscInt ivBrp, ivBphip, ivBzp, ivBrm, ivBphim, ivBzm;
+
+  PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
+  PetscInt ivEphimzm, ivEphipzm, ivEphimzp, ivEphipzp;
+  PetscInt ivErmphim, ivErpphim, ivErmphip, ivErpphip;
+
+  PetscInt ivVrmphimzm[4], ivVrmphimzp[4], ivVrmphipzm[4], ivVrmphipzp[4];
+  PetscInt ivVrpphimzm[4], ivVrpphipzm[4], ivVrpphipzp[4], ivVrpphimzp[4];
+
+  DM dmCoord;
+  PetscScalar ** ** arrCoord, ** ** arrX, dt;
+  PetscInt countz = 0, countphi = 0, countr = 0;
+
+  PetscCall(TSGetDM(ts, & da));
+  PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+  PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+
+  for (d = 0; d < 4; ++d) {
+    /* Vertex locations */
+    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_LEFT, d, & ivVrmphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_RIGHT, d, & ivVrpphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_UP_LEFT, d, & ivVrmphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_UP_RIGHT, d, & ivVrpphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_LEFT, d, & ivVrmphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_RIGHT, d, & ivVrpphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_LEFT, d, & ivVrmphipzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_RIGHT, d, & ivVrpphipzp[d]));
+  }
+  /* Edge locations */
+  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm));
+  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim));
+  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim));
+  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip));
+  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp));
+  /* Face locations */
+  PetscCall(DMStagGetLocationSlot(da, LEFT, 0, & ivBrm));
+  PetscCall(DMStagGetLocationSlot(da, DOWN, 0, & ivBphim));
+  PetscCall(DMStagGetLocationSlot(da, BACK, 0, & ivBzm));
+  PetscCall(DMStagGetLocationSlot(da, RIGHT, 0, & ivBrp));
+  PetscCall(DMStagGetLocationSlot(da, UP, 0, & ivBphip));
+  PetscCall(DMStagGetLocationSlot(da, FRONT, 0, & ivBzp));
+  /* Cell locations */
+  PetscCall(DMStagGetLocationSlot(da, ELEMENT, 0, & ivn));
+
+  PetscCall(DMGetCoordinateDM(da, & dmCoord));
+  PetscCall(DMGetCoordinatesLocal(da, & coordLocal));
+  PetscCall(DMStagVecGetArrayRead(dmCoord, coordLocal, & arrCoord));
+  for (d = 0; d < 3; ++d) {
+    /* Face coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoord, LEFT, d, & icBrm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN, d, & icBphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK, d, & icBzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, RIGHT, d, & icBrp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP, d, & icBphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT, d, & icBzp[d]));
+    /* Edge coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_LEFT, d, & icErmzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_DOWN, d, & icEphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_RIGHT, d, & icErpzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_UP, d, & icEphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_LEFT, d, & icErmphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_RIGHT, d, & icErpphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP_LEFT, d, & icErmphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP_RIGHT, d, & icErpphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_DOWN, d, & icEphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_LEFT, d, & icErmzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_RIGHT, d, & icErpzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & icEphipzp[d]));
+  }
+  /* Compute function over the locally owned part of the grid */
+  PetscCall(DMGetLocalVector(da, & xLocal));
+  PetscCall(DMStagVecGetArray(da, xLocal, & arrX));
+  PetscCall(TSGetTimeStep(ts, & dt));
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+        if (user -> ictype == 1) {
+          /* B(r, phi, z, t) = (cos(pi*t)/r) * ((z-0.5)^2 + sin(phi)) e_r */
+          arrX[ez][ephi][er][ivBrm] = PetscCosReal(PETSC_PI * time) * (PetscSinReal(arrCoord[ez][ephi][er][icBrm[1]]) + PetscSqr(arrCoord[ez][ephi][er][icBrm[2]] - 0.5)) / arrCoord[ez][ephi][er][icBrm[0]];
+          arrX[ez][ephi][er][ivBphim] = 0.0;
+          arrX[ez][ephi][er][ivBzm] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = PetscCosReal(PETSC_PI * time) * (PetscSinReal(arrCoord[ez][ephi][er][icBrp[1]]) + PetscSqr(arrCoord[ez][ephi][er][icBrp[2]] - 0.5)) / arrCoord[ez][ephi][er][icBrp[0]];
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = 0.0;
+          }
+          /* E(r, phi, z, t) = (cos(pi*t)*(2*z-1)/r) e_phi - (cos(pi*t)*cos(phi)/r^2) e_z */
+          arrX[ez][ephi][er][ivErmzm] = PetscCosReal(PETSC_PI * time) * (2.0 * arrCoord[ez][ephi][er][icErmzm[2]] - 1.0) / arrCoord[ez][ephi][er][icErmzm[0]];
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          arrX[ez][ephi][er][ivErmphim] = -PetscCosReal(arrCoord[ez][ephi][er][icErmphim[1]]) * PetscCosReal(PETSC_PI * time) / PetscSqr(arrCoord[ez][ephi][er][icErmphim[0]]);
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = PetscCosReal(PETSC_PI * time) * (2.0 * arrCoord[ez][ephi][er][icErpzm[2]] - 1.0) / arrCoord[ez][ephi][er][icErpzm[0]];
+            arrX[ez][ephi][er][ivErpphim] = -PetscCosReal(arrCoord[ez][ephi][er][icErpphim[1]]) * PetscCosReal(PETSC_PI * time) / PetscSqr(arrCoord[ez][ephi][er][icErpphim[0]]);
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = -PetscCosReal(arrCoord[ez][ephi][er][icErmphip[1]]) * PetscCosReal(PETSC_PI * time) / PetscSqr(arrCoord[ez][ephi][er][icErmphip[0]]);
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = PetscCosReal(PETSC_PI * time) * (2.0 * arrCoord[ez][ephi][er][icErmzp[2]] - 1.0) / arrCoord[ez][ephi][er][icErmzp[0]];
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = -PetscCosReal(arrCoord[ez][ephi][er][icErpphip[1]]) * PetscCosReal(PETSC_PI * time) / PetscSqr(arrCoord[ez][ephi][er][icErpphip[0]]);
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = PetscCosReal(PETSC_PI * time) * (2.0 * arrCoord[ez][ephi][er][icErpzp[2]] - 1.0) / arrCoord[ez][ephi][er][icErpzp[0]];
+          }
+        }
+        if (user -> ictype == 2) {
+          /* B(r, phi, z, t) = sin(pi*r) exp(-t) e_phi */
+          arrX[ez][ephi][er][ivBrm] = 0.0;
+          arrX[ez][ephi][er][ivBphim] = PetscSinReal(PETSC_PI * arrCoord[ez][ephi][er][icBphim[0]]) * PetscExpReal(-time);
+          arrX[ez][ephi][er][ivBzm] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = PetscSinReal(PETSC_PI * arrCoord[ez][ephi][er][icBphip[0]]) * PetscExpReal(-time);
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = 0.0;
+          }
+          /* E(r, phi, z, t) = (pi*cos(pi*r) + sin(pi*r)/r) exp(-t) e_z */
+          arrX[ez][ephi][er][ivErmzm] = 0.0;
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          arrX[ez][ephi][er][ivErmphim] = (PETSC_PI * PetscCosReal(PETSC_PI * arrCoord[ez][ephi][er][icErmphim[0]]) + PetscSinReal(PETSC_PI * arrCoord[ez][ephi][er][icErmphim[0]]) / arrCoord[ez][ephi][er][icErmphim[0]]) * PetscExpReal(-time);
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = 0.0;
+            arrX[ez][ephi][er][ivErpphim] = (PETSC_PI * PetscCosReal(PETSC_PI * arrCoord[ez][ephi][er][icErpphim[0]]) + PetscSinReal(PETSC_PI * arrCoord[ez][ephi][er][icErpphim[0]]) / arrCoord[ez][ephi][er][icErpphim[0]]) * PetscExpReal(-time);
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = (PETSC_PI * PetscCosReal(PETSC_PI * arrCoord[ez][ephi][er][icErmphip[0]]) + PetscSinReal(PETSC_PI * arrCoord[ez][ephi][er][icErmphip[0]]) / arrCoord[ez][ephi][er][icErmphip[0]]) * PetscExpReal(-time);
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = 0.0;
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = (PETSC_PI * PetscCosReal(PETSC_PI * arrCoord[ez][ephi][er][icErpphip[0]]) + PetscSinReal(PETSC_PI * arrCoord[ez][ephi][er][icErpphip[0]]) / arrCoord[ez][ephi][er][icErpphip[0]]) * PetscExpReal(-time);
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = 0.0;
+          }
+        }
+        if (user -> ictype == 3) {
+          /* B(r, phi, z, t) = cos(phi) e_r - sin(phi) e_phi */
+          arrX[ez][ephi][er][ivBrm] = PetscCosReal(arrCoord[ez][ephi][er][icBrm[1]]);
+          arrX[ez][ephi][er][ivBphim] = -PetscSinReal(arrCoord[ez][ephi][er][icBphim[1]]);
+          arrX[ez][ephi][er][ivBzm] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = PetscCosReal(arrCoord[ez][ephi][er][icBrp[1]]);
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = -PetscSinReal(arrCoord[ez][ephi][er][icBphip[1]]);
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = 0.0;
+          }
+          /* E(r, phi, z, t) = 0 */
+          arrX[ez][ephi][er][ivErmzm] = 0.0;
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          arrX[ez][ephi][er][ivErmphim] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = 0.0;
+            arrX[ez][ephi][er][ivErpphim] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = 0.0;
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = 0.0;
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = 0.0;
+          }
+        }
+        if (user -> ictype == 4) {
+          /* B(r, phi, z, t) = e_z */
+          arrX[ez][ephi][er][ivBrm] = 0.0;
+          arrX[ez][ephi][er][ivBphim] = 0.0;
+          arrX[ez][ephi][er][ivBzm] = 1.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = 1.0;
+          }
+          /* E(r, phi, z, t) = 0 */
+          arrX[ez][ephi][er][ivErmzm] = 0.0;
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          arrX[ez][ephi][er][ivErmphim] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = 0.0;
+            arrX[ez][ephi][er][ivErpphim] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = 0.0;
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = 0.0;
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = 0.0;
+          }
+        }
+        if (user -> ictype == 5) {
+          /* B(r, phi, z, t) = (1/r) e_r */
+          arrX[ez][ephi][er][ivBrm] = 1.0 / arrCoord[ez][ephi][er][icBrm[0]];
+          arrX[ez][ephi][er][ivBphim] = 0.0;
+          arrX[ez][ephi][er][ivBzm] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = 1.0 / arrCoord[ez][ephi][er][icBrp[0]];
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = 0.0;
+          }
+          /* E(r, phi, z, t) = 0 */
+          arrX[ez][ephi][er][ivErmzm] = 0.0;
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          arrX[ez][ephi][er][ivErmphim] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = 0.0;
+            arrX[ez][ephi][er][ivErpphim] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = 0.0;
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = 0.0;
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = 0.0;
+          }
+        }
+        if (user -> ictype == 6) {
+          /* B(r, phi, z, t<=t_1) = (1 - t/r^2) e_phi */
+          /* B(r, phi, z, t_1<t<=t_2) = (1 - 2dt/r^2 + time/r^2 - 3(time^2 - dt^2)/(2r^4) ) e_phi */
+          arrX[ez][ephi][er][ivBrm] = 0.0;
+          /*arrX[ez][ephi][er][ivBphim] = 1.0 - time / PetscPowReal(arrCoord[ez][ephi][er][icBphim[0]],2) ;*/
+          arrX[ez][ephi][er][ivBphim] = 1.0 - (time > 0.0) * (2.0 * dt - time) / PetscPowReal(arrCoord[ez][ephi][er][icBphim[0]], 2) - (time > 0.0) * 3.0 * (PetscSqr(time) - PetscSqr(dt)) / (2.0 * PetscPowReal(arrCoord[ez][ephi][er][icBphim[0]], 4));
+          if (user -> debug) {
+            PetscCall(PetscPrintf(PETSC_COMM_WORLD, "X_exact(Bphim) = %g\n", (double) arrX[ez][ephi][er][ivBphim]));
+          }
+          arrX[ez][ephi][er][ivBzm] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            /*arrX[ez][ephi][er][ivBphip] = 1.0 - time / PetscPowReal(arrCoord[ez][ephi][er][icBphip[0]],2) ;*/
+            arrX[ez][ephi][er][ivBphip] = 1.0 - (time > 0.0) * (2.0 * dt - time) / PetscPowReal(arrCoord[ez][ephi][er][icBphip[0]], 2) - (time > 0.0) * 3.0 * (PetscSqr(time) - PetscSqr(dt)) / (2.0 * PetscPowReal(arrCoord[ez][ephi][er][icBphip[0]], 4));
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = 0.0;
+          }
+          /* E(r, phi, z, t<=t_1) = (1/r + t/r^3) e_z */
+          /* E(r, phi, z, t<=t_2) = (1/r + 2dt/r^3 - time/r^3 + 9(time^2 - dt^2)/(2r^5) ) e_z */
+          arrX[ez][ephi][er][ivErmzm] = 0.0;
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          /*arrX[ez][ephi][er][ivErmphim] = 1.0 / arrCoord[ez][ephi][er][icErmphim[0]] + time / PetscPowReal(arrCoord[ez][ephi][er][icErmphim[0]],3) ; */
+          arrX[ez][ephi][er][ivErmphim] = (1.0 + (time > 0.0) * (2.0 * dt - time) / PetscPowReal(arrCoord[ez][ephi][er][icErmphim[0]], 2) + (time > 0.0) * 9.0 * (PetscSqr(time) - PetscSqr(dt)) / (2.0 * PetscPowReal(arrCoord[ez][ephi][er][icErmphim[0]], 4))) / arrCoord[ez][ephi][er][icErmphim[0]];
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = 0.0;
+            /*arrX[ez][ephi][er][ivErpphim] = 1.0 / arrCoord[ez][ephi][er][icErpphim[0]] + time / PetscPowReal(arrCoord[ez][ephi][er][icErpphim[0]],3);*/
+            arrX[ez][ephi][er][ivErpphim] = (1.0 + (time > 0.0) * (2.0 * dt - time) / PetscPowReal(arrCoord[ez][ephi][er][icErpphim[0]], 2) + (time > 0.0) * 9.0 * (PetscSqr(time) - PetscSqr(dt)) / (2.0 * PetscPowReal(arrCoord[ez][ephi][er][icErpphim[0]], 4))) / arrCoord[ez][ephi][er][icErpphim[0]];
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            /*arrX[ez][ephi][er][ivErmphip] = 1.0 / arrCoord[ez][ephi][er][icErmphip[0]] + time / PetscPowReal(arrCoord[ez][ephi][er][icErmphip[0]],3);*/
+            arrX[ez][ephi][er][ivErmphip] = (1.0 + (time > 0.0) * (2.0 * dt - time) / PetscPowReal(arrCoord[ez][ephi][er][icErmphip[0]], 2) + (time > 0.0) * 9.0 * (PetscSqr(time) - PetscSqr(dt)) / (2.0 * PetscPowReal(arrCoord[ez][ephi][er][icErmphip[0]], 4))) / arrCoord[ez][ephi][er][icErmphip[0]];
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = 0.0;
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            /*arrX[ez][ephi][er][ivErpphip] = 1.0 / arrCoord[ez][ephi][er][icErpphip[0]] + time / PetscPowReal(arrCoord[ez][ephi][er][icErpphip[0]],3);*/
+            arrX[ez][ephi][er][ivErpphip] = (1.0 + (time > 0.0) * (2.0 * dt - time) / PetscPowReal(arrCoord[ez][ephi][er][icErpphip[0]], 2) + (time > 0.0) * 9.0 * (PetscSqr(time) - PetscSqr(dt)) / (2.0 * PetscPowReal(arrCoord[ez][ephi][er][icErpphip[0]], 4))) / arrCoord[ez][ephi][er][icErpphip[0]];
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = 0.0;
+          }
+        }
+        if (user -> ictype == 7) {
+          /* B(r, phi, z, t) = (cos(pi*t) + sin(phi)) e_z */
+          arrX[ez][ephi][er][ivBrm] = 0.0;
+          arrX[ez][ephi][er][ivBphim] = 0.0;
+          arrX[ez][ephi][er][ivBzm] = PetscSinReal(arrCoord[ez][ephi][er][icBzm[1]]) + PetscCosReal(PETSC_PI * time);
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = PetscSinReal(arrCoord[ez][ephi][er][icBzp[1]]) + PetscCosReal(PETSC_PI * time);
+          }
+          /* E(r, phi, z, t) = (cos(phi)/r) e_r */
+          arrX[ez][ephi][er][ivErmzm] = 0.0;
+          arrX[ez][ephi][er][ivEphimzm] = PetscCosReal(arrCoord[ez][ephi][er][icEphimzm[1]]) / arrCoord[ez][ephi][er][icEphimzm[0]];
+          arrX[ez][ephi][er][ivErmphim] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = 0.0;
+            arrX[ez][ephi][er][ivErpphim] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = PetscCosReal(arrCoord[ez][ephi][er][icEphipzm[1]]) / arrCoord[ez][ephi][er][icEphipzm[0]];
+            arrX[ez][ephi][er][ivErmphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = 0.0;
+            arrX[ez][ephi][er][ivEphimzp] = PetscCosReal(arrCoord[ez][ephi][er][icEphimzp[1]]) / arrCoord[ez][ephi][er][icEphimzp[0]];
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = 0.0;
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = PetscCosReal(arrCoord[ez][ephi][er][icEphipzp[1]]) / arrCoord[ez][ephi][er][icEphipzp[0]];
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = 0.0;
+          }
+        }
+        if (user -> ictype == 8) {
+          /* B(r, phi, z, t) = exp(sin(phi)*r+t) e_z */
+          arrX[ez][ephi][er][ivBrm] = 0.0;
+          arrX[ez][ephi][er][ivBphim] = 0.0;
+          arrX[ez][ephi][er][ivBzm] = PetscExpReal(time + PetscSinReal(arrCoord[ez][ephi][er][icBzm[1]]) * arrCoord[ez][ephi][er][icBzm[0]]);
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = PetscExpReal(time + PetscSinReal(arrCoord[ez][ephi][er][icBzp[1]]) * arrCoord[ez][ephi][er][icBzp[0]]);
+          }
+          /* E(r, phi, z, t) = exp(sin(phi)*r+t) * (cos(phi) e_r - sin(phi) e_phi) */
+          arrX[ez][ephi][er][ivErmzm] = -PetscExpReal(time + PetscSinReal(arrCoord[ez][ephi][er][icErmzm[1]]) * arrCoord[ez][ephi][er][icErmzm[0]]) * PetscSinReal(arrCoord[ez][ephi][er][icErmzm[1]]);
+          arrX[ez][ephi][er][ivEphimzm] = PetscExpReal(time + PetscSinReal(arrCoord[ez][ephi][er][icEphimzm[1]]) * arrCoord[ez][ephi][er][icEphimzm[0]]) * PetscCosReal(arrCoord[ez][ephi][er][icEphimzm[1]]);
+          arrX[ez][ephi][er][ivErmphim] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = -PetscExpReal(time + PetscSinReal(arrCoord[ez][ephi][er][icErpzm[1]]) * arrCoord[ez][ephi][er][icErpzm[0]]) * PetscSinReal(arrCoord[ez][ephi][er][icErpzm[1]]);
+            arrX[ez][ephi][er][ivErpphim] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = PetscExpReal(time + PetscSinReal(arrCoord[ez][ephi][er][icEphipzm[1]]) * arrCoord[ez][ephi][er][icEphipzm[0]]) * PetscCosReal(arrCoord[ez][ephi][er][icEphipzm[1]]);
+            arrX[ez][ephi][er][ivErmphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = -PetscExpReal(time + PetscSinReal(arrCoord[ez][ephi][er][icErmzp[1]]) * arrCoord[ez][ephi][er][icErmzp[0]]) * PetscSinReal(arrCoord[ez][ephi][er][icErmzp[1]]);
+            arrX[ez][ephi][er][ivEphimzp] = PetscExpReal(time + PetscSinReal(arrCoord[ez][ephi][er][icEphimzp[1]]) * arrCoord[ez][ephi][er][icEphimzp[0]]) * PetscCosReal(arrCoord[ez][ephi][er][icEphimzp[1]]);
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = 0.0;
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = PetscExpReal(time + PetscSinReal(arrCoord[ez][ephi][er][icEphipzp[1]]) * arrCoord[ez][ephi][er][icEphipzp[0]]) * PetscCosReal(arrCoord[ez][ephi][er][icEphipzp[1]]);
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = -PetscExpReal(time + PetscSinReal(arrCoord[ez][ephi][er][icErpzp[1]]) * arrCoord[ez][ephi][er][icErpzp[0]]) * PetscSinReal(arrCoord[ez][ephi][er][icErpzp[1]]);
+          }
+        }
+
+        if (user -> ictype == 9) {
+          char filename[PETSC_MAX_PATH_LEN];
+          /* B(r, phi, z, t=0) Loaded from ReadInitialData output */
+          PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecBr.txt", user->input_folder));
+          ReadALine(filename, er + ephi * (N[0] + 1) + ez * N[1] * (N[0] + 1), & arrX[ez][ephi][er][ivBrm] );
+          arrX[ez][ephi][er][ivBrm] /= user->B0;
+          if (er == N[0] - 1) {
+            ReadALine(filename, er + 1 + ephi * (N[0] + 1) + ez * N[1] * (N[0] + 1), & arrX[ez][ephi][er][ivBrp] );
+            arrX[ez][ephi][er][ivBrp] /= user->B0;
+          }
+
+          PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecBphi.txt", user->input_folder));
+          ReadALine(filename, er + ephi * N[0] + ez * N[0] * (N[1] + 1), & arrX[ez][ephi][er][ivBphim] );
+          arrX[ez][ephi][er][ivBphim] /= user->B0;
+          if (ephi == N[1] - 1) {
+            ReadALine(filename, er + (ephi + 1) * N[0] + ez * N[0] * (N[1] + 1), & arrX[ez][ephi][er][ivBphip] );
+            arrX[ez][ephi][er][ivBphip] /= user->B0;
+          }
+
+          PetscCall(PetscSNPrintf(filename, PETSC_MAX_PATH_LEN, "%s/vecBz.txt", user->input_folder));
+          ReadALine(filename, er + ephi * N[0] + ez * N[0] * N[1], & arrX[ez][ephi][er][ivBzm] );
+          arrX[ez][ephi][er][ivBzm] /= user->B0;
+          if (ez == N[2] - 1) {
+            ReadALine(filename, er + ephi * N[0] + (ez + 1) * N[0] * N[1], & arrX[ez][ephi][er][ivBzp] );
+            arrX[ez][ephi][er][ivBzp] *= 0.2;
+          }
+
+          /* tau(r, phi, z, t=0) initialized with zero values. The E field will be computed later from B field with the derived curl operator */
+          arrX[ez][ephi][er][ivErmzm] = 0.0;
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          arrX[ez][ephi][er][ivErmphim] = 0.0;
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = 0.0;
+            arrX[ez][ephi][er][ivErpphim] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = 0.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = 0.0;
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = 0.0;
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = 0.0;
+          }
+
+          /* n_i(r, phi, z, t=0) = ni_0 */
+          arrX[ez][ephi][er][ivn] = 1.0;
+
+          /* Vi_perp(r, phi, z, t=0) = 0 */
+          arrX[ez][ephi][er][ivVrmphimzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphimzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzp[2]] = 0.0;
+
+          /* EP(r, phi, z, t=0) = 0 */
+          arrX[ez][ephi][er][ivVrmphimzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphimzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzp[3]] = 0.0;
+        }
+
+        if (user -> ictype == 10) {
+          /* B(r, phi, z, t=0) = e_phi + sqrt(2*ln(2*r_max/r)) e_z */
+          arrX[ez][ephi][er][ivBrm] = 0.0;
+          arrX[ez][ephi][er][ivBphim] = 1.0;
+          arrX[ez][ephi][er][ivBzm] = PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icBzm[0]]));
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = 1.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icBzp[0]]));
+          }
+          /* tau(r, phi, z, t=0) initialized with zero values. The tau field can be computed later from B field with the derived curl operator */
+          /*arrX[ez][ephi][er][ivErmzm] = 0.0;
+            arrX[ez][ephi][er][ivEphimzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphim] = 0.0;
+            if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = 0.0;
+            arrX[ez][ephi][er][ivErpphim] = 0.0;
+            }
+            if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = 0.0;
+            }
+            if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = 0.0;
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+            }
+            if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = 0.0;
+            }
+            if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+            }
+            if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = 0.0;
+            }*/
+          /* tau(r, phi, z, t=0) = eta / (mu0 * V_A) / r * [e_z + sqrt(2*ln(2*r_max/r))^{-1} e_phi] */
+          arrX[ez][ephi][er][ivErmzm] = condu(er, ephi, ez, BACK_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmzm[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErmzm[0]])));
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          arrX[ez][ephi][er][ivErmphim] = condu(er, ephi, ez, DOWN_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmphim[0]]);
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = condu(er, ephi, ez, BACK_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpzm[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErpzm[0]])));
+            arrX[ez][ephi][er][ivErpphim] = condu(er, ephi, ez, DOWN_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpphim[0]]);
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = condu(er, ephi, ez, UP_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmphip[0]]);
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = condu(er, ephi, ez, FRONT_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmzp[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErmzp[0]])));
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = condu(er, ephi, ez, UP_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpphip[0]]);
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = condu(er, ephi, ez, FRONT_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpzp[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErpzp[0]])));
+          }
+
+          /* n_i(r, phi, z, t=0) = ni_0 */
+          arrX[ez][ephi][er][ivn] = 1.0;
+
+          /* Vi_perp(r, phi, z, t=0) = 0 */
+          arrX[ez][ephi][er][ivVrmphimzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphimzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzp[2]] = 0.0;
+
+          /* EP(r, phi, z, t=0) = 0 */
+          arrX[ez][ephi][er][ivVrmphimzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphimzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzp[3]] = 0.0;
+        }
+
+        if (user -> ictype == 11) {
+          /* B(r, phi, z, t=0) = [2+cos(eta/mu0 * t)] * [e_phi + sqrt(2*ln(2*r_max/r)) e_z] */
+          arrX[ez][ephi][er][ivBrm] = 0.0;
+          arrX[ez][ephi][er][ivBphim] = 2.0 + PetscCosReal((user->eta / user->mu0) * time);
+          arrX[ez][ephi][er][ivBzm] = (2.0 + PetscCosReal((user->eta / user->mu0) * time)) * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icBzm[0]]));
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = 2.0 + PetscCosReal((user->eta / user->mu0) * time);
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = (2.0 + PetscCosReal((user->eta / user->mu0) * time)) * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icBzp[0]]));
+          }
+          /* tau(r, phi, z, t=0) = eta / (mu0 * V_A) * (cos(eta/mu0 * t) + 2)/r * [e_z + sqrt(2*ln(2*r_max/r))^{-1} e_phi] */
+          if(er == 0 || ez == 0){
+            arrX[ez][ephi][er][ivErmzm] = 0.0;
+          }
+          else{
+            arrX[ez][ephi][er][ivErmzm] = condu(er, ephi, ez, BACK_LEFT, user) * (2.0 + PetscCosReal(condu(er, ephi, ez, BACK_LEFT, user) / user->mu0 * time)) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmzm[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErmzm[0]])));
+          }
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          if((ephi == 0 && !user->phibtype) || er == 0){
+            arrX[ez][ephi][er][ivErmphim] = 0.0;
+          }
+          else{
+            arrX[ez][ephi][er][ivErmphim] = condu(er, ephi, ez, DOWN_LEFT, user) * (2.0 + PetscCosReal(condu(er, ephi, ez, DOWN_LEFT, user) / user->mu0 * time)) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmphim[0]]);
+          }
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = 0.0;
+            arrX[ez][ephi][er][ivErpphim] = 0.0;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = condu(er, ephi, ez, UP_LEFT, user) * (2.0 + PetscCosReal(condu(er, ephi, ez, UP_LEFT, user) / user->mu0 * time)) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmphip[0]]);
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = 0.0;
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = 0.0;
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = 0.0;
+          }
+
+          /* n_i(r, phi, z, t=0) = ni_0 */
+          arrX[ez][ephi][er][ivn] = 1.0;
+
+          /* Vi_perp(r, phi, z, t=0) = 0 */
+          arrX[ez][ephi][er][ivVrmphimzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphimzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzp[2]] = 0.0;
+
+          /* EP(r, phi, z, t=0) = 0 */
+          arrX[ez][ephi][er][ivVrmphimzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphimzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzp[3]] = 0.0;
+        }
+
+        if (user -> ictype == 12) {
+          /* B(r, phi, z, t=0) = exp(- z / z_max) / r e_r + (r - z) e_phi + cos(2*r_max/r) e_z */
+          arrX[ez][ephi][er][ivBrm] = PetscExpReal(- arrCoord[ez][ephi][er][icBrm[2]] / user->zmax) / arrCoord[ez][ephi][er][icBrm[0]];
+          arrX[ez][ephi][er][ivBphim] = arrCoord[ez][ephi][er][icBphim[0]] - arrCoord[ez][ephi][er][icBphim[2]];
+          arrX[ez][ephi][er][ivBzm] = PetscCosReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icBzm[0]]);
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = PetscExpReal(- arrCoord[ez][ephi][er][icBrp[2]] / user->zmax) / arrCoord[ez][ephi][er][icBrp[0]];
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = arrCoord[ez][ephi][er][icBphip[0]] - arrCoord[ez][ephi][er][icBphip[2]];
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = PetscCosReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icBzp[0]]);
+          }
+          /* tau(r, phi, z, t=0) = eta / (mu0 * V_A) / r * [e_z + sqrt(2*ln(2*r_max/r))^{-1} e_phi] */
+          arrX[ez][ephi][er][ivErmzm] = condu(er, ephi, ez, BACK_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmzm[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErmzm[0]])));
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          arrX[ez][ephi][er][ivErmphim] = condu(er, ephi, ez, DOWN_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmphim[0]]);
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = condu(er, ephi, ez, BACK_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpzm[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErpzm[0]])));
+            arrX[ez][ephi][er][ivErpphim] = condu(er, ephi, ez, DOWN_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpphim[0]]);
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = condu(er, ephi, ez, UP_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmphip[0]]);
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = condu(er, ephi, ez, FRONT_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmzp[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErmzp[0]])));
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = condu(er, ephi, ez, UP_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpphip[0]]);
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = condu(er, ephi, ez, FRONT_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpzp[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErpzp[0]])));
+          }
+
+          /* n_i(r, phi, z, t=0) = ni_0 */
+          arrX[ez][ephi][er][ivn] = 1.0;
+
+          /* Vi_perp(r, phi, z, t=0) = 0 */
+          arrX[ez][ephi][er][ivVrmphimzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphimzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzp[2]] = 0.0;
+
+          /* EP(r, phi, z, t=0) = 0 */
+          arrX[ez][ephi][er][ivVrmphimzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphimzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzp[3]] = 0.0;
+        }
+
+        if (user -> ictype == 13) {
+          /* B(r, phi, z, t=0) = e_phi + sqrt(2*ln(2*r_max/r)) e_z */
+          if(er!=0) {
+            arrX[ez][ephi][er][ivBrm] = 0.0;
+          }
+          arrX[ez][ephi][er][ivBphim] = 1.0;
+          if(ez!=0) {
+            arrX[ez][ephi][er][ivBzm] = PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icBzm[0]]));
+          }
+          if(er==0) {
+            arrX[ez][ephi][er][ivBrm] = NAN;
+          }
+          if(ez==0) {
+            arrX[ez][ephi][er][ivBzm] = NAN;
+          }
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivBrp] = NAN;
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivBphip] = 1.0;
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivBzp] = NAN;
+          }
+          /* tau(r, phi, z, t=0) = 0 */
+          /*
+             arrX[ez][ephi][er][ivErmzm] = 0.0;
+             arrX[ez][ephi][er][ivEphimzm] = 0.0;
+             arrX[ez][ephi][er][ivErmphim] = 0.0;
+             if (er == N[0] - 1) {
+             arrX[ez][ephi][er][ivErpzm] = 0.0;
+             arrX[ez][ephi][er][ivErpphim] = 0.0;
+             }
+             if (ephi == N[1] - 1) {
+             arrX[ez][ephi][er][ivEphipzm] = 0.0;
+             arrX[ez][ephi][er][ivErmphip] = 0.0;
+             }
+             if (ez == N[2] - 1) {
+             arrX[ez][ephi][er][ivErmzp] = 0.0;
+             arrX[ez][ephi][er][ivEphimzp] = 0.0;
+             }
+             if (er == N[0] - 1 && ephi == N[1] - 1) {
+             arrX[ez][ephi][er][ivErpphip] = 0.0;
+             }
+             if (ephi == N[1] - 1 && ez == N[2] - 1) {
+             arrX[ez][ephi][er][ivEphipzp] = 0.0;
+             }
+             if (er == N[0] - 1 && ez == N[2] - 1) {
+             arrX[ez][ephi][er][ivErpzp] = 0.0;
+             }*/
+
+          /* tau(r, phi, z, t=0) = eta / (mu0 * V_A) / r * [e_z + sqrt(2*ln(2*r_max/r))^{-1} e_phi] */
+          arrX[ez][ephi][er][ivErmzm] = condu(er, ephi, ez, BACK_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmzm[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErmzm[0]])));
+          arrX[ez][ephi][er][ivEphimzm] = 0.0;
+          arrX[ez][ephi][er][ivErmphim] = condu(er, ephi, ez, DOWN_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmphim[0]]);
+          if (er == N[0] - 1) {
+            arrX[ez][ephi][er][ivErpzm] = condu(er, ephi, ez, BACK_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpzm[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErpzm[0]])));
+            arrX[ez][ephi][er][ivErpphim] = condu(er, ephi, ez, DOWN_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpphim[0]]);
+          }
+          if (ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivEphipzm] = 0.0;
+            arrX[ez][ephi][er][ivErmphip] = condu(er, ephi, ez, UP_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmphip[0]]);
+          }
+          if (ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErmzp] = condu(er, ephi, ez, FRONT_LEFT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErmzp[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErmzp[0]])));
+            arrX[ez][ephi][er][ivEphimzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrX[ez][ephi][er][ivErpphip] = condu(er, ephi, ez, UP_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpphip[0]]);
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivEphipzp] = 0.0;
+          }
+          if (er == N[0] - 1 && ez == N[2] - 1) {
+            arrX[ez][ephi][er][ivErpzp] = condu(er, ephi, ez, FRONT_RIGHT, user) / (11000000.0 * user->mu0 * arrCoord[ez][ephi][er][icErpzp[0]] * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icErpzp[0]])));
+          }
+
+          /* n_i(r, phi, z, t=0) = ni_0 */
+          arrX[ez][ephi][er][ivn] = 1.0;
+
+          /* Vi_perp(r, phi, z, t=0) = 0 */
+          arrX[ez][ephi][er][ivVrmphimzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphimzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphimzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrmphipzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphimzp[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzm[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzm[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzm[2]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzp[0]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzp[1]] = 0.0;
+          arrX[ez][ephi][er][ivVrpphipzp[2]] = 0.0;
+
+          /* EP(r, phi, z, t=0) = 0 */
+          arrX[ez][ephi][er][ivVrmphimzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphimzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrmphipzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphimzp[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzm[3]] = 0.0;
+
+          arrX[ez][ephi][er][ivVrpphipzp[3]] = 0.0;
+        }
+      }
+    }
+  }
+  /* Restore vectors */
+  PetscCall(DMStagVecRestoreArray(da, xLocal, & arrX));
+  PetscCall(DMLocalToGlobal(da, xLocal, INSERT_VALUES, * X));
+  PetscCall(DMRestoreLocalVector(da, & xLocal));
+  PetscCall(DMStagVecRestoreArrayRead(dmCoord, coordLocal, & arrCoord));
+
+  if (user -> ictype == 9 && user -> Ebc) {
+    Vec Xcopy;
+    PetscCall(VecDuplicate( * X, & Xcopy));
+    PetscCall(VecCopy( * X, Xcopy));
+    PetscCall(VecScale(Xcopy, 1.0 / 11000000.0));
+    FormDerivedCurl(ts, Xcopy, * X, user); //This updates only the E field part in X by computing the derived mimetic curl operator applied to B field of Xcopy
+                                           //PetscBarrier((PetscObject) Xcopy);
+    PetscCall(VecDestroy( & Xcopy));
+  }
+
+  if (0) {
+    /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+       Normalize the system
+       - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+    Vec B, E, ni, Vi_perp;
+    PetscCall(VecGetSubVector( * X, user -> isB, & B));
+    VecScale(B, 0.2); // B := tilde{B} = (B_0^-1) B
+    PetscCall(VecRestoreSubVector( * X, user -> isB, & B));
+    PetscCall(VecGetSubVector( * X, user -> istau, & E));
+    VecScale(E, 0.2); // E := tilde{E} = (E_0^-1) E
+    VecScale(E, 1.0 / 11000000); // E := tilde{E} = (E_0^-1) E
+    PetscCall(VecRestoreSubVector( * X, user -> istau, & E));
+    PetscCall(VecGetSubVector( * X, user -> isni, & ni));
+    VecScale(ni, 1e-20); // ni := tilde{ni} = (ni_0^-1) ni
+    PetscCall(VecRestoreSubVector( * X, user -> isni, & ni));
+    PetscCall(VecGetSubVector( * X, user -> isV, & Vi_perp));
+    VecScale(Vi_perp, 1.0 / 11000000); // Vi_perp := tilde{Vi_perp} = (Vi_perp_0^-1) Vi_perp
+    PetscCall(VecRestoreSubVector( * X, user -> isV, & Vi_perp));
+  }
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+PetscErrorCode ReadALine(const char * file_name, PetscInt linenum, PetscReal * output) {
+  PetscFunctionBeginUser;
+  PetscInt i, num;
+  char filename[PETSC_MAX_PATH_LEN];
+  PetscReal value;
+  PetscBool reached = PETSC_FALSE;
+
+  *output = 1000000;
+
+  //PetscPrintf(PETSC_COMM_WORLD, "Inside ReadALine.\n");
+
+  snprintf(filename, sizeof(filename), "%s", file_name);
+
+  //PetscPrintf(PETSC_COMM_WORLD, "Inside ReadALine: filename = %s.\n",filename);
+
+  //PetscPrintf(PETSC_COMM_WORLD, "Inside ReadALine: after snprintf.\n");
+
+  FILE * pFile = fopen(filename, "r");
+
+  //PetscPrintf(PETSC_COMM_WORLD, "Inside ReadALine: after fopen.\n");
+
+  if (pFile == NULL) SETERRQ(PETSC_COMM_SELF, 1, "Incorrect location of data");
+  fscanf(pFile, "%d", &num);
+
+  //PetscPrintf(PETSC_COMM_WORLD, "Inside ReadALine: after fscanf num: num = %d.\n",num);
+
+  i = 0;
+  while (fscanf(pFile, "%lf", & value) == 1 && !reached) {
+    //printf("%lf\n", (*data)[i]);
+    if(linenum == i){
+      *output = value;
+      reached = PETSC_TRUE;
+    }
+    else{
+      i = i + 1;
+    }
+  }
+
+  //PetscPrintf(PETSC_COMM_WORLD, "Inside ReadALine: after fscanf value: output = %lf.\n",*output);
+
+  fclose(pFile);
+
+  if (i < linenum){
+    printf("i = [%d] but linenum = [%d]\n", i, linenum);
+  }
+
+  //PetscPrintf(PETSC_COMM_WORLD, "End of ReadALine.\n");
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+PetscErrorCode FormIFunction_InitializeEP_LargeData(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void * ptr) {
+  PetscFunctionBeginUser;
+  User * user = (User * ) ptr;
+  DM da, coordDA = user -> coorda;
+  PetscInt startr, startphi, startz, nr, nphi, nz;
+  PetscScalar dt, cellvolume;
+  Vec fLocal, xLocal, bcLocal, xdotLocal, pLocal;
+  Vec VxBe, VxBeLocal, VxB, Vf, VfLocal, nif, nifLocal, niv, nivLocal, Bv, BvLocal, curlBv, curlBvLocal, GradEP, GradEPLocal, Fcopy, FcopyLocal;
+  Vec x, potential;
+  Vec coordLocal;
+  PetscInt N[3], er, ephi, ez, d;
+
+  PetscInt icp[3];
+  PetscInt icBrp[3], icBphip[3], icBzp[3], icBrm[3], icBphim[3], icBzm[3];
+  PetscInt icErmzm[3], icErmzp[3], icErpzm[3], icErpzp[3];
+
+  PetscInt icEphimzm[3], icEphipzm[3], icEphimzp[3], icEphipzp[3];
+  PetscInt icErmphim[3], icErpphim[3], icErmphip[3], icErpphip[3];
+  PetscInt icrmphimzm[3], icrmphimzp[3], icrmphipzm[3], icrmphipzp[3];
+  PetscInt icrpphimzm[3], icrpphimzp[3], icrpphipzm[3], icrpphipzp[3];
+
+  PetscInt ivn;
+
+  PetscInt ivBrp, ivBphip, ivBzp, ivBrm, ivBphim, ivBzm;
+
+  PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
+  PetscInt ivEphimzm, ivEphipzm, ivEphimzp, ivEphipzp;
+  PetscInt ivErmphim, ivErpphim, ivErmphip, ivErpphip;
+
+  PetscInt ivVrmphimzm[4], ivVrmphimzp[4], ivVrmphipzm[4], ivVrmphipzp[4];
+  PetscInt ivVrpphimzm[4], ivVrpphipzm[4], ivVrpphipzp[4], ivVrpphimzp[4];
+
+  DM dmCoord;
+  DM dmCoorda;
+  Vec coordaLocal;
+  PetscScalar ** ** arrCoorda;
+
+  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrP, ** ** arrx, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrXdot, ** ** arrBv, ** ** arrcurlBv, ** ** arrnif, ** ** arrniv, ** ** arrVf, ** ** arrVxBe, ** ** arrGradEP, ** ** arrFcopy;
+
+  PetscCall(VecZeroEntries(F));
+  PetscCall(TSGetDM(ts, & da));
+
+  PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+  PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
+
+  for (d = 0; d < 4; ++d) {
+    /* Vertex locations */
+    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_LEFT, d, & ivVrmphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_RIGHT, d, & ivVrpphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_UP_LEFT, d, & ivVrmphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_UP_RIGHT, d, & ivVrpphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_LEFT, d, & ivVrmphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_RIGHT, d, & ivVrpphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_LEFT, d, & ivVrmphipzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_RIGHT, d, & ivVrpphipzp[d]));
+  }
+  /* Edge locations */
+  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm));
+  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim));
+  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim));
+  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip));
+  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp));
+  /* Face locations */
+  PetscCall(DMStagGetLocationSlot(da, LEFT, 0, & ivBrm));
+  PetscCall(DMStagGetLocationSlot(da, DOWN, 0, & ivBphim));
+  PetscCall(DMStagGetLocationSlot(da, BACK, 0, & ivBzm));
+  PetscCall(DMStagGetLocationSlot(da, RIGHT, 0, & ivBrp));
+  PetscCall(DMStagGetLocationSlot(da, UP, 0, & ivBphip));
+  PetscCall(DMStagGetLocationSlot(da, FRONT, 0, & ivBzp));
+  /* Cell locations */
+  PetscCall(DMStagGetLocationSlot(da, ELEMENT, 0, & ivn));
+
+  PetscCall(DMGetCoordinateDM(da, & dmCoord));
+  PetscCall(DMGetCoordinatesLocal(da, & coordLocal));
+  PetscCall(DMStagVecGetArrayRead(dmCoord, coordLocal, & arrCoord));
+  PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
+  PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
+  PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoorda));
+  for (d = 0; d < 3; ++d) {
+    /* Element coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]));
+    /* Face coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoord, LEFT, d, & icBrm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN, d, & icBphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK, d, & icBzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, RIGHT, d, & icBrp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP, d, & icBphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT, d, & icBzp[d]));
+    /* Edge coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_LEFT, d, & icErmzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_DOWN, d, & icEphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_RIGHT, d, & icErpzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_UP, d, & icEphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_LEFT, d, & icErmphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_RIGHT, d, & icErpphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP_LEFT, d, & icErmphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP_RIGHT, d, & icErpphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_DOWN, d, & icEphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_LEFT, d, & icErmzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_RIGHT, d, & icErpzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & icEphipzp[d]));
+    /* Vertex coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_LEFT, d, & icrmphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_RIGHT, d, & icrpphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_LEFT, d, & icrmphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_RIGHT, d, & icrpphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_LEFT, d, & icrmphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_RIGHT, d, & icrpphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_LEFT, d, & icrmphipzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_RIGHT, d, & icrpphipzp[d]));
+  }
+  /* Compute the source term potential for time-dependent manufactured solution */
+  PetscCall(DMCreateGlobalVector(da, & potential));
+  FormSourceTermPotential(ts, t, potential, user);
+  PetscCall(DMGetLocalVector(da, & pLocal));
+  PetscCall(DMGlobalToLocalBegin(da, potential, INSERT_VALUES, pLocal));
+  PetscCall(DMGlobalToLocalEnd(da, potential, INSERT_VALUES, pLocal));
+  PetscCall(DMStagVecGetArrayRead(da, pLocal, & arrP));
+
+  /* Compute the exact solution to set boundary conditions */
+  PetscCall(DMCreateGlobalVector(da, & x));
+  FormExactSolution_LargeData(t, ts, & x, user);
+  PetscCall(DMGetLocalVector(da, & bcLocal));
+  PetscCall(DMGlobalToLocalBegin(da, x, INSERT_VALUES, bcLocal));
+  PetscCall(DMGlobalToLocalEnd(da, x, INSERT_VALUES, bcLocal));
+  PetscCall(DMStagVecGetArrayRead(da, bcLocal, & arrx));
+  PetscCall(TSGetTimeStep(ts, & dt));
+  {
+    /* Compute the gradient of EP */
+    PetscCall(VecDuplicate(X, & GradEP));
+    PetscCall(VecCopy(X, GradEP));
+    FormDiscreteGradientEP_noMat(ts, X, GradEP, user);
+    PetscCall(DMGetLocalVector(da, & GradEPLocal));
+    PetscCall(DMGlobalToLocalBegin(da, GradEP, INSERT_VALUES, GradEPLocal));
+    PetscCall(DMGlobalToLocalEnd(da, GradEP, INSERT_VALUES, GradEPLocal));
+    PetscCall(DMStagVecGetArrayRead(da, GradEPLocal, & arrGradEP));
+  }
+
+  /* Compute function over the locally owned part of the grid */
+  /* f1(V,EP,tau,B,ni) = V; on all vertices
+     f2(V,EP,tau,B,ni) = -derived_mimetic_div(primary_mimetic_grad(EP)) - (1/V_A) * derived_mimetic_div(derived_mimetic_curl(B)); on all vertices
+     f3(V,EP,tau,B,ni) = tau - primary_mimetic_grad(EP) - (1/(L0*V_A)) * derived_mimetic_curl(B) = tau - primary_mimetic_grad(EP) - (1/(L0*V_A)) * primary_mimetic_curl^T (beta_f B)/beta_e ≡ tau - primary_mimetic_grad(EP) - (1/(L0*V_A)) * M_e^{-1} Curl^T M_f B; on all edges
+     f4(V,EP,tau,B,ni) = dB/dt; on all faces
+     f5(V,EP,tau,B,ni) = dni/dt; in all cells */
+  PetscCall(DMGetLocalVector(da, & fLocal));
+  PetscCall(DMGlobalToLocalBegin(da, F, INSERT_VALUES, fLocal));
+  PetscCall(DMGlobalToLocalEnd(da, F, INSERT_VALUES, fLocal));
+  PetscCall(DMStagVecGetArray(da, fLocal, & arrF));
+
+  PetscCall(DMGetLocalVector(da, & xLocal));
+  PetscCall(DMGlobalToLocalBegin(da, X, INSERT_VALUES, xLocal));
+  PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, xLocal));
+  PetscCall(DMStagVecGetArrayRead(da, xLocal, & arrX));
+
+  PetscCall(DMGetLocalVector(da, & xdotLocal));
+  PetscCall(DMGlobalToLocalBegin(da, Xdot, INSERT_VALUES, xdotLocal));
+  PetscCall(DMGlobalToLocalEnd(da, Xdot, INSERT_VALUES, xdotLocal));
+  PetscCall(DMStagVecGetArrayRead(da, xdotLocal, & arrXdot));
+
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          cellvolume = user -> dphi * PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
+        } else {
+          cellvolume = PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) *
+            PetscAbsReal(arrCoord[ez][ephi][er][icBphip[1]] - arrCoord[ez][ephi][er][icBphim[1]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
+        }
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
+        } else {
+          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
+        }
+
+        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
+        } else {
+          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
+        }
+
+        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
+
+        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
+
+        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
+
+        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
+        } else {
+          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
+        }
+
+        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
+        } else {
+          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
+        }
+
+        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
+
+        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+
+        /* Set boundary conditions for tau field */
+        /* f3(V,EP,tau,B,ni) = tau */
+        if (er == 0 || ez == 0) {
+          arrF[ez][ephi][er][ivErmzm] = arrX[ez][ephi][er][ivErmzm];
+        }
+        if (!(user -> phibtype)) {
+          if (er == 0 || ephi == 0) {
+            arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim];
+            if (user -> debug) {
+              PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F(Ermphim,%d,%d,%d) = %g\n", er, ephi, ez, (double) arrF[ez][ephi][er][ivErmphim]));
+            }
+          }
+          if (ephi == 0 || ez == 0) {
+            arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm];
+          }
+        } else {
+          if (er == 0) {
+            arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim];
+            if (user -> debug) {
+              PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F(Ermphim,%d,%d,%d) = %g\n", er, ephi, ez, (double) arrF[ez][ephi][er][ivErmphim]));
+            }
+          }
+          if (ez == 0) {
+            arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm];
+          }
+        }
+        if (er == N[0] - 1) {
+          arrF[ez][ephi][er][ivErpzm] = arrX[ez][ephi][er][ivErpzm];
+          arrF[ez][ephi][er][ivErpphim] = arrX[ez][ephi][er][ivErpphim];
+        }
+        if (!(user -> phibtype)) {
+          if (ephi == N[1] - 1) {
+            arrF[ez][ephi][er][ivEphipzm] = arrX[ez][ephi][er][ivEphipzm];
+            arrF[ez][ephi][er][ivErmphip] = arrX[ez][ephi][er][ivErmphip];
+          }
+        }
+        if (ez == N[2] - 1) {
+          arrF[ez][ephi][er][ivErmzp] = arrX[ez][ephi][er][ivErmzp];
+          arrF[ez][ephi][er][ivEphimzp] = arrX[ez][ephi][er][ivEphimzp];
+        }
+        if (!(user -> phibtype)) {
+          if (er == N[0] - 1 && ephi == N[1] - 1) {
+            arrF[ez][ephi][er][ivErpphip] = arrX[ez][ephi][er][ivErpphip];
+          }
+          if (ephi == N[1] - 1 && ez == N[2] - 1) {
+            arrF[ez][ephi][er][ivEphipzp] = arrX[ez][ephi][er][ivEphipzp];
+          }
+        }
+        if (er == N[0] - 1 && ez == N[2] - 1) {
+          arrF[ez][ephi][er][ivErpzp] = arrX[ez][ephi][er][ivErpzp];
+        }
+
+        /* f1(V,EP,tau,B,ni) = V; on all vertices
+           f5(V,EP,tau,B,ni) = dni/dt ; in all cells
+           */
+        arrF[ez][ephi][er][ivn] = arrXdot[ez][ephi][er][ivn];
+
+        arrF[ez][ephi][er][ivVrmphimzm[0]] = arrX[ez][ephi][er][ivVrmphimzm[0]];
+        arrF[ez][ephi][er][ivVrmphimzm[1]] = arrX[ez][ephi][er][ivVrmphimzm[1]];
+        arrF[ez][ephi][er][ivVrmphimzm[2]] = arrX[ez][ephi][er][ivVrmphimzm[2]];
+        arrF[ez][ephi][er][ivVrmphimzp[0]] = arrX[ez][ephi][er][ivVrmphimzp[0]];
+        arrF[ez][ephi][er][ivVrmphimzp[1]] = arrX[ez][ephi][er][ivVrmphimzp[1]];
+        arrF[ez][ephi][er][ivVrmphimzp[2]] = arrX[ez][ephi][er][ivVrmphimzp[2]];
+        arrF[ez][ephi][er][ivVrmphipzm[0]] = arrX[ez][ephi][er][ivVrmphipzm[0]];
+        arrF[ez][ephi][er][ivVrmphipzm[1]] = arrX[ez][ephi][er][ivVrmphipzm[1]];
+        arrF[ez][ephi][er][ivVrmphipzm[2]] = arrX[ez][ephi][er][ivVrmphipzm[2]];
+        arrF[ez][ephi][er][ivVrmphipzp[0]] = arrX[ez][ephi][er][ivVrmphipzp[0]];
+        arrF[ez][ephi][er][ivVrmphipzp[1]] = arrX[ez][ephi][er][ivVrmphipzp[1]];
+        arrF[ez][ephi][er][ivVrmphipzp[2]] = arrX[ez][ephi][er][ivVrmphipzp[2]];
+        arrF[ez][ephi][er][ivVrpphimzm[0]] = arrX[ez][ephi][er][ivVrpphimzm[0]];
+        arrF[ez][ephi][er][ivVrpphimzm[1]] = arrX[ez][ephi][er][ivVrpphimzm[1]];
+        arrF[ez][ephi][er][ivVrpphimzm[2]] = arrX[ez][ephi][er][ivVrpphimzm[2]];
+        arrF[ez][ephi][er][ivVrpphimzp[0]] = arrX[ez][ephi][er][ivVrpphimzp[0]];
+        arrF[ez][ephi][er][ivVrpphimzp[1]] = arrX[ez][ephi][er][ivVrpphimzp[1]];
+        arrF[ez][ephi][er][ivVrpphimzp[2]] = arrX[ez][ephi][er][ivVrpphimzp[2]];
+        arrF[ez][ephi][er][ivVrpphipzm[0]] = arrX[ez][ephi][er][ivVrpphipzm[0]];
+        arrF[ez][ephi][er][ivVrpphipzm[1]] = arrX[ez][ephi][er][ivVrpphipzm[1]];
+        arrF[ez][ephi][er][ivVrpphipzm[2]] = arrX[ez][ephi][er][ivVrpphipzm[2]];
+        arrF[ez][ephi][er][ivVrpphipzp[0]] = arrX[ez][ephi][er][ivVrpphipzp[0]];
+        arrF[ez][ephi][er][ivVrpphipzp[1]] = arrX[ez][ephi][er][ivVrpphipzp[1]];
+        arrF[ez][ephi][er][ivVrpphipzp[2]] = arrX[ez][ephi][er][ivVrpphipzp[2]];
+
+        /* f4(V,EP,tau,B,ni) = dB/dt */
+        arrF[ez][ephi][er][ivBrm] = arrXdot[ez][ephi][er][ivBrm]; /* Left face */
+
+        arrF[ez][ephi][er][ivBphim] = arrXdot[ez][ephi][er][ivBphim]; /* Down face */
+
+        arrF[ez][ephi][er][ivBzm] = arrXdot[ez][ephi][er][ivBzm]; /* Back face */
+
+        if (er == N[0] - 1) {
+          arrF[ez][ephi][er][ivBrp] = arrXdot[ez][ephi][er][ivBrp]; /* Right face */
+        }
+
+        if (ephi == N[1] - 1 && !(user -> phibtype)) {
+          arrF[ez][ephi][er][ivBphip] = arrXdot[ez][ephi][er][ivBphip]; /* Up face */
+        }
+
+        if (ez == N[2] - 1) {
+          arrF[ez][ephi][er][ivBzp] = arrXdot[ez][ephi][er][ivBzp]; /* Front face */
+        }
+
+        /* Set boundary conditions for EP field */
+        /* f2(V,EP,tau,B,ni) = (EP - EPboundarycondition) */
+        if (er == 0 || ez == 0 || (ephi == 0 && !(user -> phibtype))) {
+          arrF[ez][ephi][er][ivVrmphimzm[3]] = arrX[ez][ephi][er][ivVrmphimzm[3]];
+        }
+        if (er == N[0] - 1) {
+          arrF[ez][ephi][er][ivVrpphimzm[3]] = arrX[ez][ephi][er][ivVrpphimzm[3]];
+        }
+        if (ez == N[2] - 1) {
+          arrF[ez][ephi][er][ivVrmphimzp[3]] = arrX[ez][ephi][er][ivVrmphimzp[3]];
+        }
+        if (ephi == N[1] - 1 && !(user -> phibtype)) {
+          arrF[ez][ephi][er][ivVrmphipzm[3]] = arrX[ez][ephi][er][ivVrmphipzm[3]];
+        }
+        if (ez == N[2] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
+          arrF[ez][ephi][er][ivVrmphipzp[3]] = arrX[ez][ephi][er][ivVrmphipzp[3]];
+        }
+        if (er == N[0] - 1 && ez == N[2] - 1) {
+          arrF[ez][ephi][er][ivVrpphimzp[3]] = arrX[ez][ephi][er][ivVrpphimzp[3]];
+        }
+        if (er == N[0] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
+          arrF[ez][ephi][er][ivVrpphipzm[3]] = arrX[ez][ephi][er][ivVrpphipzm[3]];
+        }
+        if (er == N[0] - 1 && ez == N[2] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
+          arrF[ez][ephi][er][ivVrpphipzp[3]] = arrX[ez][ephi][er][ivVrpphipzp[3]];
+        }
+      }
+    }
+  }
+  /* End of triple for loop */
+
+  PetscCall(DMStagVecRestoreArray(da, pLocal, & arrP));
+  PetscCall(DMRestoreLocalVector(da, & pLocal));
+  //PetscBarrier((PetscObject) potential);
+  PetscCall(VecDestroy( & potential));
+
+  if (user -> phibtype) {
+    PetscCall(DMStagVecRestoreArray(da, fLocal, & arrF));
+    PetscCall(DMLocalToGlobal(da, fLocal, INSERT_VALUES, F));
+    /*DMRestoreLocalVector(da,&fLocal);*/
+
+    /*DMGetLocalVector(da,&fLocal);*/
+    PetscCall(DMGlobalToLocalBegin(da, F, INSERT_VALUES, fLocal));
+    PetscCall(DMGlobalToLocalEnd(da, F, INSERT_VALUES, fLocal));
+    PetscCall(DMStagVecGetArray(da, fLocal, & arrF));
+  }
+
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
+        } else {
+          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
+        }
+
+        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
+        } else {
+          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
+        }
+
+        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
+
+        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
+
+        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
+
+        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
+        } else {
+          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
+        }
+
+        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
+
+        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
+        } else {
+          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]); /* front right = rpzp */
+        }
+
+        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
+
+        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+
+        /* f3(V,EP,tau,B,ni) = tau - (1/(L0*V_A)) * derived_mimetic_curl(B) = tau - (1/(L0*V_A)) * primary_mimetic_curl^T (beta_f B)/beta_e ≡ tau - (1/(L0*V_A)) * M_e^{-1} Curl^T M_f B; for all inner edges */
+        if (!(er == 0 || ez == 0)) {
+          arrF[ez][ephi][er][ivErmzm] = arrX[ez][ephi][er][ivErmzm] - ((arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) -
+                arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) -
+                arrX[ez - 1][ephi][er][ivBrm] * betaf(er, ephi, ez - 1, LEFT, user) / surface(er, ephi, ez - 1, LEFT, user) +
+                arrX[ez][ephi][er - 1][ivBzm] * betaf(er - 1, ephi, ez, BACK, user) / surface(er - 1, ephi, ez, BACK, user)) * rmzmedgelength / betae(er, ephi, ez, BACK_LEFT, user)) / 11000000.0;
+        }
+        if (!(user -> phibtype)) {
+          if (!(ephi == 0 || ez == 0)) {
+            arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm] - ((-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                  arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
+                  arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
+                  arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betae(er, ephi, ez, BACK_DOWN, user)) / 11000000.0;
+          }
+          if (!(er == 0 || ephi == 0)) {
+            arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim] - ((-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
+                  arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                  arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
+                  arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betae(er, ephi, ez, DOWN_LEFT, user)) / 11000000.0;
+          }
+        } else {
+          if (!(ez == 0)) {
+            arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm] - ((-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                  arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
+                  arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
+                  arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betae(er, ephi, ez, BACK_DOWN, user)) / 11000000.0;
+          }
+          if (!(er == 0)) {
+            arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim] - ((-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
+                  arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                  arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
+                  arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betae(er, ephi, ez, DOWN_LEFT, user)) / 11000000.0;
+          }
+        }
+      }
+    }
+  }
+  //PetscBarrier((PetscObject) F);
+
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+        //F3(V,EP,tau,B,ni) -= prim_grad(EP) ; on inner edges
+        if (!(er == 0 || ez == 0)) {
+          arrF[ez][ephi][er][ivErmzm] -= arrGradEP[ez][ephi][er][ivErmzm];
+        }
+        if (!(user -> phibtype)) {
+          if (!(ephi == 0 || ez == 0)) {
+            arrF[ez][ephi][er][ivEphimzm] -= arrGradEP[ez][ephi][er][ivEphimzm];
+          }
+          if (!(er == 0 || ephi == 0)) {
+            arrF[ez][ephi][er][ivErmphim] -= arrGradEP[ez][ephi][er][ivErmphim];
+          }
+        } else {
+          if (!(ez == 0)) {
+            arrF[ez][ephi][er][ivEphimzm] -= arrGradEP[ez][ephi][er][ivEphimzm];
+          }
+          if (!(er == 0)) {
+            arrF[ez][ephi][er][ivErmphim] -= arrGradEP[ez][ephi][er][ivErmphim];
+          }
+        }
+      }
+    }
+  }
+
+  PetscCall(DMStagVecRestoreArray(da, fLocal, & arrF));
+  PetscCall(DMLocalToGlobal(da, fLocal, INSERT_VALUES, F));
+
+  PetscCall(VecDuplicate(F, & Fcopy));
+  PetscCall(VecCopy(F, Fcopy));
+  //VecScale(Fcopy, -1.0);
+
+  PetscCall(DMGetLocalVector(da, & FcopyLocal));
+  PetscCall(DMGlobalToLocalBegin(da, Fcopy, INSERT_VALUES, FcopyLocal));
+  PetscCall(DMGlobalToLocalEnd(da, Fcopy, INSERT_VALUES, FcopyLocal));
+  PetscCall(DMStagVecGetArray(da, FcopyLocal, & arrFcopy));
+
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+        //F3copy(V,EP,tau,B,ni) -= tau ; on inner edges
+        if (!(er == 0 || ez == 0)) {
+          arrFcopy[ez][ephi][er][ivErmzm] -= arrX[ez][ephi][er][ivErmzm];
+        }
+        if (!(user -> phibtype)) {
+          if (!(ephi == 0 || ez == 0)) {
+            arrFcopy[ez][ephi][er][ivEphimzm] -= arrX[ez][ephi][er][ivEphimzm];
+          }
+          if (!(er == 0 || ephi == 0)) {
+            arrFcopy[ez][ephi][er][ivErmphim] -= arrX[ez][ephi][er][ivErmphim];
+          }
+        } else {
+          if (!(ez == 0)) {
+            arrFcopy[ez][ephi][er][ivEphimzm] -= arrX[ez][ephi][er][ivEphimzm];
+          }
+          if (!(er == 0)) {
+            arrFcopy[ez][ephi][er][ivErmphim] -= arrX[ez][ephi][er][ivErmphim];
+          }
+        }
+      }
+    }
+  }
+  PetscCall(DMStagVecRestoreArray(da, FcopyLocal, & arrFcopy));
+  PetscCall(DMLocalToGlobal(da, FcopyLocal, INSERT_VALUES, Fcopy));
+  PetscCall(DMRestoreLocalVector(da, & FcopyLocal));
+
+  ApplyDerivedDivergence(ts, Fcopy, F, user);
+
+  /* Restore vectors */
+  PetscCall(VecDestroy(& Fcopy));
+  PetscCall(DMStagVecRestoreArrayRead(da, GradEPLocal, & arrGradEP));
+  PetscCall(DMRestoreLocalVector(da, & GradEPLocal));
+  PetscCall(VecDestroy( & GradEP));
+  PetscCall(DMRestoreLocalVector(da, & fLocal));
+  PetscCall(DMStagVecRestoreArrayRead(da, xLocal, & arrX));
+  PetscCall(DMRestoreLocalVector(da, & xLocal));
+  PetscCall(DMStagVecRestoreArrayRead(da, xdotLocal, & arrXdot));
+  PetscCall(DMRestoreLocalVector(da, & xdotLocal));
+  PetscCall(DMStagVecRestoreArrayRead(da, bcLocal, & arrx));
+  PetscCall(DMRestoreLocalVector(da, & bcLocal));
+
+  PetscCall(DMStagVecRestoreArrayRead(dmCoord, coordLocal, & arrCoord));
+  PetscCall(DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoorda));
+  if (user -> debug) {
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F = \n"));
+    PetscCall(VecView(F, PETSC_VIEWER_STDOUT_WORLD));
+  }
+
+  //PetscBarrier((PetscObject) x);
+  PetscCall(VecDestroy( & x));
+  PetscFunctionReturn(PETSC_SUCCESS);
+}

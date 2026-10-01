@@ -30,7 +30,6 @@
 
 PetscErrorCode FormIJacobian_BImplicit(TS,PetscReal,Vec,Vec,PetscReal,Mat,Mat,void*); /* This routine computes the analytical Jacobian. Not implemented yet */
 PetscErrorCode FormIFunction_Vperp_viscosity(TS,PetscReal,Vec,Vec,Vec,void*); /* This IFunction has the constraints: [(\nabla x B) x B = - lambda (\nabla^2 V)].e_{R/Z}; V . B = 0 */
-PetscErrorCode FormIFunction_Initializepsi(TS,PetscReal,Vec,Vec,Vec,void*); /* This is the Ifunction used in the TSSolver that initializes the poloidal flux function psi: (1/r) Delta^* = mu_0 J0 */
 PetscErrorCode FormIFunction_InitializeEP(TS,PetscReal,Vec,Vec,Vec,void*); /* This is the Ifunction used in the TSSolver that initializes EP and tau */
 PetscErrorCode FormIFunction_InitializeEP_halo(TS,PetscReal,Vec,Vec,Vec,void*); /* This is the Ifunction used in the TSSolver that initializes EP and tau for the halo current simulation*/
 PetscErrorCode FormIFunction_newequilibrium_Vperp(TS,PetscReal,Vec,Vec,Vec,void*); /* This is the Ifunction used in the TSSolver that initializes V: [(\nabla x B) x B = -(1/Re) (\nabla^2 V) + n_i * dV/dt].e_{R/Z}; V . B = 0 */
@@ -43,9 +42,6 @@ PetscErrorCode SampleShellPCSetUp(PC); /* This routine sets up a Shell Precondit
 PetscErrorCode SampleShellPCApply(PC,Vec,Vec); /* This routine applies a Shell Preconditioner that has the same effect as a 2-field fieldsplit preconditioner where the velocity is split from the remaining unknowns */
 PetscErrorCode SampleShellPCDestroy(PC); /* This routine destroys a Shell Preconditioner that has the same effect as a 2-field fieldsplit preconditioner where the velocity is split from the remaining unknowns */
 PetscErrorCode ReadInitialData(PetscReal**,PetscInt*,const char*); /* This routine reads data from an input file and stores these in an array. The length of the output array is also computed. */
-PetscErrorCode ReadALine(const char*,PetscInt,PetscReal*); /* This routine reads an entry from a specific line of an input file and stores it in the output array. */
-PetscErrorCode FormExactSolution_LargeData(PetscReal,TS,Vec*,void*); /* This routine sets up the vector which will be used to set the boundary conditions inside FormIFunction_DampingV. It uses ReadALine instead of ReadInitialData  */
-PetscErrorCode FormIFunction_InitializeEP_LargeData(TS,PetscReal,Vec,Vec,Vec,void*); /* This is the Ifunction used in the TSSolver that initializes EP and tau. It uses ReadALine instead of ReadInitialData */
 PetscErrorCode FormInitialSolution_psi(TS,Vec,void*); /* This routine sets up the initial solution X_0 from input data files containing G(psi) values on face centers, psi values on edge centers and the levelset function on cell centers */
 
 PetscErrorCode stag_vec_io(User *user, PetscViewer viewer, Vec X, PetscBool load);

@@ -5732,3 +5732,180 @@ PetscErrorCode VertexToEdgeReconstruction_scalar(TS ts, Vec V, Vec E, void *ptr)
     PetscLogEventEnd(USER_EVENT,0,0,0,0);
     return(0);
 }
+
+PetscErrorCode getJArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr) {
+  PetscFunctionBeginUser;
+  PetscLogEvent  USER_EVENT;
+  PetscClassId   classid;
+
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("getVArray",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
+
+  User           *user = (User*)ptr;
+  DM             da, dmV, daV;
+  PetscInt       startr,startphi,startz,nr,nphi,nz;
+  Vec            vecV, V, X_local;
+  PetscInt       er,ephi,ez,d;
+  const PetscScalar *array;
+  int            len;
+
+  PetscCall(TSGetDM(ts,& da));
+
+  DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmV); /* 3 dofs per element */
+  PetscCall(DMSetUp(dmV));
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+  PetscCall(DMCreateGlobalVector(dmV, & V));
+  PetscCall(DMGetLocalVector(da, & X_local));
+  PetscCall(DMGlobalToLocal(da, X, INSERT_VALUES, X_local));
+
+  PetscCall(DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+
+  for (ez = startz; ez < startz + nz; ++ez)
+  {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi)
+    {
+      for (er = startr; er < startr + nr; ++er)
+      {
+        DMStagStencil from[24], to[3];
+        PetscScalar valFrom[24], valTo[3];
+        for (PetscInt comp = 0; comp < 3; ++comp)
+        {
+          for (PetscInt index = 0; index < 8; ++index)
+          {
+            from[index + comp*8].i = er;
+            from[index + comp*8].j = ephi;
+            from[index + comp*8].k = ez;
+            from[index + comp*8].c = comp;
+          }
+          from[0 + comp*8].loc = BACK_DOWN_LEFT;
+          from[1 + comp*8].loc = BACK_DOWN_RIGHT;
+          from[2 + comp*8].loc = BACK_UP_LEFT;
+          from[3 + comp*8].loc = BACK_UP_RIGHT;
+          from[4 + comp*8].loc = FRONT_DOWN_LEFT;
+          from[5 + comp*8].loc = FRONT_DOWN_RIGHT;
+          from[6 + comp*8].loc = FRONT_UP_LEFT;
+          from[7 + comp*8].loc = FRONT_UP_RIGHT;
+        }
+
+        PetscCall(DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom));
+
+        for (PetscInt comp = 0; comp < 3; ++comp)
+        {
+          to[comp].i = er;
+          to[comp].j = ephi;
+          to[comp].k = ez;
+          to[comp].loc = ELEMENT;
+          to[comp].c = comp;
+          valTo[comp] = 0.0;
+          for (PetscInt index = 0; index < 8; ++index)
+            valTo[comp] += valFrom[index + comp*8];
+          valTo[comp] /= 8.0;
+        }
+
+        PetscCall(DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES));
+      }
+    }
+  }
+  PetscCall(VecAssemblyBegin(V));
+  PetscCall(VecAssemblyEnd(V));
+
+  DMStagVecSplitToDMDA(dmV, V, ELEMENT, -3, & daV, & vecV); /* note -3 : pad with zero in 2D case */
+  PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity"));
+
+  PetscMPIInt rank;
+  MPI_Comm    comm;
+  VecScatter  scat;
+  Vec         Xseq, naturalX;
+
+
+  DMDACreateNaturalVector(daV,&naturalX);
+  DMDAGlobalToNaturalBegin(daV, vecV, INSERT_VALUES, naturalX);
+  DMDAGlobalToNaturalEnd(daV, vecV, INSERT_VALUES, naturalX);
+
+  /* create scater to zero */
+  //VecScatterCreateToZero(naturalX, &scat, &Xseq);
+  VecScatterCreateToAll(naturalX, &scat, &Xseq);
+  VecScatterBegin(scat, naturalX, Xseq, INSERT_VALUES, SCATTER_FORWARD);
+  VecScatterEnd(scat, naturalX, Xseq, INSERT_VALUES, SCATTER_FORWARD);
+
+  MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
+  /* Only rank == 0 has the entries of the patch, so run code only at that rank */
+  if (rank == 0 || 1) {
+    PetscInt sizeX;
+    PetscCall(VecGetSize(Xseq, &sizeX));
+    //PetscPrintf(PETSC_COMM_SELF,"The size of Xseq is %d, and the grid size is %d\n",sizeX,user->Nphi*(user->Nr+1)*user->Nz);
+    PetscCall(VecGetArrayRead(Xseq, &array));
+    memcpy(gf_V, array, 3*user->Nr*user->Nz*user->Nphi*(sizeof(PetscScalar)));
+    PetscCall(VecRestoreArrayRead(Xseq, &array));
+  }
+
+  PetscCall(VecDestroy(&naturalX));
+
+
+  /* Destroy DMDAs and Vecs */
+  PetscCall(VecDestroy( & vecV));
+  PetscCall(DMDestroy( & daV));
+  PetscCall(VecDestroy( & V));
+  PetscCall(DMDestroy( & dmV));
+
+
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+int isInDomain(const double * R, const double * Z, void * ptr){
+  PetscFunctionBeginUser;
+  PetscLogEvent  USER_EVENT;
+  PetscClassId   classid;
+
+  PetscCall(PetscClassIdRegister("class name",&classid));
+  PetscCall(PetscLogEventRegister("isInDomain",classid,&USER_EVENT));
+  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
+
+  int value = -3;
+  int loopbr = 0;
+  User * user = (User * ) ptr;
+  PetscInt startr, startphi, startz, nr, nphi, nz, d, N[3], er, ephi, ez;
+  PetscInt icBrp[3], icBphip[3], icBzp[3], icBrm[3], icBphim[3], icBzm[3];
+  DM dmCoorda, coordDA = user -> coorda;
+  Vec coordaLocal;
+  PetscScalar ** ** arrCoord;
+
+  PetscCall(DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+  PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
+  PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
+  PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoord));
+  for (d = 0; d < 3; ++d) {
+    /* Face coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoorda, LEFT, d, & icBrm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, DOWN, d, & icBphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK, d, & icBzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, RIGHT, d, & icBrp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, UP, d, & icBphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT, d, & icBzp[d]));
+  }
+  PetscCall(DMStagGetGlobalSizes(user -> coorda, & N[0], & N[1], & N[2]));
+
+  for (ez = startz; ez < startz + nz; ++ez) {
+    if(loopbr){
+      break;
+    }
+    ephi = 0;
+    for (er = startr; er < startr + nr; ++er) {
+      if((*Z >= arrCoord[ez][ephi][er][icBzm[2]]) && (*Z <= arrCoord[ez][ephi][er][icBzp[2]]) && (*R >= arrCoord[ez][ephi][er][icBrm[0]]) && (*R <= arrCoord[ez][ephi][er][icBrp[0]])) {
+        value = (int) (user->dataC[er + ez * N[1] * N[0]]);
+        loopbr = 1;
+        break;
+      }
+    }
+  }
+
+  if(value == -3){
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "cell indices not found for (R,Z) = (%f,%f)\n", *R,*Z));
+  }
+  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
+
+  return value;
+}

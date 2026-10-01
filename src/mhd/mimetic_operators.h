@@ -38,7 +38,6 @@ PetscErrorCode FormDiscreteGradientEP(TS,Mat,Vec,Vec,void*);
 PetscErrorCode FormDiscreteGradientEP_noMat(TS,Vec,Vec,void*);
 PetscErrorCode FormDiscreteGradientVectorField(TS,Vec,Vec,Vec,Vec,void*);
 PetscErrorCode ApplyDerivedDivergence(TS,Vec,Vec,void*);
-PetscErrorCode ApplyDeltastar2(TS,Vec,Vec,void*);
 PetscErrorCode ApplyVectorLaplacian(TS,Vec,Vec,void*);
 PetscErrorCode FormElectricField(TS,Vec,Vec,void*); /* This routine computes the electric field E and sets it on the edge values of output vector F. It uses tau field and electrostatic potential from input X: E = tau + \nabla (EP). */
 

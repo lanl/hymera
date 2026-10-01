@@ -50,7 +50,7 @@ const char help[] = "Time-dependent magnetic diffusion PDE in 3d cylindrical coo
 #include "mhd.h"
 
 void view4d_zero(view4d_t v);
-void view3d_zero(view3d_t v);
+#line 54
 
 void subview_exclude_d1(view4d_t v4, view3d_t v);
 
@@ -969,10 +969,7 @@ void view4d_zero(view4d_t v) {
         v.data[i] = 0.0;
 }
 
-void view3d_zero(view3d_t v) {
-  for (size_t i = 0; i < v.dim0 * v.dim1 * v.dim2; ++i)
-        v.data[i] = 0.0;
-}
+#line 976
 
 void subview_exclude_d1(view4d_t v4, view3d_t  v) {
   for (size_t i = 0; i < v.dim0; ++i)

@@ -72,6 +72,22 @@ constraints).
 - **SampleShellPCDestroy_Diag** -- destroy/cleanup paired with
   `SampleShellPCSetUp_Diag`.
 
+### Second pass
+
+Four more functions, found unreachable only after the pass above removed
+their last live callers, moved to the end of this file:
+
+- **FormIFunction_Initializepsi** -- its only registration site was
+  `FormInitialpsi` (`TSSetIFunction`), already moved to the attic above, so
+  nothing live could ever select it as the TS `IFunction`.
+- **FormExactSolution_LargeData** -- its only caller was
+  `FormIFunction_InitializeEP_LargeData` (see next item), itself dead.
+- **FormIFunction_InitializeEP_LargeData** -- its only registration site was
+  `FormInitialSolution_LargeData` (`TSSetIFunction`), already moved to the
+  attic above.
+- **ReadALine** -- its only callers were `FormExactSolution_LargeData`
+  (above) and other already-attic code; no live caller remained.
+
 ## geometry.c
 
 `geometry_attic.c` contains 19 functions moved verbatim (byte-for-byte
@@ -95,6 +111,15 @@ them to this file.
   already-quarantined `ComputeIsBBoundary`/`ComputeIsCBoundary`).
 - **VertexToEdgeReconstruction_scalar** -- scalar-field variant of the live
   `VertexToEdgeReconstruction` (vertex-to-edge reconstruction operator).
+
+### Second pass
+
+Two more functions, with no callers at all (not even a dead one), moved to
+the end of this file:
+
+- **getJArray** -- no callers anywhere in `src/`, `tests/`, or the built
+  objects; an orphaned current-density array builder.
+- **isInDomain** -- no callers anywhere; an orphaned point-in-domain test.
 
 ## What each function was
 
@@ -199,6 +224,20 @@ its different signature: it takes `Vec,Vec,void*` with no `TS` argument).
   `FormDiscreteGradientEP_tilde` followed by `ApplyDerivedDivergence`; a
   composed-operator alternative to the live `ApplyDeltastar2`.
 
+### Second pass
+
+`ApplyDeltastar2`, held back by the pass above because it was still called
+from `FormIFunction_Initializepsi` in `../ts_functions.c`, now moves too:
+that caller was itself found unreachable in this pass (see the
+`ts_functions.c` second-pass note above) and moved to the attic, leaving
+`ApplyDeltastar2` with no live caller. Its declaration is removed from
+`mimetic_operators.h`.
+
+- **ApplyDeltastar2** -- applies the discrete `Delta*` operator to `EP`
+  directly (the live residual's companion to the now-attic `ApplyDeltastar`
+  composed form); dead once its sole caller, `FormIFunction_Initializepsi`,
+  moved to the attic.
+
 ## monitor_functions.c
 
 `monitor_functions_attic.c` contains 6 functions moved verbatim (byte-for-byte
@@ -255,3 +294,16 @@ moved together.
 - **betaf_wmp** -- face mass-matrix coefficient built from `alphafc_wmp`
   (material-property-weighted variant of the live `betaf`).
 - **alphac** -- cell-centered mass-matrix coefficient.
+
+## mhd.c
+
+`mhd_attic.c` contains 1 function moved verbatim (byte-for-byte identical
+body) out of `../mhd.c`. It had zero callers anywhere in `src/`, `tests/`,
+or the built objects (verified with `nm`), confirmed with the same
+codegen-identity check used elsewhere in this directory. `view3d_zero` was
+declared with a forward declaration near the top of `mhd.c` itself (not in
+a header); that declaration was removed along with the move.
+
+- **view3d_zero** -- zeroes a 3D view's backing array element-by-element; no
+  caller anywhere (`view4d_zero` and `subview_exclude_d1`, its neighbors in
+  `mhd.c`, remain live).
