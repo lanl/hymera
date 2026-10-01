@@ -55,3 +55,23 @@ include("Utils")
 # )
 
 find_package(HDF5 COMPONENTS CXX REQUIRED)
+
+# --------------------------------------------------------------------------------------
+# MHD regression harness, tier 0: the discrete mass-matrix coefficients.
+#
+# Evaluates every live alpha-/beta-/rese/condu function in mass_matrix_coefficients.c
+# over the full index/location/material space (~9.8M evaluations, a few seconds) and
+# compares a SHA-256 of the exact hexadecimal output against a recorded value. Links
+# mhd_core directly; needs no input files, no solver and no time step.
+#
+# This is the gate for deduplicating that file: any refactor of it must leave the
+# hash unchanged. On failure, regenerate the full output on both revisions and diff
+# them -- tests/regression/run_t0.sh does this.
+# --------------------------------------------------------------------------------------
+enable_language(C)
+add_executable(t0_coefficients ${CMAKE_CURRENT_SOURCE_DIR}/regression/t0_coefficients.c)
+target_link_libraries(t0_coefficients PRIVATE mhd_core MPI::MPI_C)
+add_test(NAME mhd_t0_coefficients
+         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/regression/run_t0.sh
+                 $<TARGET_FILE:t0_coefficients>)
+set_tests_properties(mhd_t0_coefficients PROPERTIES LABELS "tier0" TIMEOUT 120)
