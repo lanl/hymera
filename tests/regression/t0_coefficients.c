@@ -26,6 +26,7 @@
  */
 
 #include <petscdmstag.h>
+#include <math.h>
 #include <stdio.h>
 
 #include "mfd_config.h"
@@ -91,14 +92,28 @@ static const struct { const char *name; cell_fn fn; } CELL_FNS[] = {
   {"conduc",              conduc},
 };
 
-/* A tag field with all five materials and maximal tag variation between
- * neighbours. The three isolcell cells must be blanket wall (tag 0) for their
- * special branch to be reached, matching the production geometry. */
+/* Material tags. A tokamak-like layout -- nested shells of plasma, separatrix,
+ * blanket wall, vacuum vessel and exterior -- so that large connected plasma
+ * regions exist and the residuals' interior plasma branches (which require all
+ * four cells around a vertex to be plasma) are exercised. A band of rapidly
+ * alternating tags crosses the middle so that every material also borders every
+ * other, exercising the interface branches. The three hardcoded isolated cells
+ * are blanket wall, as in the production geometry.
+ *
+ * An earlier version used only the alternating pattern; that left no vertex with
+ * four plasma neighbours, so whole branches were never evaluated and a
+ * deliberate perturbation in one of them went undetected. */
 static double tag_at(int er, int ez) {
   if ((er == 28 && ez == 183) || (er == 13 && ez == 176) || (er == 47 && ez == 176))
     return 0.0;
-  static const double tags[5] = {1.0, 2.0, 0.0, -1.0, -2.0};
-  return tags[(er + 2 * ez) % 5];
+  static const double band[5] = {1.0, 2.0, 0.0, -1.0, -2.0};
+  if (ez >= 40 && ez <= 60 && er >= 5 && er <= 45) return band[(er + 2 * ez) % 5];
+  const double r = hypot((er - 24.5) / 25.0, (ez - 92.5) / 92.0);
+  if (r < 0.45) return 1.0;
+  if (r < 0.60) return 2.0;
+  if (r < 0.80) return 0.0;
+  if (r < 0.92) return -1.0;
+  return -2.0;
 }
 
 static PetscErrorCode setup(User *u, PetscInt phibtype, PetscInt ictype) {

@@ -70,7 +70,7 @@ find_package(HDF5 COMPONENTS CXX REQUIRED)
 # --------------------------------------------------------------------------------------
 enable_language(C)
 add_executable(t0_coefficients ${CMAKE_CURRENT_SOURCE_DIR}/regression/t0_coefficients.c)
-target_link_libraries(t0_coefficients PRIVATE mhd_core MPI::MPI_C)
+target_link_libraries(t0_coefficients PRIVATE mhd_core MPI::MPI_C m)
 add_test(NAME mhd_t0_coefficients
          COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/regression/run_t0.sh
                  $<TARGET_FILE:t0_coefficients>)
@@ -85,3 +85,12 @@ add_test(NAME mhd_t0_operators
          COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/regression/run_t0.sh
                  $<TARGET_FILE:t0_operators> --baseline t0_operators)
 set_tests_properties(mhd_t0_operators PROPERTIES LABELS "tier0" TIMEOUT 300)
+
+# Tier 1: the live implicit residuals, each evaluated once on a fixed state.
+# Gate for refactoring ts_functions.c; see regression/t1_residuals.c.
+add_executable(t1_residuals ${CMAKE_CURRENT_SOURCE_DIR}/regression/t1_residuals.c)
+target_link_libraries(t1_residuals PRIVATE mhd_core MPI::MPI_C m)
+add_test(NAME mhd_t1_residuals
+         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/regression/run_t0.sh
+                 $<TARGET_FILE:t1_residuals> --baseline t1_residuals)
+set_tests_properties(mhd_t1_residuals PROPERTIES LABELS "tier1" TIMEOUT 300)
