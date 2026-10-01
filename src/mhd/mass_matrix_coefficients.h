@@ -30,6 +30,8 @@
 
 /* A per-cell mass-matrix coefficient: alphaec, alphaec2, alphaecnores, ... */
 typedef PetscScalar (*mfd_cell_coeff)(PetscInt, PetscInt, PetscInt, void *);
+/* A per-edge mass-matrix coefficient at a stencil location: betae, betaenores, ... */
+typedef PetscScalar (*mfd_edge_coeff)(PetscInt, PetscInt, PetscInt, DMStagStencilLocation, void *);
 
 PetscScalar betaf(PetscInt,PetscInt,PetscInt,DMStagStencilLocation,void*);
 PetscScalar betae(PetscInt,PetscInt,PetscInt,DMStagStencilLocation,void*);

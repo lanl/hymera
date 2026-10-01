@@ -949,14 +949,24 @@ PetscErrorCode FormPrimaryCurl(TS ts, Vec X, Vec F, void * ptr) {
   PetscFunctionReturn(PETSC_SUCCESS);
 }
 
-PetscErrorCode FormDerivedCurl(TS ts, Vec X, Vec F, void * ptr) {
+/* Derived mimetic curl of B, written into the edge (tau) slots of F.
+ *
+ * For each edge, the face values of B around it are weighted by the face
+ * coefficient betaf over the face area, summed with orientation signs, scaled by
+ * the edge length and divided by the edge coefficient. The three public
+ * variants were 275-line copies that differed only in that edge coefficient:
+ *   FormDerivedCurl       betae       full material properties
+ *   FormDerivedCurlnores  betaenores  without resistivity
+ *   FormDerivedCurlnomp   betaenomp   without material properties
+ * `label` keeps each variant's own PETSc log event name. */
+static PetscErrorCode derived_curl(TS ts, Vec X, Vec F, void * ptr, mfd_edge_coeff edgecoeff, const char * label) {
   PetscFunctionBeginUser;
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
   PetscCall(PetscClassIdRegister("class name",&classid));
-  PetscCall(PetscLogEventRegister("FormDerivedCurl",classid,&USER_EVENT));
+  PetscCall(PetscLogEventRegister(label,classid,&USER_EVENT));
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
   User * user = (User * ) ptr;
@@ -1110,97 +1120,97 @@ PetscErrorCode FormDerivedCurl(TS ts, Vec X, Vec F, void * ptr) {
 
         /* f(B) = primary_mimetic_curl^T (beta_f B)/beta_e ≡ M_e^{-1} Curl^T M_f B  */
         /* Back Left edge */
-        //if (er == 0 && ez == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rmzmedgelength / betae(er, ephi, ez, BACK_LEFT, user);} /* Back Left boundary edge */
-        //else if (er == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez-1][ephi][er][ivBrm] * betaf(er, ephi, ez-1, LEFT, user)/surface(er, ephi, ez-1, LEFT, user)) * rmzmedgelength / betae(er, ephi, ez, BACK_LEFT, user);} /* Left boundary edge */
-        //else if (ez == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez][ephi][er-1][ivBzm] * betaf(er-1, ephi, ez, BACK, user)/surface(er-1, ephi, ez, BACK, user)) * rmzmedgelength / betae(er, ephi, ez, BACK_LEFT, user);} /* Back boundary edge */
+        //if (er == 0 && ez == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rmzmedgelength / edgecoeff(er, ephi, ez, BACK_LEFT, user);} /* Back Left boundary edge */
+        //else if (er == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez-1][ephi][er][ivBrm] * betaf(er, ephi, ez-1, LEFT, user)/surface(er, ephi, ez-1, LEFT, user)) * rmzmedgelength / edgecoeff(er, ephi, ez, BACK_LEFT, user);} /* Left boundary edge */
+        //else if (ez == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez][ephi][er-1][ivBzm] * betaf(er-1, ephi, ez, BACK, user)/surface(er-1, ephi, ez, BACK, user)) * rmzmedgelength / edgecoeff(er, ephi, ez, BACK_LEFT, user);} /* Back boundary edge */
         if (er != 0 && ez != 0) {
           arrF[ez][ephi][er][ivErmzm] = (arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) -
             arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) -
             arrX[ez - 1][ephi][er][ivBrm] * betaf(er, ephi, ez - 1, LEFT, user) / surface(er, ephi, ez - 1, LEFT, user) +
-            arrX[ez][ephi][er - 1][ivBzm] * betaf(er - 1, ephi, ez, BACK, user) / surface(er - 1, ephi, ez, BACK, user)) * rmzmedgelength / betae(er, ephi, ez, BACK_LEFT, user);
+            arrX[ez][ephi][er - 1][ivBzm] * betaf(er - 1, ephi, ez, BACK, user) / surface(er - 1, ephi, ez, BACK, user)) * rmzmedgelength / edgecoeff(er, ephi, ez, BACK_LEFT, user);
         } /* Internal edge */
 
         if (!(user -> phibtype)) {
           /* Back Down edge */
-          //if (ephi == 0 && ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * phimzmedgelength / betae(er, ephi, ez, BACK_DOWN, user);} /* Back Down boundary edge */
-          //else if (ephi == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez-1][ephi][er][ivBphim] * betaf(er, ephi, ez-1, DOWN, user)/surface(er, ephi, ez-1, DOWN, user)) * phimzmedgelength / betae(er, ephi, ez, BACK_DOWN, user);} /* Down boundary edge */
-          //else if (ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez][ephi-1][er][ivBzm] * betaf(er, ephi-1, ez, BACK, user)/surface(er, ephi-1, ez, BACK, user)) * phimzmedgelength / betae(er, ephi, ez, BACK_DOWN, user);} /* Back boundary edge */
+          //if (ephi == 0 && ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * phimzmedgelength / edgecoeff(er, ephi, ez, BACK_DOWN, user);} /* Back Down boundary edge */
+          //else if (ephi == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez-1][ephi][er][ivBphim] * betaf(er, ephi, ez-1, DOWN, user)/surface(er, ephi, ez-1, DOWN, user)) * phimzmedgelength / edgecoeff(er, ephi, ez, BACK_DOWN, user);} /* Down boundary edge */
+          //else if (ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez][ephi-1][er][ivBzm] * betaf(er, ephi-1, ez, BACK, user)/surface(er, ephi-1, ez, BACK, user)) * phimzmedgelength / edgecoeff(er, ephi, ez, BACK_DOWN, user);} /* Back boundary edge */
           if (ephi != 0 && ez != 0) {
             arrF[ez][ephi][er][ivEphimzm] = (-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
               arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
               arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
-              arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betae(er, ephi, ez, BACK_DOWN, user);
+              arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / edgecoeff(er, ephi, ez, BACK_DOWN, user);
           } /* Internal edge */
 
           /* Down Left edge */
-          //if (er == 0 && ephi == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user)) * rmphimedgelength / betae(er, ephi, ez, DOWN_LEFT, user);} /* Down Left boundary edge */
-          //else if (er == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi-1][er][ivBrm] * betaf(er, ephi-1, ez, LEFT, user)/surface(er, ephi-1, ez, LEFT, user)) * rmphimedgelength / betae(er, ephi, ez, DOWN_LEFT, user);} /* Left boundary edge */
-          //else if (ephi == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er-1][ivBphim] * betaf(er-1, ephi, ez, DOWN, user)/surface(er-1, ephi, ez, DOWN, user)) * rmphimedgelength / betae(er, ephi, ez, DOWN_LEFT, user);} /* Down boundary edge */
+          //if (er == 0 && ephi == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user)) * rmphimedgelength / edgecoeff(er, ephi, ez, DOWN_LEFT, user);} /* Down Left boundary edge */
+          //else if (er == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi-1][er][ivBrm] * betaf(er, ephi-1, ez, LEFT, user)/surface(er, ephi-1, ez, LEFT, user)) * rmphimedgelength / edgecoeff(er, ephi, ez, DOWN_LEFT, user);} /* Left boundary edge */
+          //else if (ephi == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er-1][ivBphim] * betaf(er-1, ephi, ez, DOWN, user)/surface(er-1, ephi, ez, DOWN, user)) * rmphimedgelength / edgecoeff(er, ephi, ez, DOWN_LEFT, user);} /* Down boundary edge */
           if (ephi != 0 && ez != 0) {
             arrF[ez][ephi][er][ivErmphim] = (-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
               arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
               arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
-              arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betae(er, ephi, ez, DOWN_LEFT, user);
+              arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / edgecoeff(er, ephi, ez, DOWN_LEFT, user);
           } /* Internal edge */
         } else {
-          //if (ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez][ephi-1][er][ivBzm] * betaf(er, ephi-1, ez, BACK, user)/surface(er, ephi-1, ez, BACK, user)) * phimzmedgelength / betae(er, ephi, ez, BACK_DOWN, user);} /* Back boundary edge */
+          //if (ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez][ephi-1][er][ivBzm] * betaf(er, ephi-1, ez, BACK, user)/surface(er, ephi-1, ez, BACK, user)) * phimzmedgelength / edgecoeff(er, ephi, ez, BACK_DOWN, user);} /* Back boundary edge */
           if (ez != 0) {
             arrF[ez][ephi][er][ivEphimzm] = (-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
               arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
               arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
-              arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betae(er, ephi, ez, BACK_DOWN, user);
+              arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / edgecoeff(er, ephi, ez, BACK_DOWN, user);
           } /* Internal edge */
 
-          //if (er == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi-1][er][ivBrm] * betaf(er, ephi-1, ez, LEFT, user)/surface(er, ephi-1, ez, LEFT, user)) * rmphimedgelength / betae(er, ephi, ez, DOWN_LEFT, user);} /* Left boundary edge */
+          //if (er == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi-1][er][ivBrm] * betaf(er, ephi-1, ez, LEFT, user)/surface(er, ephi-1, ez, LEFT, user)) * rmphimedgelength / edgecoeff(er, ephi, ez, DOWN_LEFT, user);} /* Left boundary edge */
           if (er != 0) {
             arrF[ez][ephi][er][ivErmphim] = (-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
               arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
               arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
-              arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betae(er, ephi, ez, DOWN_LEFT, user);
+              arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / edgecoeff(er, ephi, ez, DOWN_LEFT, user);
           } /* Internal edge */
         }
 
         if (er == N[0] - 1) {
           /* Right boundary Back edge */
-          //if (ez == 0) {arrF[ez][ephi][er][ivErpzm] = ( arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rpzmedgelength / betae(er, ephi, ez, BACK_RIGHT, user);} /* Back Right boundary edge */
-          //else {arrF[ez][ephi][er][ivErpzm] = ( arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) - arrX[ez-1][ephi][er][ivBrp] * betaf(er, ephi, ez-1, RIGHT, user)/surface(er, ephi, ez-1, RIGHT, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rpzmedgelength / betae(er, ephi, ez, BACK_RIGHT, user);} /* Right boundary edge */
+          //if (ez == 0) {arrF[ez][ephi][er][ivErpzm] = ( arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rpzmedgelength / edgecoeff(er, ephi, ez, BACK_RIGHT, user);} /* Back Right boundary edge */
+          //else {arrF[ez][ephi][er][ivErpzm] = ( arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) - arrX[ez-1][ephi][er][ivBrp] * betaf(er, ephi, ez-1, RIGHT, user)/surface(er, ephi, ez-1, RIGHT, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rpzmedgelength / edgecoeff(er, ephi, ez, BACK_RIGHT, user);} /* Right boundary edge */
 
           /* Right boundary Down edge */
-          //if (ephi == 0 && !(user->phibtype)) {arrF[ez][ephi][er][ivErpphim] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user)) * rpphimedgelength / betae(er, ephi, ez, DOWN_RIGHT, user);} /* Down Right boundary edge */
-          //else {arrF[ez][ephi][er][ivErpphim] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi-1][er][ivBrp] * betaf(er, ephi-1, ez, RIGHT, user)/surface(er, ephi-1, ez, RIGHT, user)) * rpphimedgelength / betae(er, ephi, ez, DOWN_RIGHT, user);} /* Right boundary edge */
+          //if (ephi == 0 && !(user->phibtype)) {arrF[ez][ephi][er][ivErpphim] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user)) * rpphimedgelength / edgecoeff(er, ephi, ez, DOWN_RIGHT, user);} /* Down Right boundary edge */
+          //else {arrF[ez][ephi][er][ivErpphim] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi-1][er][ivBrp] * betaf(er, ephi-1, ez, RIGHT, user)/surface(er, ephi-1, ez, RIGHT, user)) * rpphimedgelength / edgecoeff(er, ephi, ez, DOWN_RIGHT, user);} /* Right boundary edge */
         }
 
         if (ephi == N[1] - 1 && !(user -> phibtype)) {
           /* Up boundary Back edge */
-          //if (ez == 0) {arrF[ez][ephi][er][ivEphipzm] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * phipzmedgelength / betae(er, ephi, ez, BACK_UP, user);} /* Back Up boundary edge */
-          //else {arrF[ez][ephi][er][ivEphipzm] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez-1][ephi][er][ivBphip] * betaf(er, ephi, ez-1, UP, user)/surface(er, ephi, ez-1, UP, user)) * phipzmedgelength / betae(er, ephi, ez, BACK_UP, user);} /* Up boundary edge */
+          //if (ez == 0) {arrF[ez][ephi][er][ivEphipzm] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * phipzmedgelength / edgecoeff(er, ephi, ez, BACK_UP, user);} /* Back Up boundary edge */
+          //else {arrF[ez][ephi][er][ivEphipzm] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez-1][ephi][er][ivBphip] * betaf(er, ephi, ez-1, UP, user)/surface(er, ephi, ez-1, UP, user)) * phipzmedgelength / edgecoeff(er, ephi, ez, BACK_UP, user);} /* Up boundary edge */
 
           /* Up boundary Left edge */
-          //if (er == 0) {arrF[ez][ephi][er][ivErmphip] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user)) * rmphipedgelength / betae(er, ephi, ez, UP_LEFT, user);} /* Up Left boundary edge */
-          //else {arrF[ez][ephi][er][ivErmphip] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er-1][ivBphip] * betaf(er-1, ephi, ez, UP, user)/surface(er-1, ephi, ez, UP, user)) * rmphipedgelength / betae(er, ephi, ez, UP_LEFT, user);} /* Up boundary edge */
+          //if (er == 0) {arrF[ez][ephi][er][ivErmphip] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user)) * rmphipedgelength / edgecoeff(er, ephi, ez, UP_LEFT, user);} /* Up Left boundary edge */
+          //else {arrF[ez][ephi][er][ivErmphip] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er-1][ivBphip] * betaf(er-1, ephi, ez, UP, user)/surface(er-1, ephi, ez, UP, user)) * rmphipedgelength / edgecoeff(er, ephi, ez, UP_LEFT, user);} /* Up boundary edge */
         }
 
         if (ez == N[2] - 1) {
           /* Front boundary Left edge */
-          //if (er == 0) {arrF[ez][ephi][er][ivErmzp] = ( -arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user)) * rmzpedgelength / betae(er, ephi, ez, FRONT_LEFT, user);} /* Front Left boundary edge */
-          //else {arrF[ez][ephi][er][ivErmzp] = ( -arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er-1][ivBzp] * betaf(er-1, ephi, ez, FRONT, user)/surface(er-1, ephi, ez, FRONT, user)) * rmzpedgelength / betae(er, ephi, ez, FRONT_LEFT, user);} /* Front boundary edge */
+          //if (er == 0) {arrF[ez][ephi][er][ivErmzp] = ( -arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user)) * rmzpedgelength / edgecoeff(er, ephi, ez, FRONT_LEFT, user);} /* Front Left boundary edge */
+          //else {arrF[ez][ephi][er][ivErmzp] = ( -arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er-1][ivBzp] * betaf(er-1, ephi, ez, FRONT, user)/surface(er-1, ephi, ez, FRONT, user)) * rmzpedgelength / edgecoeff(er, ephi, ez, FRONT_LEFT, user);} /* Front boundary edge */
 
           /* Front boundary Down edge */
-          //if (ephi == 0 && !(user->phibtype)) {arrF[ez][ephi][er][ivEphimzp] = ( arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * phimzpedgelength / betae(er, ephi, ez, FRONT_DOWN, user);} /* Front Down boundary edge */
-          //else {arrF[ez][ephi][er][ivEphimzp] = ( arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi-1][er][ivBzp] * betaf(er, ephi-1, ez, FRONT, user)/surface(er, ephi-1, ez, FRONT, user)) * phimzpedgelength / betae(er, ephi, ez, FRONT_DOWN, user);} /* Front boundary edge */
+          //if (ephi == 0 && !(user->phibtype)) {arrF[ez][ephi][er][ivEphimzp] = ( arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * phimzpedgelength / edgecoeff(er, ephi, ez, FRONT_DOWN, user);} /* Front Down boundary edge */
+          //else {arrF[ez][ephi][er][ivEphimzp] = ( arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi-1][er][ivBzp] * betaf(er, ephi-1, ez, FRONT, user)/surface(er, ephi-1, ez, FRONT, user)) * phimzpedgelength / edgecoeff(er, ephi, ez, FRONT_DOWN, user);} /* Front boundary edge */
         }
 
         if (er == N[0] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
           /* Up Right boundary edge */
-          //arrF[ez][ephi][er][ivErpphip] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user)) * rpphipedgelength / betae(er, ephi, ez, UP_RIGHT, user);
+          //arrF[ez][ephi][er][ivErpphip] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user)) * rpphipedgelength / edgecoeff(er, ephi, ez, UP_RIGHT, user);
         }
         if (ephi == N[1] - 1 && ez == N[2] - 1 && !(user -> phibtype)) {
           /* Front Up boundary edge */
-          //arrF[ez][ephi][er][ivEphipzp] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * phipzpedgelength / betae(er, ephi, ez, FRONT_UP, user);
+          //arrF[ez][ephi][er][ivEphipzp] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * phipzpedgelength / edgecoeff(er, ephi, ez, FRONT_UP, user);
         }
         if (er == N[0] - 1 && ez == N[2] - 1) {
           /* Front Right boundary edge */
-          //arrF[ez][ephi][er][ivErpzp] = ( -arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * rpzpedgelength / betae(er, ephi, ez, FRONT_RIGHT, user);
+          //arrF[ez][ephi][er][ivErpzp] = ( -arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * rpzpedgelength / edgecoeff(er, ephi, ez, FRONT_RIGHT, user);
         }
       }
     }
@@ -1224,558 +1234,21 @@ PetscErrorCode FormDerivedCurl(TS ts, Vec X, Vec F, void * ptr) {
 
   PetscFunctionReturn(PETSC_SUCCESS);
 }
+#line 952
+PetscErrorCode FormDerivedCurl(TS ts, Vec X, Vec F, void * ptr) {
+  return derived_curl(ts, X, F, ptr, betae, "FormDerivedCurl");
+}
+#line 1227
 
 PetscErrorCode FormDerivedCurlnores(TS ts, Vec X, Vec F, void * ptr) {
-  PetscFunctionBeginUser;
-
-  PetscLogEvent  USER_EVENT;
-  PetscClassId   classid;
-
-  PetscCall(PetscClassIdRegister("class name",&classid));
-  PetscCall(PetscLogEventRegister("FormDerivedCurlnores",classid,&USER_EVENT));
-  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
-
-  User * user = (User * ) ptr;
-  DM da, coordDA = user -> coorda;
-  PetscInt startr, startphi, startz, nr, nphi, nz;
-
-  Vec fLocal, xLocal;
-  Vec coordLocal;
-  PetscInt N[3], er, ephi, ez, d;
-
-  PetscInt icp[3];
-  PetscInt icBrp[3], icBphip[3], icBzp[3], icBrm[3], icBphim[3], icBzm[3];
-  PetscInt icErmzm[3], icErmzp[3], icErpzm[3], icErpzp[3];
-
-  PetscInt icEphimzm[3], icEphipzm[3], icEphimzp[3], icEphipzp[3];
-  PetscInt icErmphim[3], icErpphim[3], icErmphip[3], icErpphip[3];
-  PetscInt icrmphimzm[3], icrmphimzp[3], icrmphipzm[3], icrmphipzp[3];
-  PetscInt icrpphimzm[3], icrpphimzp[3], icrpphipzm[3], icrpphipzp[3];
-  PetscInt ivBrp, ivBphip, ivBzp, ivBrm, ivBphim, ivBzm;
-
-  PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
-  PetscInt ivEphimzm, ivEphipzm, ivEphimzp, ivEphipzp;
-  PetscInt ivErmphim, ivErpphim, ivErmphip, ivErpphip;
-  DM dmCoord;
-  DM dmCoorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoorda;
-
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength;
-
-  PetscCall(TSGetDM(ts, & da));
-  PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
-  PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
-  /* Edge locations */
-  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim));
-  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip));
-  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp));
-  /* Face locations */
-  PetscCall(DMStagGetLocationSlot(da, LEFT, 0, & ivBrm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN, 0, & ivBphim));
-  PetscCall(DMStagGetLocationSlot(da, BACK, 0, & ivBzm));
-  PetscCall(DMStagGetLocationSlot(da, RIGHT, 0, & ivBrp));
-  PetscCall(DMStagGetLocationSlot(da, UP, 0, & ivBphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT, 0, & ivBzp));
-  PetscCall(DMGetCoordinateDM(da, & dmCoord));
-  PetscCall(DMGetCoordinatesLocal(da, & coordLocal));
-  PetscCall(DMStagVecGetArrayRead(dmCoord, coordLocal, & arrCoord));
-  PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
-  PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
-  PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoorda));
-  for (d = 0; d < 3; ++d) {
-    /* Element coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]));
-    /* Face coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, LEFT, d, & icBrm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN, d, & icBphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK, d, & icBzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, RIGHT, d, & icBrp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP, d, & icBphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT, d, & icBzp[d]));
-    /* Edge coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_LEFT, d, & icErmzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_DOWN, d, & icEphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_RIGHT, d, & icErpzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_UP, d, & icEphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_LEFT, d, & icErmphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_RIGHT, d, & icErpphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_LEFT, d, & icErmphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_RIGHT, d, & icErpphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_DOWN, d, & icEphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_LEFT, d, & icErmzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_RIGHT, d, & icErpzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & icEphipzp[d]));
-    /* Vertex coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_LEFT, d, & icrmphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_RIGHT, d, & icrpphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_LEFT, d, & icrmphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_RIGHT, d, & icrpphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_LEFT, d, & icrmphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_RIGHT, d, & icrpphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_LEFT, d, & icrmphipzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_RIGHT, d, & icrpphipzp[d]));
-  }
-
-  /* Compute function over the locally owned part of the grid */
-  /* f(B) = derived_mimetic_curl(B) */
-  PetscCall(DMGetLocalVector(da, & fLocal));
-  PetscCall(DMGlobalToLocalBegin(da, F, INSERT_VALUES, fLocal));
-  PetscCall(DMGlobalToLocalEnd(da, F, INSERT_VALUES, fLocal));
-  PetscCall(DMStagVecGetArray(da, fLocal, & arrF));
-
-  PetscCall(DMGetLocalVector(da, & xLocal));
-  PetscCall(DMGlobalToLocalBegin(da, X, INSERT_VALUES, xLocal));
-  PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, xLocal));
-  PetscCall(DMStagVecGetArrayRead(da, xLocal, & arrX));
-
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-        /*PetscPrintf(PETSC_COMM_WORLD,"dphi = %g\n",(double)user->dphi);
-        PetscPrintf(PETSC_COMM_WORLD,"Phip - Phim at CELL(%d,%d,%d) = %g\n",(double)(arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]),er,ephi,ez);*/
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
-
-        /* f(B) = primary_mimetic_curl^T (beta_f B)/beta_e ≡ M_e^{-1} Curl^T M_f B  */
-        /* Back Left edge */
-        //if (er == 0 && ez == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rmzmedgelength / betaenores(er, ephi, ez, BACK_LEFT, user);} /* Back Left boundary edge */
-        //else if (er == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez-1][ephi][er][ivBrm] * betaf(er, ephi, ez-1, LEFT, user)/surface(er, ephi, ez-1, LEFT, user)) * rmzmedgelength / betaenores(er, ephi, ez, BACK_LEFT, user);} /* Left boundary edge */
-        //else if (ez == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez][ephi][er-1][ivBzm] * betaf(er-1, ephi, ez, BACK, user)/surface(er-1, ephi, ez, BACK, user)) * rmzmedgelength / betaenores(er, ephi, ez, BACK_LEFT, user);} /* Back boundary edge */
-        if (er != 0 && ez != 0) {
-          arrF[ez][ephi][er][ivErmzm] = (arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) -
-            arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) -
-            arrX[ez - 1][ephi][er][ivBrm] * betaf(er, ephi, ez - 1, LEFT, user) / surface(er, ephi, ez - 1, LEFT, user) +
-            arrX[ez][ephi][er - 1][ivBzm] * betaf(er - 1, ephi, ez, BACK, user) / surface(er - 1, ephi, ez, BACK, user)) * rmzmedgelength / betaenores(er, ephi, ez, BACK_LEFT, user);
-        } /* Internal edge */
-
-        if (!(user -> phibtype)) {
-          /* Back Down edge */
-          //if (ephi == 0 && ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * phimzmedgelength / betaenores(er, ephi, ez, BACK_DOWN, user);} /* Back Down boundary edge */
-          //else if (ephi == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez-1][ephi][er][ivBphim] * betaf(er, ephi, ez-1, DOWN, user)/surface(er, ephi, ez-1, DOWN, user)) * phimzmedgelength / betaenores(er, ephi, ez, BACK_DOWN, user);} /* Down boundary edge */
-          //else if (ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez][ephi-1][er][ivBzm] * betaf(er, ephi-1, ez, BACK, user)/surface(er, ephi-1, ez, BACK, user)) * phimzmedgelength / betaenores(er, ephi, ez, BACK_DOWN, user);} /* Back boundary edge */
-          if (ephi != 0 && ez != 0) {
-            arrF[ez][ephi][er][ivEphimzm] = (-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-              arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
-              arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
-              arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betaenores(er, ephi, ez, BACK_DOWN, user);
-          } /* Internal edge */
-
-          /* Down Left edge */
-          //if (er == 0 && ephi == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user)) * rmphimedgelength / betaenores(er, ephi, ez, DOWN_LEFT, user);} /* Down Left boundary edge */
-          //else if (er == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi-1][er][ivBrm] * betaf(er, ephi-1, ez, LEFT, user)/surface(er, ephi-1, ez, LEFT, user)) * rmphimedgelength / betaenores(er, ephi, ez, DOWN_LEFT, user);} /* Left boundary edge */
-          //else if (ephi == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er-1][ivBphim] * betaf(er-1, ephi, ez, DOWN, user)/surface(er-1, ephi, ez, DOWN, user)) * rmphimedgelength / betaenores(er, ephi, ez, DOWN_LEFT, user);} /* Down boundary edge */
-          if (ephi != 0 && ez != 0) {
-            arrF[ez][ephi][er][ivErmphim] = (-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
-              arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-              arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
-              arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betaenores(er, ephi, ez, DOWN_LEFT, user);
-          } /* Internal edge */
-        } else {
-          //if (ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez][ephi-1][er][ivBzm] * betaf(er, ephi-1, ez, BACK, user)/surface(er, ephi-1, ez, BACK, user)) * phimzmedgelength / betaenores(er, ephi, ez, BACK_DOWN, user);} /* Back boundary edge */
-          if (ez != 0) {
-            arrF[ez][ephi][er][ivEphimzm] = (-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-              arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
-              arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
-              arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betaenores(er, ephi, ez, BACK_DOWN, user);
-          } /* Internal edge */
-
-          //if (er == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi-1][er][ivBrm] * betaf(er, ephi-1, ez, LEFT, user)/surface(er, ephi-1, ez, LEFT, user)) * rmphimedgelength / betaenores(er, ephi, ez, DOWN_LEFT, user);} /* Left boundary edge */
-          if (er != 0) {
-            arrF[ez][ephi][er][ivErmphim] = (-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
-              arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-              arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
-              arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betaenores(er, ephi, ez, DOWN_LEFT, user);
-          } /* Internal edge */
-        }
-
-        if (er == N[0] - 1) {
-          /* Right boundary Back edge */
-          //if (ez == 0) {arrF[ez][ephi][er][ivErpzm] = ( arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rpzmedgelength / betaenores(er, ephi, ez, BACK_RIGHT, user);} /* Back Right boundary edge */
-          //else {arrF[ez][ephi][er][ivErpzm] = ( arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) - arrX[ez-1][ephi][er][ivBrp] * betaf(er, ephi, ez-1, RIGHT, user)/surface(er, ephi, ez-1, RIGHT, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rpzmedgelength / betaenores(er, ephi, ez, BACK_RIGHT, user);} /* Right boundary edge */
-
-          /* Right boundary Down edge */
-          //if (ephi == 0 && !(user->phibtype)) {arrF[ez][ephi][er][ivErpphim] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user)) * rpphimedgelength / betaenores(er, ephi, ez, DOWN_RIGHT, user);} /* Down Right boundary edge */
-          //else {arrF[ez][ephi][er][ivErpphim] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi-1][er][ivBrp] * betaf(er, ephi-1, ez, RIGHT, user)/surface(er, ephi-1, ez, RIGHT, user)) * rpphimedgelength / betaenores(er, ephi, ez, DOWN_RIGHT, user);} /* Right boundary edge */
-        }
-
-        if (ephi == N[1] - 1 && !(user -> phibtype)) {
-          /* Up boundary Back edge */
-          //if (ez == 0) {arrF[ez][ephi][er][ivEphipzm] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * phipzmedgelength / betaenores(er, ephi, ez, BACK_UP, user);} /* Back Up boundary edge */
-          //else {arrF[ez][ephi][er][ivEphipzm] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez-1][ephi][er][ivBphip] * betaf(er, ephi, ez-1, UP, user)/surface(er, ephi, ez-1, UP, user)) * phipzmedgelength / betaenores(er, ephi, ez, BACK_UP, user);} /* Up boundary edge */
-
-          /* Up boundary Left edge */
-          //if (er == 0) {arrF[ez][ephi][er][ivErmphip] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user)) * rmphipedgelength / betaenores(er, ephi, ez, UP_LEFT, user);} /* Up Left boundary edge */
-          //else {arrF[ez][ephi][er][ivErmphip] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er-1][ivBphip] * betaf(er-1, ephi, ez, UP, user)/surface(er-1, ephi, ez, UP, user)) * rmphipedgelength / betaenores(er, ephi, ez, UP_LEFT, user);} /* Up boundary edge */
-        }
-
-        if (ez == N[2] - 1) {
-          /* Front boundary Left edge */
-          //if (er == 0) {arrF[ez][ephi][er][ivErmzp] = ( -arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user)) * rmzpedgelength / betaenores(er, ephi, ez, FRONT_LEFT, user);} /* Front Left boundary edge */
-          //else {arrF[ez][ephi][er][ivErmzp] = ( -arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er-1][ivBzp] * betaf(er-1, ephi, ez, FRONT, user)/surface(er-1, ephi, ez, FRONT, user)) * rmzpedgelength / betaenores(er, ephi, ez, FRONT_LEFT, user);} /* Front boundary edge */
-
-          /* Front boundary Down edge */
-          //if (ephi == 0 && !(user->phibtype)) {arrF[ez][ephi][er][ivEphimzp] = ( arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * phimzpedgelength / betaenores(er, ephi, ez, FRONT_DOWN, user);} /* Front Down boundary edge */
-          //else {arrF[ez][ephi][er][ivEphimzp] = ( arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi-1][er][ivBzp] * betaf(er, ephi-1, ez, FRONT, user)/surface(er, ephi-1, ez, FRONT, user)) * phimzpedgelength / betaenores(er, ephi, ez, FRONT_DOWN, user);} /* Front boundary edge */
-        }
-
-        if (er == N[0] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
-          /* Up Right boundary edge */
-          //arrF[ez][ephi][er][ivErpphip] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user)) * rpphipedgelength / betaenores(er, ephi, ez, UP_RIGHT, user);
-        }
-        if (ephi == N[1] - 1 && ez == N[2] - 1 && !(user -> phibtype)) {
-          /* Front Up boundary edge */
-          //arrF[ez][ephi][er][ivEphipzp] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * phipzpedgelength / betaenores(er, ephi, ez, FRONT_UP, user);
-        }
-        if (er == N[0] - 1 && ez == N[2] - 1) {
-          /* Front Right boundary edge */
-          //arrF[ez][ephi][er][ivErpzp] = ( -arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * rpzpedgelength / betaenores(er, ephi, ez, FRONT_RIGHT, user);
-        }
-      }
-    }
-  }
-
-  /* Restore vectors */
-  /* DMStagVecRestoreArray(da,F,&arrF); */
-
-  PetscCall(DMStagVecRestoreArray(da, fLocal, & arrF));
-  PetscCall(DMLocalToGlobal(da, fLocal, INSERT_VALUES, F));
-  PetscCall(DMRestoreLocalVector(da, & fLocal));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, xLocal, & arrX));
-  PetscCall(DMRestoreLocalVector(da, & xLocal));
-
-  PetscCall(DMStagVecRestoreArrayRead(dmCoord, coordLocal, & arrCoord));
-
-  PetscCall(DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoorda));
-
-  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
-
-  PetscFunctionReturn(PETSC_SUCCESS);
+  return derived_curl(ts, X, F, ptr, betaenores, "FormDerivedCurlnores");
 }
+#line 1503
 
 PetscErrorCode FormDerivedCurlnomp(TS ts, Vec X, Vec F, void * ptr) {
-  PetscFunctionBeginUser;
-
-  PetscLogEvent  USER_EVENT;
-  PetscClassId   classid;
-
-  PetscCall(PetscClassIdRegister("class name",&classid));
-  PetscCall(PetscLogEventRegister("FormDerivedCurlnomp",classid,&USER_EVENT));
-  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
-
-  User * user = (User * ) ptr;
-  DM da, coordDA = user -> coorda;
-  PetscInt startr, startphi, startz, nr, nphi, nz;
-
-  Vec fLocal, xLocal;
-  Vec coordLocal;
-  PetscInt N[3], er, ephi, ez, d;
-
-  PetscInt icp[3];
-  PetscInt icBrp[3], icBphip[3], icBzp[3], icBrm[3], icBphim[3], icBzm[3];
-  PetscInt icErmzm[3], icErmzp[3], icErpzm[3], icErpzp[3];
-
-  PetscInt icEphimzm[3], icEphipzm[3], icEphimzp[3], icEphipzp[3];
-  PetscInt icErmphim[3], icErpphim[3], icErmphip[3], icErpphip[3];
-  PetscInt icrmphimzm[3], icrmphimzp[3], icrmphipzm[3], icrmphipzp[3];
-  PetscInt icrpphimzm[3], icrpphimzp[3], icrpphipzm[3], icrpphipzp[3];
-  PetscInt ivBrp, ivBphip, ivBzp, ivBrm, ivBphim, ivBzm;
-
-  PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
-  PetscInt ivEphimzm, ivEphipzm, ivEphimzp, ivEphipzp;
-  PetscInt ivErmphim, ivErpphim, ivErmphip, ivErpphip;
-  DM dmCoord;
-  DM dmCoorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoorda;
-
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength;
-
-  PetscCall(TSGetDM(ts, & da));
-  PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
-  PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
-  /* Edge locations */
-  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim));
-  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip));
-  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp));
-  /* Face locations */
-  PetscCall(DMStagGetLocationSlot(da, LEFT, 0, & ivBrm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN, 0, & ivBphim));
-  PetscCall(DMStagGetLocationSlot(da, BACK, 0, & ivBzm));
-  PetscCall(DMStagGetLocationSlot(da, RIGHT, 0, & ivBrp));
-  PetscCall(DMStagGetLocationSlot(da, UP, 0, & ivBphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT, 0, & ivBzp));
-  PetscCall(DMGetCoordinateDM(da, & dmCoord));
-  PetscCall(DMGetCoordinatesLocal(da, & coordLocal));
-  PetscCall(DMStagVecGetArrayRead(dmCoord, coordLocal, & arrCoord));
-  PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
-  PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
-  PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoorda));
-  for (d = 0; d < 3; ++d) {
-    /* Element coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]));
-    /* Face coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, LEFT, d, & icBrm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN, d, & icBphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK, d, & icBzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, RIGHT, d, & icBrp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP, d, & icBphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT, d, & icBzp[d]));
-    /* Edge coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_LEFT, d, & icErmzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_DOWN, d, & icEphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_RIGHT, d, & icErpzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_UP, d, & icEphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_LEFT, d, & icErmphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_RIGHT, d, & icErpphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_LEFT, d, & icErmphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_RIGHT, d, & icErpphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_DOWN, d, & icEphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_LEFT, d, & icErmzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_RIGHT, d, & icErpzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & icEphipzp[d]));
-    /* Vertex coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_LEFT, d, & icrmphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_RIGHT, d, & icrpphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_LEFT, d, & icrmphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_RIGHT, d, & icrpphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_LEFT, d, & icrmphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_RIGHT, d, & icrpphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_LEFT, d, & icrmphipzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_RIGHT, d, & icrpphipzp[d]));
-  }
-
-  /* Compute function over the locally owned part of the grid */
-  /* f(B) = derived_mimetic_curl(B) */
-  PetscCall(DMGetLocalVector(da, & fLocal));
-  PetscCall(DMGlobalToLocalBegin(da, F, INSERT_VALUES, fLocal));
-  PetscCall(DMGlobalToLocalEnd(da, F, INSERT_VALUES, fLocal));
-  PetscCall(DMStagVecGetArray(da, fLocal, & arrF));
-
-  PetscCall(DMGetLocalVector(da, & xLocal));
-  PetscCall(DMGlobalToLocalBegin(da, X, INSERT_VALUES, xLocal));
-  PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, xLocal));
-  PetscCall(DMStagVecGetArrayRead(da, xLocal, & arrX));
-
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-        /*PetscPrintf(PETSC_COMM_WORLD,"dphi = %g\n",(double)user->dphi);
-        PetscPrintf(PETSC_COMM_WORLD,"Phip - Phim at CELL(%d,%d,%d) = %g\n",(double)(arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]),er,ephi,ez);*/
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
-
-        /* f(B) = primary_mimetic_curl^T (beta_f B)/beta_e ≡ M_e^{-1} Curl^T M_f B  */
-        /* Back Left edge */
-        //if (er == 0 && ez == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rmzmedgelength / betaenomp(er, ephi, ez, BACK_LEFT, user);} /* Back Left boundary edge */
-        //else if (er == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez-1][ephi][er][ivBrm] * betaf(er, ephi, ez-1, LEFT, user)/surface(er, ephi, ez-1, LEFT, user)) * rmzmedgelength / betaenomp(er, ephi, ez, BACK_LEFT, user);} /* Left boundary edge */
-        //else if (ez == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez][ephi][er-1][ivBzm] * betaf(er-1, ephi, ez, BACK, user)/surface(er-1, ephi, ez, BACK, user)) * rmzmedgelength / betaenomp(er, ephi, ez, BACK_LEFT, user);} /* Back boundary edge */
-        if (er != 0 && ez != 0) {
-          arrF[ez][ephi][er][ivErmzm] = (arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) -
-            arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) -
-            arrX[ez - 1][ephi][er][ivBrm] * betaf(er, ephi, ez - 1, LEFT, user) / surface(er, ephi, ez - 1, LEFT, user) +
-            arrX[ez][ephi][er - 1][ivBzm] * betaf(er - 1, ephi, ez, BACK, user) / surface(er - 1, ephi, ez, BACK, user)) * rmzmedgelength / betaenomp(er, ephi, ez, BACK_LEFT, user);
-        } /* Internal edge */
-
-        if (!(user -> phibtype)) {
-          /* Back Down edge */
-          //if (ephi == 0 && ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * phimzmedgelength / betaenomp(er, ephi, ez, BACK_DOWN, user);} /* Back Down boundary edge */
-          //else if (ephi == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez-1][ephi][er][ivBphim] * betaf(er, ephi, ez-1, DOWN, user)/surface(er, ephi, ez-1, DOWN, user)) * phimzmedgelength / betaenomp(er, ephi, ez, BACK_DOWN, user);} /* Down boundary edge */
-          //else if (ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez][ephi-1][er][ivBzm] * betaf(er, ephi-1, ez, BACK, user)/surface(er, ephi-1, ez, BACK, user)) * phimzmedgelength / betaenomp(er, ephi, ez, BACK_DOWN, user);} /* Back boundary edge */
-          if (ephi != 0 && ez != 0) {
-            arrF[ez][ephi][er][ivEphimzm] = (-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-              arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
-              arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
-              arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betaenomp(er, ephi, ez, BACK_DOWN, user);
-          } /* Internal edge */
-
-          /* Down Left edge */
-          //if (er == 0 && ephi == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user)) * rmphimedgelength / betaenomp(er, ephi, ez, DOWN_LEFT, user);} /* Down Left boundary edge */
-          //else if (er == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi-1][er][ivBrm] * betaf(er, ephi-1, ez, LEFT, user)/surface(er, ephi-1, ez, LEFT, user)) * rmphimedgelength / betaenomp(er, ephi, ez, DOWN_LEFT, user);} /* Left boundary edge */
-          //else if (ephi == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er-1][ivBphim] * betaf(er-1, ephi, ez, DOWN, user)/surface(er-1, ephi, ez, DOWN, user)) * rmphimedgelength / betaenomp(er, ephi, ez, DOWN_LEFT, user);} /* Down boundary edge */
-          if (ephi != 0 && ez != 0) {
-            arrF[ez][ephi][er][ivErmphim] = (-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
-              arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-              arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
-              arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betaenomp(er, ephi, ez, DOWN_LEFT, user);
-          } /* Internal edge */
-        } else {
-          //if (ez == 0) {arrF[ez][ephi][er][ivEphimzm] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) - arrX[ez][ephi-1][er][ivBzm] * betaf(er, ephi-1, ez, BACK, user)/surface(er, ephi-1, ez, BACK, user)) * phimzmedgelength / betaenomp(er, ephi, ez, BACK_DOWN, user);} /* Back boundary edge */
-          if (ez != 0) {
-            arrF[ez][ephi][er][ivEphimzm] = (-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-              arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
-              arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
-              arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betaenomp(er, ephi, ez, BACK_DOWN, user);
-          } /* Internal edge */
-
-          //if (er == 0) {arrF[ez][ephi][er][ivErmphim] = ( -arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi-1][er][ivBrm] * betaf(er, ephi-1, ez, LEFT, user)/surface(er, ephi-1, ez, LEFT, user)) * rmphimedgelength / betaenomp(er, ephi, ez, DOWN_LEFT, user);} /* Left boundary edge */
-          if (er != 0) {
-            arrF[ez][ephi][er][ivErmphim] = (-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
-              arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-              arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
-              arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betaenomp(er, ephi, ez, DOWN_LEFT, user);
-          } /* Internal edge */
-        }
-
-        if (er == N[0] - 1) {
-          /* Right boundary Back edge */
-          //if (ez == 0) {arrF[ez][ephi][er][ivErpzm] = ( arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rpzmedgelength / betaenomp(er, ephi, ez, BACK_RIGHT, user);} /* Back Right boundary edge */
-          //else {arrF[ez][ephi][er][ivErpzm] = ( arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) - arrX[ez-1][ephi][er][ivBrp] * betaf(er, ephi, ez-1, RIGHT, user)/surface(er, ephi, ez-1, RIGHT, user) + arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rpzmedgelength / betaenomp(er, ephi, ez, BACK_RIGHT, user);} /* Right boundary edge */
-
-          /* Right boundary Down edge */
-          //if (ephi == 0 && !(user->phibtype)) {arrF[ez][ephi][er][ivErpphim] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user)) * rpphimedgelength / betaenomp(er, ephi, ez, DOWN_RIGHT, user);} /* Down Right boundary edge */
-          //else {arrF[ez][ephi][er][ivErpphim] = ( -arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) - arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi-1][er][ivBrp] * betaf(er, ephi-1, ez, RIGHT, user)/surface(er, ephi-1, ez, RIGHT, user)) * rpphimedgelength / betaenomp(er, ephi, ez, DOWN_RIGHT, user);} /* Right boundary edge */
-        }
-
-        if (ephi == N[1] - 1 && !(user -> phibtype)) {
-          /* Up boundary Back edge */
-          //if (ez == 0) {arrF[ez][ephi][er][ivEphipzm] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * phipzmedgelength / betaenomp(er, ephi, ez, BACK_UP, user);} /* Back Up boundary edge */
-          //else {arrF[ez][ephi][er][ivEphipzm] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user) + arrX[ez-1][ephi][er][ivBphip] * betaf(er, ephi, ez-1, UP, user)/surface(er, ephi, ez-1, UP, user)) * phipzmedgelength / betaenomp(er, ephi, ez, BACK_UP, user);} /* Up boundary edge */
-
-          /* Up boundary Left edge */
-          //if (er == 0) {arrF[ez][ephi][er][ivErmphip] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user)) * rmphipedgelength / betaenomp(er, ephi, ez, UP_LEFT, user);} /* Up Left boundary edge */
-          //else {arrF[ez][ephi][er][ivErmphip] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er-1][ivBphip] * betaf(er-1, ephi, ez, UP, user)/surface(er-1, ephi, ez, UP, user)) * rmphipedgelength / betaenomp(er, ephi, ez, UP_LEFT, user);} /* Up boundary edge */
-        }
-
-        if (ez == N[2] - 1) {
-          /* Front boundary Left edge */
-          //if (er == 0) {arrF[ez][ephi][er][ivErmzp] = ( -arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user)) * rmzpedgelength / betaenomp(er, ephi, ez, FRONT_LEFT, user);} /* Front Left boundary edge */
-          //else {arrF[ez][ephi][er][ivErmzp] = ( -arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) + arrX[ez][ephi][er-1][ivBzp] * betaf(er-1, ephi, ez, FRONT, user)/surface(er-1, ephi, ez, FRONT, user)) * rmzpedgelength / betaenomp(er, ephi, ez, FRONT_LEFT, user);} /* Front boundary edge */
-
-          /* Front boundary Down edge */
-          //if (ephi == 0 && !(user->phibtype)) {arrF[ez][ephi][er][ivEphimzp] = ( arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * phimzpedgelength / betaenomp(er, ephi, ez, FRONT_DOWN, user);} /* Front Down boundary edge */
-          //else {arrF[ez][ephi][er][ivEphimzp] = ( arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user)/surface(er, ephi, ez, DOWN, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user) - arrX[ez][ephi-1][er][ivBzp] * betaf(er, ephi-1, ez, FRONT, user)/surface(er, ephi-1, ez, FRONT, user)) * phimzpedgelength / betaenomp(er, ephi, ez, FRONT_DOWN, user);} /* Front boundary edge */
-        }
-
-        if (er == N[0] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
-          /* Up Right boundary edge */
-          //arrF[ez][ephi][er][ivErpphip] = ( -arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) + arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user)) * rpphipedgelength / betaenomp(er, ephi, ez, UP_RIGHT, user);
-        }
-        if (ephi == N[1] - 1 && ez == N[2] - 1 && !(user -> phibtype)) {
-          /* Front Up boundary edge */
-          //arrF[ez][ephi][er][ivEphipzp] = ( arrX[ez][ephi][er][ivBphip] * betaf(er, ephi, ez, UP, user)/surface(er, ephi, ez, UP, user) - arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * phipzpedgelength / betaenomp(er, ephi, ez, FRONT_UP, user);
-        }
-        if (er == N[0] - 1 && ez == N[2] - 1) {
-          /* Front Right boundary edge */
-          //arrF[ez][ephi][er][ivErpzp] = ( -arrX[ez][ephi][er][ivBrp] * betaf(er, ephi, ez, RIGHT, user)/surface(er, ephi, ez, RIGHT, user) + arrX[ez][ephi][er][ivBzp] * betaf(er, ephi, ez, FRONT, user)/surface(er, ephi, ez, FRONT, user)) * rpzpedgelength / betaenomp(er, ephi, ez, FRONT_RIGHT, user);
-        }
-      }
-    }
-  }
-
-  /* Restore vectors */
-  /* DMStagVecRestoreArray(da,F,&arrF); */
-
-  PetscCall(DMStagVecRestoreArray(da, fLocal, & arrF));
-  PetscCall(DMLocalToGlobal(da, fLocal, INSERT_VALUES, F));
-  PetscCall(DMRestoreLocalVector(da, & fLocal));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, xLocal, & arrX));
-  PetscCall(DMRestoreLocalVector(da, & xLocal));
-
-  PetscCall(DMStagVecRestoreArrayRead(dmCoord, coordLocal, & arrCoord));
-
-  PetscCall(DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoorda));
-
-  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
-
-  PetscFunctionReturn(PETSC_SUCCESS);
+  return derived_curl(ts, X, F, ptr, betaenomp, "FormDerivedCurlnomp");
 }
+#line 1779
 
 #line 5608
 
