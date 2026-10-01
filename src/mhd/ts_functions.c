@@ -145,6 +145,73 @@ static PetscErrorCode MFD_GetSlotsCoords(DM dmCoord, DM dmCoorda, MFD_Slots * s)
       icrmphimzp[d] = (S).icrmphimzp[d]; icrpphimzp[d] = (S).icrpphimzp[d]; icrmphipzp[d] = (S).icrmphipzp[d]; icrpphipzp[d] = (S).icrpphipzp[d]; \
     } \
   } while (0)
+
+/* Per-cell volume, INT_c(r dphi dr dz). Expressions are verbatim from the
+   residuals' cell loops; do not rearrange them (results must stay bit-identical). */
+static inline PetscScalar MFD_CellVolume(PetscScalar **** arrCoord, PetscInt er, PetscInt ephi, PetscInt ez,
+  const PetscInt N[3], PetscReal dphi,
+  const PetscInt icBrm[3], const PetscInt icBphim[3], const PetscInt icBzm[3],
+  const PetscInt icBrp[3], const PetscInt icBphip[3], const PetscInt icBzp[3]) {
+  PetscScalar cellvolume;
+
+  if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+    cellvolume = dphi * PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
+  } else {
+    cellvolume = PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) *
+      PetscAbsReal(arrCoord[ez][ephi][er][icBphip[1]] - arrCoord[ez][ephi][er][icBphim[1]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
+  }
+  return cellvolume;
+}
+
+/* The 12 edge lengths of one cell, from its vertex coordinates. Expressions are
+   verbatim from the residuals' cell loops; do not rearrange them. */
+static inline void MFD_CellEdgeLengths(PetscScalar **** arrCoorda, PetscInt er, PetscInt ephi, PetscInt ez,
+  const PetscInt N[3], PetscReal dphi,
+  const PetscInt icrmphimzm[3], const PetscInt icrpphimzm[3], const PetscInt icrmphipzm[3], const PetscInt icrpphipzm[3],
+  const PetscInt icrmphimzp[3], const PetscInt icrpphimzp[3], const PetscInt icrmphipzp[3], const PetscInt icrpphipzp[3],
+  PetscScalar * rmzmedgelength, PetscScalar * rmphimedgelength, PetscScalar * rmzpedgelength, PetscScalar * rmphipedgelength,
+  PetscScalar * phimzmedgelength, PetscScalar * phimzpedgelength, PetscScalar * rpphimedgelength, PetscScalar * rpzmedgelength,
+  PetscScalar * phipzmedgelength, PetscScalar * rpzpedgelength, PetscScalar * rpphipedgelength, PetscScalar * phipzpedgelength) {
+  if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+    * rmzmedgelength = dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
+  } else {
+    * rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
+  }
+
+  * rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
+
+  if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+    * rmzpedgelength = dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
+  } else {
+    * rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
+  }
+
+  * rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
+
+  * phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
+
+  * phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
+
+  * rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
+
+  if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+    * rpzmedgelength = dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
+  } else {
+    * rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
+  }
+
+  * phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
+
+  if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
+    * rpzpedgelength = dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
+  } else {
+    * rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
+  }
+
+  * rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
+
+  * phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+}
 #line 20
 
 PetscErrorCode FormIJacobian_BImplicit(TS ts, PetscReal t, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
@@ -399,52 +466,14 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          cellvolume = user -> dphi * PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
-        } else {
-          cellvolume = PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) *
-            PetscAbsReal(arrCoord[ez][ephi][er][icBphip[1]] - arrCoord[ez][ephi][er][icBphim[1]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
-        }
+        cellvolume = MFD_CellVolume(arrCoord, er, ephi, ez, N, user -> dphi, icBrm, icBphim, icBzm, icBrp, icBphip, icBzp);
+#line 3217
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
+          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
+          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
+          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
+#line 3257
 
         /* Set boundary conditions for tau field */
         /* f3(V,EP,tau,B,ni) = (tau - Eboundarycondition) */
@@ -744,45 +773,11 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]); /* front right = rpzp */
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
+          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
+          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
+          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
+#line 3595
 
 
         /* f3(V,EP,tau,B,ni) = tau - derived_mimetic_curl2(B) + (eta/(V_A*B_0)) j_RE; for all inner edges */
@@ -1208,52 +1203,14 @@ PetscErrorCode FormIFunction_InitializeEP(TS ts, PetscReal t, Vec X, Vec Xdot, V
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          cellvolume = user -> dphi * PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
-        } else {
-          cellvolume = PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) *
-            PetscAbsReal(arrCoord[ez][ephi][er][icBphip[1]] - arrCoord[ez][ephi][er][icBphim[1]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
-        }
+        cellvolume = MFD_CellVolume(arrCoord, er, ephi, ez, N, user -> dphi, icBrm, icBphim, icBzm, icBrp, icBphip, icBzp);
+#line 9587
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
+          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
+          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
+          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
+#line 9627
 
         /* Set boundary conditions for tau field */
         /* f3(V,EP,tau,B,ni) = tau */
@@ -1407,45 +1364,11 @@ PetscErrorCode FormIFunction_InitializeEP(TS ts, PetscReal t, Vec X, Vec Xdot, V
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]); /* front right = rpzp */
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
+          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
+          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
+          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
+#line 9819
 
         /* f3(V,EP,tau,B,ni) = tau - derived_mimetic_curl2(B) = tau - primary_mimetic_curl^T (beta_f B)/beta_e2; for all inner edges */
         if (!(er == 0 || ez == 0)) {
@@ -1707,52 +1630,14 @@ PetscErrorCode FormIFunction_InitializeEP_halo(TS ts, PetscReal t, Vec X, Vec Xd
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          cellvolume = user -> dphi * PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
-        } else {
-          cellvolume = PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) *
-            PetscAbsReal(arrCoord[ez][ephi][er][icBphip[1]] - arrCoord[ez][ephi][er][icBphim[1]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
-        }
+        cellvolume = MFD_CellVolume(arrCoord, er, ephi, ez, N, user -> dphi, icBrm, icBphim, icBzm, icBrp, icBphip, icBzp);
+#line 10147
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
+          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
+          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
+          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
+#line 10187
 
         /* Set boundary conditions for tau field */
         /* f3(V,EP,tau,B,ni) = tau */
@@ -1906,45 +1791,11 @@ PetscErrorCode FormIFunction_InitializeEP_halo(TS ts, PetscReal t, Vec X, Vec Xd
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]); /* front right = rpzp */
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
+          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
+          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
+          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
+#line 10379
 
         /* f3(V,EP,tau,B,ni) = tau - (1/(L0*V_A)) * derived_mimetic_curl(B) = tau - derived_mimetic_curl2(B) = tau - (1/(L0*V_A)) * primary_mimetic_curl^T (beta_f B)/beta_e ≡ tau - (1/(L0*V_A)) * M_e^{-1} Curl^T M_f B; for all inner edges not inside the wall
            f3(V,EP,tau,B,ni) = tau - primary_mimetic_grad(EP) - (1/(L0*V_A)) * der_mim_curl_etaperp(B)_perp - (1/(L0*V_A)) * der_mim_curl_etaphi(B)_phi = tau - primary_mimetic_grad(EP) - der_mim_curl2_etaperp(B)_perp - der_mim_curl2_etaphi(B)_phi ; on all edges inside the wall */
@@ -2315,52 +2166,14 @@ PetscErrorCode FormIFunction_newequilibrium_Vperp(TS ts, PetscReal t, Vec X, Vec
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          cellvolume = user -> dphi * PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
-        } else {
-          cellvolume = PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) *
-            PetscAbsReal(arrCoord[ez][ephi][er][icBphip[1]] - arrCoord[ez][ephi][er][icBphim[1]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
-        }
+        cellvolume = MFD_CellVolume(arrCoord, er, ephi, ez, N, user -> dphi, icBrm, icBphim, icBzm, icBrp, icBphip, icBzp);
+#line 12397
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
+          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
+          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
+          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
+#line 12437
 
         /* Set boundary conditions for tau field */
         /* f3(V,EP,tau,B,ni) = (tau - Eboundarycondition) */
@@ -2599,45 +2412,11 @@ PetscErrorCode FormIFunction_newequilibrium_Vperp(TS ts, PetscReal t, Vec X, Vec
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]); /* front right = rpzp */
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
+          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
+          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
+          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
+#line 12714
 
         /* f3(V,EP,tau,B,ni) = tau; for all inner edges */
         if (!(er == 0 || ez == 0)) {
@@ -3011,52 +2790,14 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          cellvolume = user -> dphi * PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
-        } else {
-          cellvolume = PetscAbsReal(arrCoord[ez][ephi][er][icBzp[2]] - arrCoord[ez][ephi][er][icBzm[2]]) *
-            PetscAbsReal(arrCoord[ez][ephi][er][icBphip[1]] - arrCoord[ez][ephi][er][icBphim[1]]) * PetscAbsReal(PetscSqr(arrCoord[ez][ephi][er][icBrp[0]]) - PetscSqr(arrCoord[ez][ephi][er][icBrm[0]])) / 2.0; /* INT_c(r dphi dr dz) */
-        }
+        cellvolume = MFD_CellVolume(arrCoord, er, ephi, ez, N, user -> dphi, icBrm, icBphim, icBzm, icBrp, icBphip, icBzp);
+#line 13988
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzm[0]];
-        } else {
-          rmzmedgelength = arrCoorda[ez][ephi][er][icrmphimzm[0]] * (arrCoorda[ez][ephi][er][icrmphipzm[1]] - arrCoorda[ez][ephi][er][icrmphimzm[1]]); /* back left = rmzm */
-        }
-
-        rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
-        phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
+        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
+          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
+          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
+          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
+#line 14028
 
         /* f1(V,E,B,ni) = 0; on all vertices
 

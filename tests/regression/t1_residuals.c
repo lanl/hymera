@@ -18,6 +18,7 @@
  *   FormIFunction_newequilibrium_Vperp   ts_functions  initial-condition relaxation
  *   FormIFunction_InitializeEP           ts_functions  initial-condition EP solve
  *   FormIFunction_InitializeEP_halo      ts_functions  initial-condition EP solve
+ *   FormRHSFunction_BImplicit            mhd.c         production time step (RHS)
  *
  * State: X and Xdot are filled with fixed asymmetric, nowhere-zero patterns, so
  * that reading a wrong slot, neighbour or component changes the result. The
@@ -224,6 +225,24 @@ int main(int argc, char **argv) {
       PetscCall(VecGetArrayRead(F, &f));
       for (PetscInt i = 0; i < n; ++i) {
         printf("%s %d %a\n", RESIDUALS[k].name, (int)i, f[i]);
+        ++count;
+      }
+      PetscCall(VecRestoreArrayRead(F, &f));
+      PetscCall(VecDestroy(&F));
+    }
+
+    /* The RHS half of the production split, registered with TSSetRHSFunction. */
+    {
+      Vec F;
+      PetscCall(DMCreateGlobalVector(u.da, &F));
+      PetscCall(VecZeroEntries(F));
+      PetscCall(FormRHSFunction_BImplicit(ts, 0.0, X, F, &u));
+      PetscInt           n;
+      const PetscScalar *f;
+      PetscCall(VecGetSize(F, &n));
+      PetscCall(VecGetArrayRead(F, &f));
+      for (PetscInt i = 0; i < n; ++i) {
+        printf("FormRHSFunction_BImplicit %d %a\n", (int)i, f[i]);
         ++count;
       }
       PetscCall(VecRestoreArrayRead(F, &f));
