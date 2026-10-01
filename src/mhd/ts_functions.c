@@ -18,6 +18,135 @@
 #include "mass_matrix_coefficients.h"
 #include "mimetic_operators.h"
 
+/* DMStag location-slot indices shared by the FormIFunction_* residuals.
+   Member names match the residuals' local variables one-for-one. */
+typedef struct {
+  /* solution DM (da): vertex (4 components), edge, face, element */
+  PetscInt ivVrmphimzm[4], ivVrpphimzm[4], ivVrmphipzm[4], ivVrpphipzm[4];
+  PetscInt ivVrmphimzp[4], ivVrpphimzp[4], ivVrmphipzp[4], ivVrpphipzp[4];
+  PetscInt ivErmzm, ivEphimzm, ivErpzm, ivEphipzm;
+  PetscInt ivErmphim, ivErpphim, ivErmphip, ivErpphip;
+  PetscInt ivEphimzp, ivErmzp, ivErpzp, ivEphipzp;
+  PetscInt ivBrm, ivBphim, ivBzm, ivBrp, ivBphip, ivBzp;
+  PetscInt ivn;
+  /* coordinate DMs (dmCoord: faces/edges; dmCoorda: element/vertices), 3 components */
+  PetscInt icp[3];
+  PetscInt icBrm[3], icBphim[3], icBzm[3], icBrp[3], icBphip[3], icBzp[3];
+  PetscInt icErmzm[3], icEphimzm[3], icErpzm[3], icEphipzm[3];
+  PetscInt icErmphim[3], icErpphim[3], icErmphip[3], icErpphip[3];
+  PetscInt icEphimzp[3], icErmzp[3], icErpzp[3], icEphipzp[3];
+  PetscInt icrmphimzm[3], icrpphimzm[3], icrmphipzm[3], icrpphipzm[3];
+  PetscInt icrmphimzp[3], icrpphimzp[3], icrmphipzp[3], icrpphipzp[3];
+} MFD_Slots;
+
+static PetscErrorCode MFD_GetSlotsSolution(DM da, MFD_Slots * s) {
+  PetscInt d;
+
+  PetscFunctionBeginUser;
+  for (d = 0; d < 4; ++d) {
+    /* Vertex locations */
+    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_LEFT, d, & s->ivVrmphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_RIGHT, d, & s->ivVrpphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_UP_LEFT, d, & s->ivVrmphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, BACK_UP_RIGHT, d, & s->ivVrpphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_LEFT, d, & s->ivVrmphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_RIGHT, d, & s->ivVrpphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_LEFT, d, & s->ivVrmphipzp[d]));
+    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_RIGHT, d, & s->ivVrpphipzp[d]));
+  }
+  /* Edge locations */
+  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & s->ivErmzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & s->ivEphimzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & s->ivErpzm));
+  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & s->ivEphipzm));
+  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & s->ivErmphim));
+  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & s->ivErpphim));
+  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & s->ivErmphip));
+  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & s->ivErpphip));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & s->ivEphimzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & s->ivErmzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & s->ivErpzp));
+  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & s->ivEphipzp));
+  /* Face locations */
+  PetscCall(DMStagGetLocationSlot(da, LEFT, 0, & s->ivBrm));
+  PetscCall(DMStagGetLocationSlot(da, DOWN, 0, & s->ivBphim));
+  PetscCall(DMStagGetLocationSlot(da, BACK, 0, & s->ivBzm));
+  PetscCall(DMStagGetLocationSlot(da, RIGHT, 0, & s->ivBrp));
+  PetscCall(DMStagGetLocationSlot(da, UP, 0, & s->ivBphip));
+  PetscCall(DMStagGetLocationSlot(da, FRONT, 0, & s->ivBzp));
+  /* Cell locations */
+  PetscCall(DMStagGetLocationSlot(da, ELEMENT, 0, & s->ivn));
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+static PetscErrorCode MFD_GetSlotsCoords(DM dmCoord, DM dmCoorda, MFD_Slots * s) {
+  PetscInt d;
+
+  PetscFunctionBeginUser;
+  for (d = 0; d < 3; ++d) {
+    /* Element coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & s->icp[d]));
+    /* Face coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoord, LEFT, d, & s->icBrm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN, d, & s->icBphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK, d, & s->icBzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, RIGHT, d, & s->icBrp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP, d, & s->icBphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT, d, & s->icBzp[d]));
+    /* Edge coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_LEFT, d, & s->icErmzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_DOWN, d, & s->icEphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_RIGHT, d, & s->icErpzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_UP, d, & s->icEphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_LEFT, d, & s->icErmphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_RIGHT, d, & s->icErpphim[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP_LEFT, d, & s->icErmphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, UP_RIGHT, d, & s->icErpphip[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_DOWN, d, & s->icEphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_LEFT, d, & s->icErmzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_RIGHT, d, & s->icErpzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & s->icEphipzp[d]));
+    /* Vertex coordinates */
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_LEFT, d, & s->icrmphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_RIGHT, d, & s->icrpphimzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_LEFT, d, & s->icrmphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_RIGHT, d, & s->icrpphipzm[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_LEFT, d, & s->icrmphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_RIGHT, d, & s->icrpphimzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_LEFT, d, & s->icrmphipzp[d]));
+    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_RIGHT, d, & s->icrpphipzp[d]));
+  }
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+/* Copy every slot index from an MFD_Slots value into the identically named
+   locals of the calling residual. Uses the caller's loop index `d`. */
+#define MFD_UNPACK_SLOTS(S) do { \
+    for (d = 0; d < 4; ++d) { \
+      ivVrmphimzm[d] = (S).ivVrmphimzm[d]; ivVrpphimzm[d] = (S).ivVrpphimzm[d]; \
+      ivVrmphipzm[d] = (S).ivVrmphipzm[d]; ivVrpphipzm[d] = (S).ivVrpphipzm[d]; \
+      ivVrmphimzp[d] = (S).ivVrmphimzp[d]; ivVrpphimzp[d] = (S).ivVrpphimzp[d]; \
+      ivVrmphipzp[d] = (S).ivVrmphipzp[d]; ivVrpphipzp[d] = (S).ivVrpphipzp[d]; \
+    } \
+    ivErmzm = (S).ivErmzm; ivEphimzm = (S).ivEphimzm; ivErpzm = (S).ivErpzm; ivEphipzm = (S).ivEphipzm; \
+    ivErmphim = (S).ivErmphim; ivErpphim = (S).ivErpphim; ivErmphip = (S).ivErmphip; ivErpphip = (S).ivErpphip; \
+    ivEphimzp = (S).ivEphimzp; ivErmzp = (S).ivErmzp; ivErpzp = (S).ivErpzp; ivEphipzp = (S).ivEphipzp; \
+    ivBrm = (S).ivBrm; ivBphim = (S).ivBphim; ivBzm = (S).ivBzm; \
+    ivBrp = (S).ivBrp; ivBphip = (S).ivBphip; ivBzp = (S).ivBzp; \
+    ivn = (S).ivn; \
+    for (d = 0; d < 3; ++d) { \
+      icp[d] = (S).icp[d]; \
+      icBrm[d] = (S).icBrm[d]; icBphim[d] = (S).icBphim[d]; icBzm[d] = (S).icBzm[d]; \
+      icBrp[d] = (S).icBrp[d]; icBphip[d] = (S).icBphip[d]; icBzp[d] = (S).icBzp[d]; \
+      icErmzm[d] = (S).icErmzm[d]; icEphimzm[d] = (S).icEphimzm[d]; icErpzm[d] = (S).icErpzm[d]; icEphipzm[d] = (S).icEphipzm[d]; \
+      icErmphim[d] = (S).icErmphim[d]; icErpphim[d] = (S).icErpphim[d]; icErmphip[d] = (S).icErmphip[d]; icErpphip[d] = (S).icErpphip[d]; \
+      icEphimzp[d] = (S).icEphimzp[d]; icErmzp[d] = (S).icErmzp[d]; icErpzp[d] = (S).icErpzp[d]; icEphipzp[d] = (S).icEphipzp[d]; \
+      icrmphimzm[d] = (S).icrmphimzm[d]; icrpphimzm[d] = (S).icrpphimzm[d]; icrmphipzm[d] = (S).icrmphipzm[d]; icrpphipzm[d] = (S).icrpphipzm[d]; \
+      icrmphimzp[d] = (S).icrmphimzp[d]; icrpphimzp[d] = (S).icrpphimzp[d]; icrmphipzp[d] = (S).icrmphipzp[d]; icrpphipzp[d] = (S).icrpphipzp[d]; \
+    } \
+  } while (0)
+#line 20
+
 PetscErrorCode FormIJacobian_BImplicit(TS ts, PetscReal t, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
   PetscFunctionBeginUser;
   PetscFunctionReturn(PETSC_SUCCESS);
@@ -88,79 +217,18 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
   PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
 
-  for (d = 0; d < 4; ++d) {
-    /* Vertex locations */
-    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_LEFT, d, & ivVrmphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_RIGHT, d, & ivVrpphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_UP_LEFT, d, & ivVrmphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_UP_RIGHT, d, & ivVrpphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_LEFT, d, & ivVrmphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_RIGHT, d, & ivVrpphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_LEFT, d, & ivVrmphipzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_RIGHT, d, & ivVrpphipzp[d]));
-  }
-  /* Edge locations */
-  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim));
-  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip));
-  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp));
-  /* Face locations */
-  PetscCall(DMStagGetLocationSlot(da, LEFT, 0, & ivBrm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN, 0, & ivBphim));
-  PetscCall(DMStagGetLocationSlot(da, BACK, 0, & ivBzm));
-  PetscCall(DMStagGetLocationSlot(da, RIGHT, 0, & ivBrp));
-  PetscCall(DMStagGetLocationSlot(da, UP, 0, & ivBphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT, 0, & ivBzp));
-  /* Cell locations */
-  PetscCall(DMStagGetLocationSlot(da, ELEMENT, 0, & ivn));
-
+  MFD_Slots S;
+  PetscCall(MFD_GetSlotsSolution(da, & S));
+#line 3002
   PetscCall(DMGetCoordinateDM(da, & dmCoord));
   PetscCall(DMGetCoordinatesLocal(da, & coordLocal));
   PetscCall(DMStagVecGetArrayRead(dmCoord, coordLocal, & arrCoord));
   PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
   PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
   PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoorda));
-  for (d = 0; d < 3; ++d) {
-    /* Element coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]));
-    /* Face coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, LEFT, d, & icBrm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN, d, & icBphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK, d, & icBzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, RIGHT, d, & icBrp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP, d, & icBphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT, d, & icBzp[d]));
-    /* Edge coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_LEFT, d, & icErmzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_DOWN, d, & icEphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_RIGHT, d, & icErpzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_UP, d, & icEphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_LEFT, d, & icErmphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_RIGHT, d, & icErpphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_LEFT, d, & icErmphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_RIGHT, d, & icErpphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_DOWN, d, & icEphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_LEFT, d, & icErmzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_RIGHT, d, & icErpzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & icEphipzp[d]));
-    /* Vertex coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_LEFT, d, & icrmphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_RIGHT, d, & icrpphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_LEFT, d, & icrmphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_RIGHT, d, & icrpphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_LEFT, d, & icrmphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_RIGHT, d, & icrpphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_LEFT, d, & icrmphipzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_RIGHT, d, & icrpphipzp[d]));
-  }
+  PetscCall(MFD_GetSlotsCoords(dmCoord, dmCoorda, & S));
+  MFD_UNPACK_SLOTS(S);
+#line 3041
   /* Compute the source term potential for time-dependent manufactured solution */
   PetscCall(DMCreateGlobalVector(da, & potential));
   FormSourceTermPotential(ts, t, potential, user);
@@ -1075,79 +1143,18 @@ PetscErrorCode FormIFunction_InitializeEP(TS ts, PetscReal t, Vec X, Vec Xdot, V
   PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
 
-  for (d = 0; d < 4; ++d) {
-    /* Vertex locations */
-    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_LEFT, d, & ivVrmphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_RIGHT, d, & ivVrpphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_UP_LEFT, d, & ivVrmphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_UP_RIGHT, d, & ivVrpphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_LEFT, d, & ivVrmphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_RIGHT, d, & ivVrpphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_LEFT, d, & ivVrmphipzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_RIGHT, d, & ivVrpphipzp[d]));
-  }
-  /* Edge locations */
-  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim));
-  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip));
-  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp));
-  /* Face locations */
-  PetscCall(DMStagGetLocationSlot(da, LEFT, 0, & ivBrm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN, 0, & ivBphim));
-  PetscCall(DMStagGetLocationSlot(da, BACK, 0, & ivBzm));
-  PetscCall(DMStagGetLocationSlot(da, RIGHT, 0, & ivBrp));
-  PetscCall(DMStagGetLocationSlot(da, UP, 0, & ivBphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT, 0, & ivBzp));
-  /* Cell locations */
-  PetscCall(DMStagGetLocationSlot(da, ELEMENT, 0, & ivn));
-
+  MFD_Slots S;
+  PetscCall(MFD_GetSlotsSolution(da, & S));
+#line 9489
   PetscCall(DMGetCoordinateDM(da, & dmCoord));
   PetscCall(DMGetCoordinatesLocal(da, & coordLocal));
   PetscCall(DMStagVecGetArrayRead(dmCoord, coordLocal, & arrCoord));
   PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
   PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
   PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoorda));
-  for (d = 0; d < 3; ++d) {
-    /* Element coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]));
-    /* Face coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, LEFT, d, & icBrm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN, d, & icBphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK, d, & icBzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, RIGHT, d, & icBrp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP, d, & icBphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT, d, & icBzp[d]));
-    /* Edge coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_LEFT, d, & icErmzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_DOWN, d, & icEphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_RIGHT, d, & icErpzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_UP, d, & icEphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_LEFT, d, & icErmphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_RIGHT, d, & icErpphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_LEFT, d, & icErmphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_RIGHT, d, & icErpphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_DOWN, d, & icEphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_LEFT, d, & icErmzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_RIGHT, d, & icErpzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & icEphipzp[d]));
-    /* Vertex coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_LEFT, d, & icrmphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_RIGHT, d, & icrpphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_LEFT, d, & icrmphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_RIGHT, d, & icrpphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_LEFT, d, & icrmphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_RIGHT, d, & icrpphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_LEFT, d, & icrmphipzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_RIGHT, d, & icrpphipzp[d]));
-  }
+  PetscCall(MFD_GetSlotsCoords(dmCoord, dmCoorda, & S));
+  MFD_UNPACK_SLOTS(S);
+#line 9528
   /* Compute the source term potential for time-dependent manufactured solution */
   PetscCall(DMCreateGlobalVector(da, & potential));
   FormSourceTermPotential(ts, t, potential, user);
@@ -1632,79 +1639,18 @@ PetscErrorCode FormIFunction_InitializeEP_halo(TS ts, PetscReal t, Vec X, Vec Xd
   PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
 
-  for (d = 0; d < 4; ++d) {
-    /* Vertex locations */
-    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_LEFT, d, & ivVrmphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_RIGHT, d, & ivVrpphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_UP_LEFT, d, & ivVrmphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_UP_RIGHT, d, & ivVrpphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_LEFT, d, & ivVrmphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_RIGHT, d, & ivVrpphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_LEFT, d, & ivVrmphipzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_RIGHT, d, & ivVrpphipzp[d]));
-  }
-  /* Edge locations */
-  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim));
-  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip));
-  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp));
-  /* Face locations */
-  PetscCall(DMStagGetLocationSlot(da, LEFT, 0, & ivBrm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN, 0, & ivBphim));
-  PetscCall(DMStagGetLocationSlot(da, BACK, 0, & ivBzm));
-  PetscCall(DMStagGetLocationSlot(da, RIGHT, 0, & ivBrp));
-  PetscCall(DMStagGetLocationSlot(da, UP, 0, & ivBphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT, 0, & ivBzp));
-  /* Cell locations */
-  PetscCall(DMStagGetLocationSlot(da, ELEMENT, 0, & ivn));
-
+  MFD_Slots S;
+  PetscCall(MFD_GetSlotsSolution(da, & S));
+#line 10046
   PetscCall(DMGetCoordinateDM(da, & dmCoord));
   PetscCall(DMGetCoordinatesLocal(da, & coordLocal));
   PetscCall(DMStagVecGetArrayRead(dmCoord, coordLocal, & arrCoord));
   PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
   PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
   PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoorda));
-  for (d = 0; d < 3; ++d) {
-    /* Element coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]));
-    /* Face coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, LEFT, d, & icBrm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN, d, & icBphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK, d, & icBzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, RIGHT, d, & icBrp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP, d, & icBphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT, d, & icBzp[d]));
-    /* Edge coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_LEFT, d, & icErmzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_DOWN, d, & icEphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_RIGHT, d, & icErpzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_UP, d, & icEphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_LEFT, d, & icErmphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_RIGHT, d, & icErpphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_LEFT, d, & icErmphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_RIGHT, d, & icErpphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_DOWN, d, & icEphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_LEFT, d, & icErmzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_RIGHT, d, & icErpzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & icEphipzp[d]));
-    /* Vertex coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_LEFT, d, & icrmphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_RIGHT, d, & icrpphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_LEFT, d, & icrmphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_RIGHT, d, & icrpphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_LEFT, d, & icrmphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_RIGHT, d, & icrpphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_LEFT, d, & icrmphipzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_RIGHT, d, & icrpphipzp[d]));
-  }
+  PetscCall(MFD_GetSlotsCoords(dmCoord, dmCoorda, & S));
+  MFD_UNPACK_SLOTS(S);
+#line 10085
   /* Compute the source term potential for time-dependent manufactured solution */
   PetscCall(DMCreateGlobalVector(da, & potential));
   FormSourceTermPotential(ts, t, potential, user);
@@ -2199,79 +2145,18 @@ PetscErrorCode FormIFunction_newequilibrium_Vperp(TS ts, PetscReal t, Vec X, Vec
   PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
   PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
 
-  for (d = 0; d < 4; ++d) {
-    /* Vertex locations */
-    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_LEFT, d, & ivVrmphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_DOWN_RIGHT, d, & ivVrpphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_UP_LEFT, d, & ivVrmphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, BACK_UP_RIGHT, d, & ivVrpphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_LEFT, d, & ivVrmphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN_RIGHT, d, & ivVrpphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_LEFT, d, & ivVrmphipzp[d]));
-    PetscCall(DMStagGetLocationSlot(da, FRONT_UP_RIGHT, d, & ivVrpphipzp[d]));
-  }
-  /* Edge locations */
-  PetscCall(DMStagGetLocationSlot(da, BACK_LEFT, 0, & ivErmzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_DOWN, 0, & ivEphimzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_RIGHT, 0, & ivErpzm));
-  PetscCall(DMStagGetLocationSlot(da, BACK_UP, 0, & ivEphipzm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_LEFT, 0, & ivErmphim));
-  PetscCall(DMStagGetLocationSlot(da, DOWN_RIGHT, 0, & ivErpphim));
-  PetscCall(DMStagGetLocationSlot(da, UP_LEFT, 0, & ivErmphip));
-  PetscCall(DMStagGetLocationSlot(da, UP_RIGHT, 0, & ivErpphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_DOWN, 0, & ivEphimzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_LEFT, 0, & ivErmzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_RIGHT, 0, & ivErpzp));
-  PetscCall(DMStagGetLocationSlot(da, FRONT_UP, 0, & ivEphipzp));
-  /* Face locations */
-  PetscCall(DMStagGetLocationSlot(da, LEFT, 0, & ivBrm));
-  PetscCall(DMStagGetLocationSlot(da, DOWN, 0, & ivBphim));
-  PetscCall(DMStagGetLocationSlot(da, BACK, 0, & ivBzm));
-  PetscCall(DMStagGetLocationSlot(da, RIGHT, 0, & ivBrp));
-  PetscCall(DMStagGetLocationSlot(da, UP, 0, & ivBphip));
-  PetscCall(DMStagGetLocationSlot(da, FRONT, 0, & ivBzp));
-  /* Cell locations */
-  PetscCall(DMStagGetLocationSlot(da, ELEMENT, 0, & ivn));
-
+  MFD_Slots S;
+  PetscCall(MFD_GetSlotsSolution(da, & S));
+#line 12194
   PetscCall(DMGetCoordinateDM(da, & dmCoord));
   PetscCall(DMGetCoordinatesLocal(da, & coordLocal));
   PetscCall(DMStagVecGetArrayRead(dmCoord, coordLocal, & arrCoord));
   PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
   PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
   PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoorda));
-  for (d = 0; d < 3; ++d) {
-    /* Element coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, ELEMENT, d, & icp[d]));
-    /* Face coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, LEFT, d, & icBrm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN, d, & icBphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK, d, & icBzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, RIGHT, d, & icBrp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP, d, & icBphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT, d, & icBzp[d]));
-    /* Edge coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_LEFT, d, & icErmzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_DOWN, d, & icEphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_RIGHT, d, & icErpzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, BACK_UP, d, & icEphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_LEFT, d, & icErmphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, DOWN_RIGHT, d, & icErpphim[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_LEFT, d, & icErmphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, UP_RIGHT, d, & icErpphip[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_DOWN, d, & icEphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_LEFT, d, & icErmzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_RIGHT, d, & icErpzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & icEphipzp[d]));
-    /* Vertex coordinates */
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_LEFT, d, & icrmphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_DOWN_RIGHT, d, & icrpphimzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_LEFT, d, & icrmphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, BACK_UP_RIGHT, d, & icrpphipzm[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_LEFT, d, & icrmphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_DOWN_RIGHT, d, & icrpphimzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_LEFT, d, & icrmphipzp[d]));
-    PetscCall(DMStagGetLocationSlot(dmCoorda, FRONT_UP_RIGHT, d, & icrpphipzp[d]));
-  }
+  PetscCall(MFD_GetSlotsCoords(dmCoord, dmCoorda, & S));
+  MFD_UNPACK_SLOTS(S);
+#line 12233
   /* Compute the source term potential for time-dependent manufactured solution */
   PetscCall(DMCreateGlobalVector(da, & potential));
   FormSourceTermPotential(ts, t, potential, user);
