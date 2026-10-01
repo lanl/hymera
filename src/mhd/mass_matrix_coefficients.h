@@ -28,6 +28,9 @@
 #include <unistd.h>
 #include <petsc/private/dmstagimpl.h>
 
+/* A per-cell mass-matrix coefficient: alphaec, alphaec2, alphaecnores, ... */
+typedef PetscScalar (*mfd_cell_coeff)(PetscInt, PetscInt, PetscInt, void *);
+
 PetscScalar betaf(PetscInt,PetscInt,PetscInt,DMStagStencilLocation,void*);
 PetscScalar betaf_wmp(PetscInt,PetscInt,PetscInt,DMStagStencilLocation,void*);
 PetscScalar betae(PetscInt,PetscInt,PetscInt,DMStagStencilLocation,void*);
