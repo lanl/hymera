@@ -75,3 +75,13 @@ add_test(NAME mhd_t0_coefficients
          COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/regression/run_t0.sh
                  $<TARGET_FILE:t0_coefficients>)
 set_tests_properties(mhd_t0_coefficients PROPERTIES LABELS "tier0" TIMEOUT 120)
+
+# Tier 0, second test: the mimetic operators that consume the coefficients above.
+# Applies each live Vec-to-Vec operator to a fixed input on the production DOF
+# layout and hashes the exact output. Gate for operator-level refactors.
+add_executable(t0_operators ${CMAKE_CURRENT_SOURCE_DIR}/regression/t0_operators.c)
+target_link_libraries(t0_operators PRIVATE mhd_core MPI::MPI_C m)
+add_test(NAME mhd_t0_operators
+         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/regression/run_t0.sh
+                 $<TARGET_FILE:t0_operators> --baseline t0_operators)
+set_tests_properties(mhd_t0_operators PROPERTIES LABELS "tier0" TIMEOUT 300)

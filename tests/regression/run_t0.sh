@@ -9,6 +9,8 @@
 #   run_t0.sh <t0_coefficients-binary> --update   record a new baseline
 #   run_t0.sh <t0_coefficients-binary> --keep F   also keep the full output in F,
 #                                                 to diff against another revision
+#   run_t0.sh <binary> --baseline NAME            use baselines/NAME.sha256
+#                                                 (default t0_coefficients)
 #
 # A hash mismatch says only that something changed. To see what, run --keep on
 # both revisions and diff the two files: each line names the function, the cell
@@ -19,16 +21,18 @@ BIN="${1:?usage: run_t0.sh <t0_coefficients> [--update|--keep FILE]}"
 shift
 MODE=check
 KEEP=""
+NAME=t0_coefficients
 while [ $# -gt 0 ]; do
   case "$1" in
     --update) MODE=update; shift ;;
     --keep)   KEEP="$2"; shift 2 ;;
+    --baseline) NAME="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASELINE="$HERE/baselines/t0_coefficients.sha256"
+BASELINE="$HERE/baselines/${NAME}.sha256"
 
 OUT="${KEEP:-$(mktemp)}"
 [ -n "$KEEP" ] || trap 'rm -f "$OUT"' EXIT
@@ -48,11 +52,11 @@ fi
 WANT="$(awk '{print $1}' "$BASELINE")"
 
 if [ "$HASH" = "$WANT" ]; then
-  echo "PASS: coefficients bit-identical to baseline ($LINES evaluations)"
+  echo "PASS: $NAME bit-identical to baseline ($LINES lines)"
   exit 0
 fi
 
-echo "FAIL: coefficient output changed"
+echo "FAIL: $NAME output changed"
 echo "  baseline: $WANT"
 echo "  now:      $HASH"
 echo "  rerun both revisions with --keep and diff the outputs to localize it"

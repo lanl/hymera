@@ -2313,7 +2313,11 @@ PetscScalar alphac(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   return alpha;
 }
 
-PetscScalar rese(PetscInt er, PetscInt ephi, PetscInt ez, DMStagStencilLocation loc, void * ptr) {
+/* Edge value of a cell quantity: the arithmetic mean of `cellfn` over the 1, 2
+ * or 4 cells sharing the edge. Same neighbour ladder as betae_sum, but averaged
+ * (0.5 and 0.25 weights) rather than summed. rese and condu, formerly two
+ * identical copies differing only in the cell function, use it. */
+static PetscScalar edge_average(PetscInt er, PetscInt ephi, PetscInt ez, DMStagStencilLocation loc, void * ptr, mfd_cell_coeff cellfn, const char * name) {
   User * user = (User * ) ptr;
   PetscInt startr, startphi, startz, nr, nphi, nz, N[3];
   PetscScalar beta = 0;
@@ -2330,188 +2334,193 @@ PetscScalar rese(PetscInt er, PetscInt ephi, PetscInt ez, DMStagStencilLocation 
   if (loc == DOWN_LEFT || loc == DOWN_RIGHT || loc == UP_LEFT || loc == UP_RIGHT) {
     if (!(user -> phibtype)) {
       if ((er == 0 && ephi == 0 && loc == DOWN_LEFT) || (er == N[0] - 1 && ephi == 0 && loc == DOWN_RIGHT) || (er == 0 && ephi == N[1] - 1 && loc == UP_LEFT) || (er == N[0] - 1 && ephi == N[1] - 1 && loc == UP_RIGHT)) {
-        beta = resec(er, ephi, ez, user);
+        beta = cellfn(er, ephi, ez, user);
       } /* Only 1 cell connected to the edge */
       else if (ephi == 0 && loc == DOWN_LEFT) {
-        beta = 0.5 * (resec(er - 1, ephi, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er - 1, ephi, ez, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (er == 0 && loc == DOWN_LEFT) {
-        beta = 0.5 * (resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (er == N[0] - 1 && loc == DOWN_RIGHT) {
-        beta = 0.5 * (resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (ephi == 0 && loc == DOWN_RIGHT) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er + 1, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er + 1, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (er == 0 && loc == UP_LEFT) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez, user));
       } /* 2 cells sharing the edge */
       else if (ephi == N[1] - 1 && loc == UP_LEFT) {
-        beta = 0.5 * (resec(er - 1, ephi, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er - 1, ephi, ez, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (er == N[0] - 1 && loc == UP_RIGHT) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez, user));
       } /* 2 cells sharing the edge */
       else if (ephi == N[1] - 1 && loc == UP_RIGHT) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er + 1, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er + 1, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (loc == DOWN_LEFT) {
-        beta = 0.25 * (resec(er - 1, ephi - 1, ez, user) + resec(er - 1, ephi, ez, user) + resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.25 * (cellfn(er - 1, ephi - 1, ez, user) + cellfn(er - 1, ephi, ez, user) + cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 4 cells sharing the edge */
       else if (loc == DOWN_RIGHT) {
-        beta = 0.25 * (resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user) + resec(er + 1, ephi - 1, ez, user) + resec(er + 1, ephi, ez, user));
+        beta = 0.25 * (cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user) + cellfn(er + 1, ephi - 1, ez, user) + cellfn(er + 1, ephi, ez, user));
       } /* 4 cells sharing the edge */
       else if (loc == UP_LEFT) {
-        beta = 0.25 * (resec(er - 1, ephi + 1, ez, user) + resec(er - 1, ephi, ez, user) + resec(er, ephi + 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.25 * (cellfn(er - 1, ephi + 1, ez, user) + cellfn(er - 1, ephi, ez, user) + cellfn(er, ephi + 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 4 cells sharing the edge */
       else {
-        beta = 0.25 * (resec(er, ephi + 1, ez, user) + resec(er, ephi, ez, user) + resec(er + 1, ephi + 1, ez, user) + resec(er + 1, ephi, ez, user));
+        beta = 0.25 * (cellfn(er, ephi + 1, ez, user) + cellfn(er, ephi, ez, user) + cellfn(er + 1, ephi + 1, ez, user) + cellfn(er + 1, ephi, ez, user));
       } /* 4 cells sharing the edge */
     } else {
       if (er == 0 && loc == DOWN_LEFT) {
-        beta = 0.5 * (resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (er == N[0] - 1 && loc == DOWN_RIGHT) {
-        beta = 0.5 * (resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (er == 0 && loc == UP_LEFT) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez, user));
       } /* 2 cells sharing the edge */
       else if (er == N[0] - 1 && loc == UP_RIGHT) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez, user));
       } /* 2 cells sharing the edge */
       else if (loc == DOWN_LEFT) {
-        beta = 0.25 * (resec(er - 1, ephi - 1, ez, user) + resec(er - 1, ephi, ez, user) + resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.25 * (cellfn(er - 1, ephi - 1, ez, user) + cellfn(er - 1, ephi, ez, user) + cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 4 cells sharing the edge */
       else if (loc == DOWN_RIGHT) {
-        beta = 0.25 * (resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user) + resec(er + 1, ephi - 1, ez, user) + resec(er + 1, ephi, ez, user));
+        beta = 0.25 * (cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user) + cellfn(er + 1, ephi - 1, ez, user) + cellfn(er + 1, ephi, ez, user));
       } /* 4 cells sharing the edge */
       else if (loc == UP_LEFT) {
-        beta = 0.25 * (resec(er - 1, ephi + 1, ez, user) + resec(er - 1, ephi, ez, user) + resec(er, ephi + 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.25 * (cellfn(er - 1, ephi + 1, ez, user) + cellfn(er - 1, ephi, ez, user) + cellfn(er, ephi + 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 4 cells sharing the edge */
       else {
-        beta = 0.25 * (resec(er, ephi + 1, ez, user) + resec(er, ephi, ez, user) + resec(er + 1, ephi + 1, ez, user) + resec(er + 1, ephi, ez, user));
+        beta = 0.25 * (cellfn(er, ephi + 1, ez, user) + cellfn(er, ephi, ez, user) + cellfn(er + 1, ephi + 1, ez, user) + cellfn(er + 1, ephi, ez, user));
       } /* 4 cells sharing the edge */
     }
   }
   /* Edges in phi direction */
   else if (loc == BACK_LEFT || loc == BACK_RIGHT || loc == FRONT_LEFT || loc == FRONT_RIGHT) {
     if ((er == 0 && ez == 0 && loc == BACK_LEFT) || (er == N[0] - 1 && ez == 0 && loc == BACK_RIGHT) || (er == 0 && ez == N[2] - 1 && loc == FRONT_LEFT) || (er == N[0] - 1 && ez == N[2] - 1 && loc == FRONT_RIGHT)) {
-      beta = resec(er, ephi, ez, user);
+      beta = cellfn(er, ephi, ez, user);
     } /* Only 1 cell connected to the edge */
     else if (ez == 0 && loc == BACK_LEFT) {
-      beta = 0.5 * (resec(er - 1, ephi, ez, user) + resec(er, ephi, ez, user));
+      beta = 0.5 * (cellfn(er - 1, ephi, ez, user) + cellfn(er, ephi, ez, user));
     } /* 2 cells sharing the edge */
     else if (er == 0 && loc == BACK_LEFT) {
-      beta = 0.5 * (resec(er, ephi, ez - 1, user) + resec(er, ephi, ez, user));
+      beta = 0.5 * (cellfn(er, ephi, ez - 1, user) + cellfn(er, ephi, ez, user));
     } /* 2 cells sharing the edge */
     else if (er == N[0] - 1 && loc == BACK_RIGHT) {
-      beta = 0.5 * (resec(er, ephi, ez - 1, user) + resec(er, ephi, ez, user));
+      beta = 0.5 * (cellfn(er, ephi, ez - 1, user) + cellfn(er, ephi, ez, user));
     } /* 2 cells sharing the edge */
     else if (ez == 0 && loc == BACK_RIGHT) {
-      beta = 0.5 * (resec(er, ephi, ez, user) + resec(er + 1, ephi, ez, user));
+      beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er + 1, ephi, ez, user));
     } /* 2 cells sharing the edge */
     else if (er == 0 && loc == FRONT_LEFT) {
-      beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi, ez + 1, user));
+      beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi, ez + 1, user));
     } /* 2 cells sharing the edge */
     else if (ez == N[2] - 1 && loc == FRONT_LEFT) {
-      beta = 0.5 * (resec(er - 1, ephi, ez, user) + resec(er, ephi, ez, user));
+      beta = 0.5 * (cellfn(er - 1, ephi, ez, user) + cellfn(er, ephi, ez, user));
     } /* 2 cells sharing the edge */
     else if (er == N[0] - 1 && loc == FRONT_RIGHT) {
-      beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi, ez + 1, user));
+      beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi, ez + 1, user));
     } /* 2 cells sharing the edge */
     else if (ez == N[2] - 1 && loc == FRONT_RIGHT) {
-      beta = 0.5 * (resec(er, ephi, ez, user) + resec(er + 1, ephi, ez, user));
+      beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er + 1, ephi, ez, user));
     } /* 2 cells sharing the edge */
     else if (loc == BACK_LEFT) {
-      beta = 0.25 * (resec(er - 1, ephi, ez - 1, user) + resec(er - 1, ephi, ez, user) + resec(er, ephi, ez - 1, user) + resec(er, ephi, ez, user));
+      beta = 0.25 * (cellfn(er - 1, ephi, ez - 1, user) + cellfn(er - 1, ephi, ez, user) + cellfn(er, ephi, ez - 1, user) + cellfn(er, ephi, ez, user));
     } /* 4 cells sharing the edge */
     else if (loc == BACK_RIGHT) {
-      beta = 0.25 * (resec(er, ephi, ez - 1, user) + resec(er, ephi, ez, user) + resec(er + 1, ephi, ez - 1, user) + resec(er + 1, ephi, ez, user));
+      beta = 0.25 * (cellfn(er, ephi, ez - 1, user) + cellfn(er, ephi, ez, user) + cellfn(er + 1, ephi, ez - 1, user) + cellfn(er + 1, ephi, ez, user));
     } /* 4 cells sharing the edge */
     else if (loc == FRONT_LEFT) {
-      beta = 0.25 * (resec(er - 1, ephi, ez + 1, user) + resec(er - 1, ephi, ez, user) + resec(er, ephi, ez + 1, user) + resec(er, ephi, ez, user));
+      beta = 0.25 * (cellfn(er - 1, ephi, ez + 1, user) + cellfn(er - 1, ephi, ez, user) + cellfn(er, ephi, ez + 1, user) + cellfn(er, ephi, ez, user));
     } /* 4 cells sharing the edge */
     else {
-      beta = 0.25 * (resec(er, ephi, ez + 1, user) + resec(er, ephi, ez, user) + resec(er + 1, ephi, ez + 1, user) + resec(er + 1, ephi, ez, user));
+      beta = 0.25 * (cellfn(er, ephi, ez + 1, user) + cellfn(er, ephi, ez, user) + cellfn(er + 1, ephi, ez + 1, user) + cellfn(er + 1, ephi, ez, user));
     } /* 4 cells sharing the edge */
   }
   /* Edges in r direction */
   else if (loc == BACK_DOWN || loc == BACK_UP || loc == FRONT_DOWN || loc == FRONT_UP) {
     if (!(user -> phibtype)) {
       if ((ephi == 0 && ez == 0 && loc == BACK_DOWN) || (ephi == N[1] - 1 && ez == 0 && loc == BACK_UP) || (ephi == 0 && ez == N[2] - 1 && loc == FRONT_DOWN) || (ephi == N[1] - 1 && ez == N[2] - 1 && loc == FRONT_UP)) {
-        beta = resec(er, ephi, ez, user);
+        beta = cellfn(er, ephi, ez, user);
       } /* Only 1 cell connected to the edge */
       else if (ez == 0 && loc == BACK_DOWN) {
-        beta = 0.5 * (resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (ephi == 0 && loc == BACK_DOWN) {
-        beta = 0.5 * (resec(er, ephi, ez - 1, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez - 1, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (ephi == N[1] - 1 && loc == BACK_UP) {
-        beta = 0.5 * (resec(er, ephi, ez - 1, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez - 1, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (ez == 0 && loc == BACK_UP) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez, user));
       } /* 2 cells sharing the edge */
       else if (ephi == 0 && loc == FRONT_DOWN) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi, ez + 1, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi, ez + 1, user));
       } /* 2 cells sharing the edge */
       else if (ez == N[2] - 1 && loc == FRONT_DOWN) {
-        beta = 0.5 * (resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (ephi == N[1] - 1 && loc == FRONT_UP) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi, ez + 1, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi, ez + 1, user));
       } /* 2 cells sharing the edge */
       else if (ez == N[2] - 1 && loc == FRONT_UP) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez, user));
       } /* 2 cells sharing the edge */
       else if (loc == BACK_DOWN) {
-        beta = 0.25 * (resec(er, ephi - 1, ez - 1, user) + resec(er, ephi - 1, ez, user) + resec(er, ephi, ez - 1, user) + resec(er, ephi, ez, user));
+        beta = 0.25 * (cellfn(er, ephi - 1, ez - 1, user) + cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez - 1, user) + cellfn(er, ephi, ez, user));
       } /* 4 cells sharing the edge */
       else if (loc == BACK_UP) {
-        beta = 0.25 * (resec(er, ephi, ez - 1, user) + resec(er, ephi, ez, user) + resec(er, ephi + 1, ez - 1, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.25 * (cellfn(er, ephi, ez - 1, user) + cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez - 1, user) + cellfn(er, ephi + 1, ez, user));
       } /* 4 cells sharing the edge */
       else if (loc == FRONT_DOWN) {
-        beta = 0.25 * (resec(er, ephi - 1, ez + 1, user) + resec(er, ephi - 1, ez, user) + resec(er, ephi, ez + 1, user) + resec(er, ephi, ez, user));
+        beta = 0.25 * (cellfn(er, ephi - 1, ez + 1, user) + cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez + 1, user) + cellfn(er, ephi, ez, user));
       } /* 4 cells sharing the edge */
       else {
-        beta = 0.25 * (resec(er, ephi, ez + 1, user) + resec(er, ephi, ez, user) + resec(er, ephi + 1, ez + 1, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.25 * (cellfn(er, ephi, ez + 1, user) + cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez + 1, user) + cellfn(er, ephi + 1, ez, user));
       } /* 4 cells sharing the edge */
     } else {
       if (ez == 0 && loc == BACK_DOWN) {
-        beta = 0.5 * (resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (ez == 0 && loc == BACK_UP) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez, user));
       } /* 2 cells sharing the edge */
       else if (ez == N[2] - 1 && loc == FRONT_DOWN) {
-        beta = 0.5 * (resec(er, ephi - 1, ez, user) + resec(er, ephi, ez, user));
+        beta = 0.5 * (cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez, user));
       } /* 2 cells sharing the edge */
       else if (ez == N[2] - 1 && loc == FRONT_UP) {
-        beta = 0.5 * (resec(er, ephi, ez, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.5 * (cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez, user));
       } /* 2 cells sharing the edge */
       else if (loc == BACK_DOWN) {
-        beta = 0.25 * (resec(er, ephi - 1, ez - 1, user) + resec(er, ephi - 1, ez, user) + resec(er, ephi, ez - 1, user) + resec(er, ephi, ez, user));
+        beta = 0.25 * (cellfn(er, ephi - 1, ez - 1, user) + cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez - 1, user) + cellfn(er, ephi, ez, user));
       } /* 4 cells sharing the edge */
       else if (loc == BACK_UP) {
-        beta = 0.25 * (resec(er, ephi, ez - 1, user) + resec(er, ephi, ez, user) + resec(er, ephi + 1, ez - 1, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.25 * (cellfn(er, ephi, ez - 1, user) + cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez - 1, user) + cellfn(er, ephi + 1, ez, user));
       } /* 4 cells sharing the edge */
       else if (loc == FRONT_DOWN) {
-        beta = 0.25 * (resec(er, ephi - 1, ez + 1, user) + resec(er, ephi - 1, ez, user) + resec(er, ephi, ez + 1, user) + resec(er, ephi, ez, user));
+        beta = 0.25 * (cellfn(er, ephi - 1, ez + 1, user) + cellfn(er, ephi - 1, ez, user) + cellfn(er, ephi, ez + 1, user) + cellfn(er, ephi, ez, user));
       } /* 4 cells sharing the edge */
       else {
-        beta = 0.25 * (resec(er, ephi, ez + 1, user) + resec(er, ephi, ez, user) + resec(er, ephi + 1, ez + 1, user) + resec(er, ephi + 1, ez, user));
+        beta = 0.25 * (cellfn(er, ephi, ez + 1, user) + cellfn(er, ephi, ez, user) + cellfn(er, ephi + 1, ez + 1, user) + cellfn(er, ephi + 1, ez, user));
       } /* 4 cells sharing the edge */
     }
   } else {
     /* DEBUG PRINT*/
     PetscPrintf(PETSC_COMM_WORLD, "Location : %d\n", (int) loc);
-    SETERRQ(PetscObjectComm((PetscObject) coordDA), PETSC_ERR_ARG_SIZ, "Incorrect DMStagStencilLocation input in rese function");
+    SETERRQ(PetscObjectComm((PetscObject) coordDA), PETSC_ERR_ARG_SIZ, "Incorrect DMStagStencilLocation input in %s function", name);
   }
   return beta;
 }
+#line 2316
+PetscScalar rese(PetscInt er, PetscInt ephi, PetscInt ez, DMStagStencilLocation loc, void * ptr) {
+  return edge_average(er, ephi, ez, loc, ptr, resec, "rese");
+}
+#line 2515
 
 PetscScalar resec(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
   User * user = (User * ) ptr;
@@ -2618,202 +2627,7 @@ PetscScalar conduc(PetscInt er, PetscInt ephi, PetscInt ez, void * ptr) {
 }
 
 PetscScalar condu(PetscInt er, PetscInt ephi, PetscInt ez, DMStagStencilLocation loc, void * ptr) {
-  User * user = (User * ) ptr;
-  PetscInt startr, startphi, startz, nr, nphi, nz, N[3];
-  PetscScalar beta = 0;
-  DM coordDA = user -> coorda;
-
-  /* DEBUG PRINT*/
-  /*PetscPrintf(PETSC_COMM_WORLD,"(er, ephi, ez) = (%d,%d,%d)\n",(int)er,(int)ephi,(int)ez);*/
-  DMStagGetGlobalSizes(coordDA, & N[0], & N[1], & N[2]);
-  /* DEBUG PRINT*/
-  /*PetscPrintf(PETSC_COMM_WORLD,"(er, ephi, ez) = (%d,%d,%d)\n",(int)er,(int)ephi,(int)ez);*/
-  DMStagGetCorners(coordDA, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL);
-  /*if (!(startz <= ez && ez<startz+nz && startphi <= ephi && ephi<startphi+nphi && startr <= er && er<startr+nr))  SETERRQ(PetscObjectComm((PetscObject)coordDA),PETSC_ERR_ARG_SIZ,"The cell indices exceed the local range");*/
-  /* Edges in z direction */
-  if (loc == DOWN_LEFT || loc == DOWN_RIGHT || loc == UP_LEFT || loc == UP_RIGHT) {
-    if (!(user -> phibtype)) {
-      if ((er == 0 && ephi == 0 && loc == DOWN_LEFT) || (er == N[0] - 1 && ephi == 0 && loc == DOWN_RIGHT) || (er == 0 && ephi == N[1] - 1 && loc == UP_LEFT) || (er == N[0] - 1 && ephi == N[1] - 1 && loc == UP_RIGHT)) {
-        beta = conduc(er, ephi, ez, user);
-      } /* Only 1 cell connected to the edge */
-      else if (ephi == 0 && loc == DOWN_LEFT) {
-        beta = 0.5 * (conduc(er - 1, ephi, ez, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (er == 0 && loc == DOWN_LEFT) {
-        beta = 0.5 * (conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (er == N[0] - 1 && loc == DOWN_RIGHT) {
-        beta = 0.5 * (conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ephi == 0 && loc == DOWN_RIGHT) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er + 1, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (er == 0 && loc == UP_LEFT) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ephi == N[1] - 1 && loc == UP_LEFT) {
-        beta = 0.5 * (conduc(er - 1, ephi, ez, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (er == N[0] - 1 && loc == UP_RIGHT) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ephi == N[1] - 1 && loc == UP_RIGHT) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er + 1, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (loc == DOWN_LEFT) {
-        beta = 0.25 * (conduc(er - 1, ephi - 1, ez, user) + conduc(er - 1, ephi, ez, user) + conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-      else if (loc == DOWN_RIGHT) {
-        beta = 0.25 * (conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user) + conduc(er + 1, ephi - 1, ez, user) + conduc(er + 1, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-      else if (loc == UP_LEFT) {
-        beta = 0.25 * (conduc(er - 1, ephi + 1, ez, user) + conduc(er - 1, ephi, ez, user) + conduc(er, ephi + 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-      else {
-        beta = 0.25 * (conduc(er, ephi + 1, ez, user) + conduc(er, ephi, ez, user) + conduc(er + 1, ephi + 1, ez, user) + conduc(er + 1, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-    } else {
-      if (er == 0 && loc == DOWN_LEFT) {
-        beta = 0.5 * (conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (er == N[0] - 1 && loc == DOWN_RIGHT) {
-        beta = 0.5 * (conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (er == 0 && loc == UP_LEFT) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (er == N[0] - 1 && loc == UP_RIGHT) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (loc == DOWN_LEFT) {
-        beta = 0.25 * (conduc(er - 1, ephi - 1, ez, user) + conduc(er - 1, ephi, ez, user) + conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-      else if (loc == DOWN_RIGHT) {
-        beta = 0.25 * (conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user) + conduc(er + 1, ephi - 1, ez, user) + conduc(er + 1, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-      else if (loc == UP_LEFT) {
-        beta = 0.25 * (conduc(er - 1, ephi + 1, ez, user) + conduc(er - 1, ephi, ez, user) + conduc(er, ephi + 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-      else {
-        beta = 0.25 * (conduc(er, ephi + 1, ez, user) + conduc(er, ephi, ez, user) + conduc(er + 1, ephi + 1, ez, user) + conduc(er + 1, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-    }
-  }
-  /* Edges in phi direction */
-  else if (loc == BACK_LEFT || loc == BACK_RIGHT || loc == FRONT_LEFT || loc == FRONT_RIGHT) {
-    if ((er == 0 && ez == 0 && loc == BACK_LEFT) || (er == N[0] - 1 && ez == 0 && loc == BACK_RIGHT) || (er == 0 && ez == N[2] - 1 && loc == FRONT_LEFT) || (er == N[0] - 1 && ez == N[2] - 1 && loc == FRONT_RIGHT)) {
-      beta = conduc(er, ephi, ez, user);
-    } /* Only 1 cell connected to the edge */
-    else if (ez == 0 && loc == BACK_LEFT) {
-      beta = 0.5 * (conduc(er - 1, ephi, ez, user) + conduc(er, ephi, ez, user));
-    } /* 2 cells sharing the edge */
-    else if (er == 0 && loc == BACK_LEFT) {
-      beta = 0.5 * (conduc(er, ephi, ez - 1, user) + conduc(er, ephi, ez, user));
-    } /* 2 cells sharing the edge */
-    else if (er == N[0] - 1 && loc == BACK_RIGHT) {
-      beta = 0.5 * (conduc(er, ephi, ez - 1, user) + conduc(er, ephi, ez, user));
-    } /* 2 cells sharing the edge */
-    else if (ez == 0 && loc == BACK_RIGHT) {
-      beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er + 1, ephi, ez, user));
-    } /* 2 cells sharing the edge */
-    else if (er == 0 && loc == FRONT_LEFT) {
-      beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi, ez + 1, user));
-    } /* 2 cells sharing the edge */
-    else if (ez == N[2] - 1 && loc == FRONT_LEFT) {
-      beta = 0.5 * (conduc(er - 1, ephi, ez, user) + conduc(er, ephi, ez, user));
-    } /* 2 cells sharing the edge */
-    else if (er == N[0] - 1 && loc == FRONT_RIGHT) {
-      beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi, ez + 1, user));
-    } /* 2 cells sharing the edge */
-    else if (ez == N[2] - 1 && loc == FRONT_RIGHT) {
-      beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er + 1, ephi, ez, user));
-    } /* 2 cells sharing the edge */
-    else if (loc == BACK_LEFT) {
-      beta = 0.25 * (conduc(er - 1, ephi, ez - 1, user) + conduc(er - 1, ephi, ez, user) + conduc(er, ephi, ez - 1, user) + conduc(er, ephi, ez, user));
-    } /* 4 cells sharing the edge */
-    else if (loc == BACK_RIGHT) {
-      beta = 0.25 * (conduc(er, ephi, ez - 1, user) + conduc(er, ephi, ez, user) + conduc(er + 1, ephi, ez - 1, user) + conduc(er + 1, ephi, ez, user));
-    } /* 4 cells sharing the edge */
-    else if (loc == FRONT_LEFT) {
-      beta = 0.25 * (conduc(er - 1, ephi, ez + 1, user) + conduc(er - 1, ephi, ez, user) + conduc(er, ephi, ez + 1, user) + conduc(er, ephi, ez, user));
-    } /* 4 cells sharing the edge */
-    else {
-      beta = 0.25 * (conduc(er, ephi, ez + 1, user) + conduc(er, ephi, ez, user) + conduc(er + 1, ephi, ez + 1, user) + conduc(er + 1, ephi, ez, user));
-    } /* 4 cells sharing the edge */
-  }
-  /* Edges in r direction */
-  else if (loc == BACK_DOWN || loc == BACK_UP || loc == FRONT_DOWN || loc == FRONT_UP) {
-    if (!(user -> phibtype)) {
-      if ((ephi == 0 && ez == 0 && loc == BACK_DOWN) || (ephi == N[1] - 1 && ez == 0 && loc == BACK_UP) || (ephi == 0 && ez == N[2] - 1 && loc == FRONT_DOWN) || (ephi == N[1] - 1 && ez == N[2] - 1 && loc == FRONT_UP)) {
-        beta = conduc(er, ephi, ez, user);
-      } /* Only 1 cell connected to the edge */
-      else if (ez == 0 && loc == BACK_DOWN) {
-        beta = 0.5 * (conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ephi == 0 && loc == BACK_DOWN) {
-        beta = 0.5 * (conduc(er, ephi, ez - 1, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ephi == N[1] - 1 && loc == BACK_UP) {
-        beta = 0.5 * (conduc(er, ephi, ez - 1, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ez == 0 && loc == BACK_UP) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ephi == 0 && loc == FRONT_DOWN) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi, ez + 1, user));
-      } /* 2 cells sharing the edge */
-      else if (ez == N[2] - 1 && loc == FRONT_DOWN) {
-        beta = 0.5 * (conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ephi == N[1] - 1 && loc == FRONT_UP) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi, ez + 1, user));
-      } /* 2 cells sharing the edge */
-      else if (ez == N[2] - 1 && loc == FRONT_UP) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (loc == BACK_DOWN) {
-        beta = 0.25 * (conduc(er, ephi - 1, ez - 1, user) + conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez - 1, user) + conduc(er, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-      else if (loc == BACK_UP) {
-        beta = 0.25 * (conduc(er, ephi, ez - 1, user) + conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez - 1, user) + conduc(er, ephi + 1, ez, user));
-      } /* 4 cells sharing the edge */
-      else if (loc == FRONT_DOWN) {
-        beta = 0.25 * (conduc(er, ephi - 1, ez + 1, user) + conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez + 1, user) + conduc(er, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-      else {
-        beta = 0.25 * (conduc(er, ephi, ez + 1, user) + conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez + 1, user) + conduc(er, ephi + 1, ez, user));
-      } /* 4 cells sharing the edge */
-    } else {
-      if (ez == 0 && loc == BACK_DOWN) {
-        beta = 0.5 * (conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ez == 0 && loc == BACK_UP) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ez == N[2] - 1 && loc == FRONT_DOWN) {
-        beta = 0.5 * (conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (ez == N[2] - 1 && loc == FRONT_UP) {
-        beta = 0.5 * (conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez, user));
-      } /* 2 cells sharing the edge */
-      else if (loc == BACK_DOWN) {
-        beta = 0.25 * (conduc(er, ephi - 1, ez - 1, user) + conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez - 1, user) + conduc(er, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-      else if (loc == BACK_UP) {
-        beta = 0.25 * (conduc(er, ephi, ez - 1, user) + conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez - 1, user) + conduc(er, ephi + 1, ez, user));
-      } /* 4 cells sharing the edge */
-      else if (loc == FRONT_DOWN) {
-        beta = 0.25 * (conduc(er, ephi - 1, ez + 1, user) + conduc(er, ephi - 1, ez, user) + conduc(er, ephi, ez + 1, user) + conduc(er, ephi, ez, user));
-      } /* 4 cells sharing the edge */
-      else {
-        beta = 0.25 * (conduc(er, ephi, ez + 1, user) + conduc(er, ephi, ez, user) + conduc(er, ephi + 1, ez + 1, user) + conduc(er, ephi + 1, ez, user));
-      } /* 4 cells sharing the edge */
-    }
-  } else {
-    /* DEBUG PRINT*/
-    PetscPrintf(PETSC_COMM_WORLD, "Location : %d\n", (int) loc);
-    SETERRQ(PetscObjectComm((PetscObject) coordDA), PETSC_ERR_ARG_SIZ, "Incorrect DMStagStencilLocation input in condu function");
-  }
-  return beta;
+  return edge_average(er, ephi, ez, loc, ptr, conduc, "condu");
 }
+#line 2819
 
