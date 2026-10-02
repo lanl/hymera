@@ -1670,74 +1670,7 @@ PetscErrorCode ComputeCurrent(TS ts, Vec X, void * ptr) {
 
   PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
 
-  if(0){
-  PetscCall(DMGetLocalVector(da, & xLocal));
-  PetscCall(DMGlobalToLocalBegin(da, X, INSERT_VALUES, xLocal));
-  PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, xLocal));
-  PetscCall(DMStagVecGetArray(da, xLocal, & arrX));
-
-  PetscCall(DMGetLocalVector(da, & JLocal));
-  PetscCall(DMStagVecGetArray(da, JLocal, & arrJ));
-  {
-  // Compute Grad(EP)
-    Mat G;
-    /* Compute the gradient of EP */
-    PetscCall(VecDuplicate(X, & GradEP));
-    PetscCall(VecCopy(X, GradEP));
-    PetscCall(DMCreateMatrix(da, & G));
-    PetscCall(MatZeroEntries(G));
-    FormDiscreteGradientEP(ts, G, X, GradEP, user);
-    PetscCall(MatDestroy( & G));
-    PetscCall(DMGetLocalVector(da, & GradEPLocal));
-    PetscCall(DMGlobalToLocalBegin(da, GradEP, INSERT_VALUES, GradEPLocal));
-    PetscCall(DMGlobalToLocalEnd(da, GradEP, INSERT_VALUES, GradEPLocal));
-    PetscCall(DMStagVecGetArrayRead(da, GradEPLocal, & arrGradEP));
-  }
-
-  // Compute J:= (1/resistivity) * (tau - Grad(EP))
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-        arrJ[ez][ephi][er][ivErmzm] = rese(er, ephi, ez, BACK_LEFT, user) * (arrX[ez][ephi][er][ivErmzm] - arrGradEP[ez][ephi][er][ivErmzm]);
-        arrJ[ez][ephi][er][ivEphimzm] = rese(er, ephi, ez, BACK_DOWN, user) * (arrX[ez][ephi][er][ivEphimzm] - arrGradEP[ez][ephi][er][ivEphimzm]);
-        arrJ[ez][ephi][er][ivErmphim] = rese(er, ephi, ez, DOWN_LEFT, user) * (arrX[ez][ephi][er][ivErmphim] - arrGradEP[ez][ephi][er][ivErmphim]);
-
-        if (er == N[0] - 1) {
-          arrJ[ez][ephi][er][ivErpzm] = rese(er, ephi, ez, BACK_RIGHT, user) * (arrX[ez][ephi][er][ivErpzm] - arrGradEP[ez][ephi][er][ivErpzm]);
-          arrJ[ez][ephi][er][ivErpphim] = rese(er, ephi, ez, DOWN_RIGHT, user) * (arrX[ez][ephi][er][ivErpphim] - arrGradEP[ez][ephi][er][ivErpphim]);
-        }
-        if (ephi == N[1] - 1) {
-          arrJ[ez][ephi][er][ivEphipzm] = rese(er, ephi, ez, BACK_UP, user) * (arrX[ez][ephi][er][ivEphipzm] - arrGradEP[ez][ephi][er][ivEphipzm]);
-          arrJ[ez][ephi][er][ivErmphip] = rese(er, ephi, ez, UP_LEFT, user) * (arrX[ez][ephi][er][ivErmphip] - arrGradEP[ez][ephi][er][ivErmphip]);
-        }
-        if (ez == N[2] - 1) {
-          arrJ[ez][ephi][er][ivErmzp] = rese(er, ephi, ez, FRONT_LEFT, user) * (arrX[ez][ephi][er][ivErmzp] - arrGradEP[ez][ephi][er][ivErmzp]);
-          arrJ[ez][ephi][er][ivEphimzp] = rese(er, ephi, ez, FRONT_DOWN, user) * (arrX[ez][ephi][er][ivEphimzp] - arrGradEP[ez][ephi][er][ivEphimzp]);
-        }
-        if (er == N[0] - 1 && ephi == N[1] - 1) {
-          arrJ[ez][ephi][er][ivErpphip] = rese(er, ephi, ez, UP_RIGHT, user) * (arrX[ez][ephi][er][ivErpphip] - arrGradEP[ez][ephi][er][ivErpphip]);
-        }
-        if (ephi == N[1] - 1 && ez == N[2] - 1) {
-          arrJ[ez][ephi][er][ivEphipzp] = rese(er, ephi, ez, FRONT_UP, user) * (arrX[ez][ephi][er][ivEphipzp] - arrGradEP[ez][ephi][er][ivEphipzp]);
-        }
-        if (er == N[0] - 1 && ez == N[2] - 1) {
-          arrJ[ez][ephi][er][ivErpzp] = rese(er, ephi, ez, FRONT_RIGHT, user) * (arrX[ez][ephi][er][ivErpzp] - arrGradEP[ez][ephi][er][ivErpzp]);
-        }
-      }
-    }
-  }
-
-  PetscCall(DMStagVecRestoreArray(da, JLocal, & arrJ));
-  PetscCall(DMLocalToGlobal(da, JLocal, INSERT_VALUES, J));
-
-  PetscCall(DMStagVecRestoreArray(da, xLocal, & arrX));
-  PetscCall(DMRestoreLocalVector(da, & xLocal));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, GradEPLocal, & arrGradEP));
-  PetscCall(DMRestoreLocalVector(da, & GradEPLocal));
-
-  PetscCall(VecDestroy( & GradEP));
-  }
+#line 2582
 
   PetscCall(DMGetLocalVector(da, & JLocal));
   PetscCall(DMGlobalToLocalBegin(da, J, INSERT_VALUES, JLocal));

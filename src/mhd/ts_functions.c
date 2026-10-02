@@ -422,16 +422,7 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
   PetscCall(DMGlobalToLocalEnd(da, VxBe, INSERT_VALUES, VxBeLocal));
   PetscCall(DMStagVecGetArrayRead(da, VxBeLocal, & arrVxBe));
 
-  if(0){
-    /* P_{e->v}(der_curl_no_mp(B)) x P_{f->v}(B) */
-    PetscCall(DMCreateGlobalVector(da, & curlBxB));
-    PetscCall(VecZeroEntries(curlBxB));
-    VertexCrossProduct(ts, curlBv, Bv, curlBxB, user);
-    PetscCall(DMGetLocalVector(da, & curlBxBLocal));
-    PetscCall(DMGlobalToLocalBegin(da, curlBxB, INSERT_VALUES, curlBxBLocal));
-    PetscCall(DMGlobalToLocalEnd(da, curlBxB, INSERT_VALUES, curlBxBLocal));
-    PetscCall(DMStagVecGetArrayRead(da, curlBxBLocal, & arrcurlBxB));
-  }
+#line 3177
 
   /* Compute function over the locally owned part of the grid */
   /* f1(V,EP,tau,B,ni) . e_r = - (P_{e->v}(der_mim_curl_no_mp(B)) x P_{f->v}(B) + Re^{-1} (\nabla^2 V)) . e_r ; on plasma vertices
@@ -711,11 +702,7 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
   }
   /* End of triple for loop */
 
-  if(0){
-    PetscCall(DMStagVecRestoreArray(da, curlBxBLocal, & arrcurlBxB));
-    PetscCall(DMRestoreLocalVector(da, & curlBxBLocal));
-    PetscCall(VecDestroy(& curlBxB));
-  }
+#line 3499
 
   PetscCall(DMStagVecRestoreArrayRead(da, LapVLocal, & arrLapV));
   PetscCall(DMRestoreLocalVector(da, & LapVLocal));
@@ -2338,33 +2325,7 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
   }
 
 
-  if(0){
-    /* Compute the exact solution to set boundary conditions */
-    PetscCall(DMCreateGlobalVector(da, & x));
-    FormExactSolution(t, ts, & x, user);
-    PetscCall(DMGetLocalVector(da, & bcLocal));
-    PetscCall(DMGlobalToLocalBegin(da, x, INSERT_VALUES, bcLocal));
-    PetscCall(DMGlobalToLocalEnd(da, x, INSERT_VALUES, bcLocal));
-    PetscCall(DMStagVecGetArrayRead(da, bcLocal, & arrx));
-    PetscCall(TSGetTimeStep(ts, & dt));
-
-    /* Compute the projection vectors */
-    /* P_{c->f}(ni) */
-    PetscCall(DMCreateGlobalVector(da, & nif));
-    CellToFaceProjection(ts, X, nif, user);
-    PetscCall(DMGetLocalVector(da, & nifLocal));
-    PetscCall(DMGlobalToLocalBegin(da, nif, INSERT_VALUES, nifLocal));
-    PetscCall(DMGlobalToLocalEnd(da, nif, INSERT_VALUES, nifLocal));
-    PetscCall(DMStagVecGetArrayRead(da, nifLocal, & arrnif));
-    /* Compute the reconstruction vectors */
-    /* R_{v->f}(V) */
-    PetscCall(DMCreateGlobalVector(da, & Vf));
-    VertexToFaceReconstruction(ts, X, Vf, user);
-    PetscCall(DMGetLocalVector(da, & VfLocal));
-    PetscCall(DMGlobalToLocalBegin(da, Vf, INSERT_VALUES, VfLocal));
-    PetscCall(DMGlobalToLocalEnd(da, Vf, INSERT_VALUES, VfLocal));
-    PetscCall(DMStagVecGetArrayRead(da, VfLocal, & arrVf));
-  }
+#line 13961
 
   /*Compute function over the locally owned part of the grid */
   /* f1(V,E,B,ni) = 0 ; on all vertices
@@ -2401,9 +2362,7 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
            f4(V,E,B,ni) = 0; in wall cells
            */
         arrF[ez][ephi][er][ivn] = 0.0;
-        if (0 && fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7) {
-          arrF[ez][ephi][er][ivn] -= (-surface(er, ephi, ez, LEFT, user) / cellvolume) * arrnif[ez][ephi][er][ivBrm] * arrVf[ez][ephi][er][ivBrm] + (surface(er, ephi, ez, RIGHT, user) / cellvolume) * arrnif[ez][ephi][er][ivBrp] * arrVf[ez][ephi][er][ivBrp] + (-surface(er, ephi, ez, DOWN, user) / cellvolume) * arrnif[ez][ephi][er][ivBphim] * arrVf[ez][ephi][er][ivBphim] + (surface(er, ephi, ez, UP, user) / cellvolume) * arrnif[ez][ephi][er][ivBphip] * arrVf[ez][ephi][er][ivBphip] + (-surface(er, ephi, ez, BACK, user) / cellvolume) * arrnif[ez][ephi][er][ivBzm] * arrVf[ez][ephi][er][ivBzm] + (surface(er, ephi, ez, FRONT, user) / cellvolume) * arrnif[ez][ephi][er][ivBzp] * arrVf[ez][ephi][er][ivBzp];
-        }
+#line 14038
 
         arrF[ez][ephi][er][ivVrmphimzm[0]] = 0.0;
         arrF[ez][ephi][er][ivVrmphimzm[1]] = 0.0;
@@ -2488,20 +2447,7 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
   /* End of triple for loop */
 
   /* Restore vectors */
-  if(0){
-    PetscCall(DMStagVecRestoreArrayRead(da, nifLocal, & arrnif));
-    PetscCall(DMRestoreLocalVector(da, & nifLocal));
-    PetscCall(VecDestroy( & nif));
-
-    PetscCall(DMStagVecRestoreArrayRead(da, VfLocal, & arrVf));
-    PetscCall(DMRestoreLocalVector(da, & VfLocal));
-    PetscCall(VecDestroy( & Vf));
-
-    PetscCall(DMStagVecRestoreArrayRead(da, bcLocal, & arrx));
-    PetscCall(DMRestoreLocalVector(da, & bcLocal));
-    //PetscBarrier((PetscObject) x);
-    PetscCall(VecDestroy( & x));
-  }
+#line 14136
 
   PetscCall(DMStagVecRestoreArray(da, fLocal, & arrF));
   PetscCall(DMLocalToGlobal(da, fLocal, INSERT_VALUES, F));
@@ -2623,19 +2569,7 @@ PetscErrorCode FormInitialSolution(TS ts, Vec X, void * ptr) {
     PetscCall(DMStagGetLocationSlot(dmCoord, FRONT_UP, d, & icEphipzp[d]));
   }
 
-  if(0 && user->ictype == 9 && user->itime == 0.0){
-    char filename[PETSC_MAX_PATH_LEN];
-    PetscViewer viewerX;
-
-    /* Read X in binary file */
-    PetscCall(PetscSNPrintf(filename, sizeof(filename), "%s/X_ic%.2d_grid%.2dx%.2dx%.2d_step%.3d_time%5.7f.dat", user->input_folder, user -> ictype, user -> Nr, user -> Nphi, user -> Nz, 2, 0.23));
-    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Reading X vector from file %s ...\n", filename));
-    PetscCall(PetscViewerBinaryOpen(PETSC_COMM_WORLD, filename, FILE_MODE_READ, & viewerX));
-    PetscCall(VecLoad(X, viewerX));
-    /* Destroy the viewer */
-    PetscCall(PetscViewerDestroy( & viewerX));
-    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Reading from file %s is over.\n", filename));
-  }
+#line 14270
   if (1) {
     /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
        Cancel all components except B
@@ -3549,15 +3483,7 @@ PetscErrorCode FormInitialSolution(TS ts, Vec X, void * ptr) {
     PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Reading from file %s is over.\n", filename));
   }
 
-  if (0 && user -> ictype == 10 && user -> itime == 0.0) {
-    Vec Xcopy;
-    PetscCall(VecDuplicate(X, & Xcopy));
-    PetscCall(VecCopy(X, Xcopy));
-    PetscCall(VecScale(Xcopy, 1.0 / user->V_A));
-    FormDerivedCurl(ts, Xcopy, X, user); //This updates only the tau field part in X by computing the derived mimetic curl operator applied to B field of Xcopy
-                                         //PetscBarrier((PetscObject) Xcopy);
-    PetscCall(VecDestroy( & Xcopy));
-  }
+#line 15192
 
   if ((user -> ictype == 9 || user -> ictype == 15) && user -> itime == 0.0) {
     SNES dummysnes;
@@ -4868,25 +4794,7 @@ PetscErrorCode FormExactSolution(PetscReal time, TS ts, Vec * X, void * ptr) {
     PetscCall(VecDestroy( & Xcopy));
   }
 
-  if (0) {
-    /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-       Normalize the system
-       - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-    Vec B, E, ni, Vi_perp;
-    PetscCall(VecGetSubVector( * X, user -> isB, & B));
-    VecScale(B, 0.2); // B := tilde{B} = (B_0^-1) B
-    PetscCall(VecRestoreSubVector( * X, user -> isB, & B));
-    PetscCall(VecGetSubVector( * X, user -> istau, & E));
-    VecScale(E, 0.2); // E := tilde{E} = (E_0^-1) E
-    VecScale(E, 1.0 / 11000000); // E := tilde{E} = (E_0^-1) E
-    PetscCall(VecRestoreSubVector( * X, user -> istau, & E));
-    PetscCall(VecGetSubVector( * X, user -> isni, & ni));
-    VecScale(ni, 1e-20); // ni := tilde{ni} = (ni_0^-1) ni
-    PetscCall(VecRestoreSubVector( * X, user -> isni, & ni));
-    PetscCall(VecGetSubVector( * X, user -> isV, & Vi_perp));
-    VecScale(Vi_perp, 1.0 / 11000000); // Vi_perp := tilde{Vi_perp} = (Vi_perp_0^-1) Vi_perp
-    PetscCall(VecRestoreSubVector( * X, user -> isV, & Vi_perp));
-  }
+#line 16521
 
   PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
 
@@ -4972,79 +4880,13 @@ PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) 
     }
   }
 
-  if (user -> dump && 0) {
-    /* Save the vector laplacian of V */
-    Vec LapV;
-    PetscCall(VecDuplicate(X, & LapV));
-    PetscCall(VecZeroEntries(LapV));
-    ApplyVectorLaplacian(ts, X, LapV, user);
-    PetscCall(VecScale(LapV, (1.0 / user->Re)));
-    char prefix[2];  //allocate memory
-    sprintf(prefix, "lv");
-    DumpVelocity_Cell(ts, (int)(step + user -> oldstep), LapV, prefix, user);
-
-    if (step != 0) {
-      VecCopy(X, LapV); /* LapV := X */
-      VecAXPBY(LapV, -10.0, 10.0, user -> X0); /* LapV := - (1/dt) oldX + (1/dt) LapV */
-      sprintf(prefix, "dv");
-      DumpVelocity_Cell(ts, (int)(step + user -> oldstep), LapV, prefix, user);
-    }
-
-    PetscCall(VecDestroy( & LapV));
-  }
+#line 17653
   /* Save SNES residual */
-  if(0){
-    SNES snes;
-    PetscCall(TSGetSNES(ts, & snes));
-    Vec residual;
-    PetscCall(VecDuplicate(X,&residual));
-
-    Vec Xdot;
-    PetscCall(VecDuplicate(X,&Xdot));
-    PetscCall(VecZeroEntries(Xdot));
-    FormIFunction_Vperp_viscosity(ts, time, X, Xdot, residual, user);
-    PetscCall(VecDestroy( & Xdot));
-
-    //SNESGetFunction(snes, & residual, NULL, NULL);
-    DumpSolution_Cell(ts, (int)(step + 800), residual, user);
-    //VecDestroy( & residual);
-  }
+#line 17670
   /* Save curl(B)xB and curl(B) */
-  if(0){
-    Vec Bv, curlBv, CurlBxB;
-    /* P_{f->v}(B) */
-    PetscCall(DMCreateGlobalVector(da, & Bv));
-    FaceToVertexProjection(ts, X, Bv, user);
-    /* P_{e->v}(der_curl_no_mp(B)) */
-    PetscCall(DMCreateGlobalVector(da, & curlBv));
-    PetscCall(VecZeroEntries(curlBv));
-    Vec curlB;
-    PetscCall(VecDuplicate(X, & curlB));
-    PetscCall(VecCopy(X, curlB));
-    FormDerivedCurlnomp(ts, X, curlB, user); //This updates only the E field part in curlB by computing the derived mimetic curl operator applied to B field of X that does not include material properties
-    DumpEdgeField(ts, (int)(step + user -> oldstep), curlB, user);
-    EdgeToVertexProjection(ts, curlB, curlBv, user);
-    //PetscBarrier((PetscObject) curlB);
-    PetscCall(VecDestroy( & curlB));
-    /* VxP_{f->v}(B) */
-    PetscCall(DMCreateGlobalVector(da, & CurlBxB));
-    PetscCall(VecZeroEntries(CurlBxB));
-    VertexCrossProduct(ts, curlBv, Bv, CurlBxB, user);
-    //Dump1stVertexField(ts, (int)(step + user -> oldstep), CurlBxB, user);
-    //PetscBarrier((PetscObject) CurlBxB);
-    PetscCall(VecDestroy( & Bv));
-    PetscCall(VecDestroy( & curlBv));
-    PetscCall(VecDestroy( & CurlBxB));
-  }
+#line 17697
   /* Save curl(tau) */
-  if(0){
-    Vec curltau;
-    PetscCall(VecDuplicate(X, & curltau));
-    PetscCall(VecCopy(X, curltau));
-    FormPrimaryCurl(ts, X, curltau, user); //This updates only the B field part in curltau by computing the primary mimetic curl operator applied to tau field of X
-    DumpSolution_Cell(ts, (int)(step + user -> oldstep + 100), curltau, user);
-    PetscCall(VecDestroy( & curltau));
-  }
+#line 17706
 
   /* Compute the 2-norm and max-norm of the error */
   if (user -> ictype != 9){
@@ -5387,30 +5229,7 @@ PetscErrorCode SampleShellPCSetUp(PC pc){
   ierr = KSPGetPC(KSP_ETBN,&PC_ETBN);CHKERRQ(ierr);
   PetscCall(PCSetType(PC_ETBN,PCASM));
   PCASMSetOverlap(PC_ETBN,7);
-  if(0){
-    KSP       *subksp;        /* array of KSP contexts for local subblocks */
-    PetscInt  nlocal,first;   /* number of local subblocks, first local subblock */
-    PC        subpc;          /* PC context for subblock */
-    PetscInt  i;
-
-    PetscCall(PetscPrintf(PETSC_COMM_WORLD,"User explicitly sets subdomain solvers.\n"));
-    PetscCall(KSPSetUp(KSP_ETBN));
-    /*
-       Extract the array of KSP contexts for the local blocks
-       */
-    PCASMGetSubKSP(PC_ETBN,&nlocal,&first,&subksp);
-    /*
-       Loop over the local blocks, setting various KSP options
-       for each block.
-       */
-    for (i=0; i<nlocal; i++) {
-      PetscCall(KSPGetPC(subksp[i],&subpc));
-      PetscCall(PCSetType(subpc,PCLU));
-      PCFactorSetMatSolverType(subpc,MATSOLVERSUPERLU_DIST);
-      PetscCall(KSPSetType(subksp[i],KSPPREONLY));
-      //KSPSetTolerances(subksp[i],1.e-7,PETSC_DEFAULT,PETSC_DEFAULT,PETSC_DEFAULT);
-    }
-  }
+#line 18072
 
   //PCSetType(PC_ETBN,PCLU);
   //PCFactorSetMatSolverType(PC_ETBN,MATSOLVERSUPERLU_DIST);
@@ -5425,11 +5244,7 @@ PetscErrorCode SampleShellPCSetUp(PC pc){
   ierr = KSPSetTolerances(user->KSP_V, PETSC_DEFAULT, PETSC_DEFAULT, PETSC_DEFAULT, 200); //use 200 outer iterations for the V solve
   CHKERRQ(ierr);
 
-  if(0){
-    KSPConvergedReasonView(user->KSP_V, PETSC_VIEWER_DEFAULT);
-    KSPMonitorSet(user->KSP_V, (PetscErrorCode (*)(KSP,PetscInt,PetscReal,void*))KSPMonitorResidual, NULL, NULL);
-    KSPView(user->KSP_V, PETSC_VIEWER_STDOUT_WORLD);
-  }
+#line 18091
 
   PetscFunctionReturn(PETSC_SUCCESS);
 }
@@ -6313,20 +6128,7 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
     PetscCall(TSSolve(dummyts, X));
 
 
-    if(0){
-      Vec residual;
-      PetscCall(VecDuplicate(X,&residual));
-
-      //Vec Xdot;
-      //VecDuplicate(X,&Xdot);
-      //VecZeroEntries(Xdot);
-      //FormIFunction_Vperp_viscosity(ts, time, X, Xdot, residual, user);
-      //VecDestroy( & Xdot);
-
-      SNESGetFunction(dummysnes, & residual, NULL, NULL);
-      DumpSolution_Cell(dummyts, (int)(900), residual, user);
-      //VecDestroy( & residual);
-    }
+#line 20977
 
 
     PetscCall(TSGetSolveTime(dummyts, & ftime));
