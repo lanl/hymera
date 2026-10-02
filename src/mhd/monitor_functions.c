@@ -1641,8 +1641,8 @@ PetscErrorCode ComputeCurrent(TS ts, Vec X, void * ptr) {
   PetscInt N[3], ivErmzm, ivErmzp, ivErpzm, ivErpzp;
   PetscInt ivEphimzm, ivEphipzm, ivEphimzp, ivEphipzp;
   PetscInt ivErmphim, ivErpphim, ivErmphip, ivErpphip;
-  Vec xLocal, JLocal, J, GradEP, GradEPLocal;
-  PetscScalar ** ** arrGradEP, ** ** arrJ, ** ** arrX, Javg, I1, I2, I3;
+  Vec JLocal, J;
+  PetscScalar ** ** arrJ, Javg, I1, I2, I3;
 
   PetscCall(TSGetDM(ts, & da));
   PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));

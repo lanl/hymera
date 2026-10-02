@@ -241,7 +241,7 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
   PetscInt startr, startphi, startz, nr, nphi, nz;
   PetscScalar dt, cellvolume;
   Vec fLocal, xLocal, bcLocal, xdotLocal, pLocal;
-  Vec VxBe, VxBeLocal, VxB, Vf, VfLocal, nif, nifLocal, niv, nivLocal, Bv, BvLocal, curlBv, curlBvLocal, GradEP, GradEPLocal, F1, F2, F3, GradV1, GradV1Local, GradV2, GradV2Local, GradV3, GradV3Local, Fcopy, FcopyLocal, curlBxB, curlBxBLocal, LapV, LapVLocal ;
+  Vec VxBe, VxBeLocal, VxB, Vf, VfLocal, nif, nifLocal, niv, nivLocal, Bv, BvLocal, curlBv, curlBvLocal, GradEP, GradEPLocal, F1, F2, F3, GradV1, GradV1Local, GradV2, GradV2Local, GradV3, GradV3Local, Fcopy, FcopyLocal, LapV, LapVLocal ;
   Vec x, potential;
   Vec coordLocal;
   PetscInt N[3], er, ephi, ez, d;
@@ -273,7 +273,7 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda;
 
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrP, ** ** arrx, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrXdot, ** ** arrBv, ** ** arrcurlBv, ** ** arrnif, ** ** arrniv, ** ** arrVf, ** ** arrVxBe, ** ** arrGradEP, ** ** arrFcopy, ** ** arrcurlBxB, ** ** arrGradV3, ** ** arrGradV2, ** ** arrGradV1, ** ** arrLapV;
+  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrP, ** ** arrx, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrXdot, ** ** arrBv, ** ** arrcurlBv, ** ** arrnif, ** ** arrniv, ** ** arrVf, ** ** arrVxBe, ** ** arrGradEP, ** ** arrFcopy, ** ** arrGradV3, ** ** arrGradV2, ** ** arrGradV1, ** ** arrLapV;
 
   PetscInt steps=0;
 
@@ -2210,10 +2210,9 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
   User * user = (User * ) ptr;
   DM da, coordDA = user -> coorda;
   PetscInt startr, startphi, startz, nr, nphi, nz;
-  PetscScalar dt, cellvolume;
-  Vec fLocal, xLocal, bcLocal;
-  Vec VxBe, VxBeLocal, VxB, Bv, BvLocal, curlBv, curlBvLocal, Vf, VfLocal, nif, nifLocal, niv, nivLocal;
-  Vec x;
+  Vec fLocal, xLocal;
+  Vec VxBe, VxBeLocal, VxB, Bv, BvLocal, curlBv, curlBvLocal, niv, nivLocal;
+#line 13823
   Vec coordLocal;
   PetscInt N[3], er, ephi, ez, d;
 
@@ -2242,7 +2241,7 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda;
 
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrx, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrBv, ** ** arrcurlBv, ** ** arrVxBe, ** ** arrnif, ** ** arrniv, ** ** arrVf;
+  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrBv, ** ** arrcurlBv, ** ** arrVxBe, ** ** arrniv;
 
   PetscCall(VecZeroEntries(F));
   PetscCall(TSGetDM(ts, & da));
@@ -2347,7 +2346,6 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        cellvolume = MFD_CellVolume(arrCoord, er, ephi, ez, N, user -> dphi, icBrm, icBphim, icBzm, icBrp, icBphip, icBzp);
 #line 13988
 
         MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
