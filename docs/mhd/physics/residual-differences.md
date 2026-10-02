@@ -70,6 +70,37 @@ contains many `#line` directives (for example `#line 3002` at line 289), so line
 numbers in compiler diagnostics, `objdump -l` and debuggers do *not* match file
 lines. Do not cross-reference them.
 
+## The inertia flag (MHD_Config/inertia)
+
+The production momentum rows carried an advective inertia term multiplied by a
+literal zero, `+ 0.0 * niv * ((V.grad)V ...)`. It is now controlled by
+`MHD_Config/inertia`, default 0.
+
+- **Off (default).** The original statement, `0.0 *` term included, is evaluated
+  exactly as before, so results are bit-for-bit identical to all earlier runs.
+  `niv` and the velocity gradient are still built, because the masked term still
+  reads them.
+- **On.** The same statement without the `0.0 *`: the term is live. This is new
+  behaviour. The tier-1 baseline freezes its current output (12,606 of 482,112
+  entries differ from the off path on the test state, all finite) but it has not
+  been validated physically.
+
+Why the off path keeps a multiply-by-zero: deleting the term was tried and changes
+30 residual entries by 1 to 14 ULP. The build contracts to fused multiply-add, and
+with the term gone GCC fuses the remaining products differently. Pinning the
+obvious rounding point with an optimization barrier did not help, and building the
+fields while dropping the term did not either -- the change comes from how the
+whole inlined body is optimized. So keeping earlier results bit-exact requires
+the term to stay. Removing it, and skipping the field builds, is a deliberate
+re-baselining step for later.
+
+The flag must not reach `vperp_residual` as a runtime value. A runtime branch on it
+inside the body also moved those 30 entries, because GCC then shares code across
+the two alternatives. `FormIFunction_Vperp_viscosity` therefore chooses between two
+constant `MFD_ResidualTerms` -- `f1_advection` false or true -- and calls the
+always-inline body with one or the other, so each is compiled as its own
+specialization and the default one is unchanged.
+
 ## Summary
 
 After comments and whitespace are removed, a token-level diff (Python `difflib` over

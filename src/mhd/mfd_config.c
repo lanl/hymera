@@ -66,6 +66,8 @@ PetscErrorCode AppCtxView(MPI_Comm comm, const User *ctx) {
   PetscCall(PetscPrintf(comm,"debug       = %d\n",(int)ctx->debug));
   PetscCall(PetscPrintf(comm,"dump        = %d\n",(int)ctx->dump));
   PetscCall(PetscPrintf(comm,"monitor     = %d\n",(int)ctx->monitor));
+  PetscCall(PetscPrintf(comm,"inertia     = %d\n",(int)ctx->inertia));
+#line 69
   PetscCall(PetscPrintf(comm,"prestep     = %d\n",(int)ctx->prestep));
   PetscCall(PetscPrintf(comm,"savecoords  = %d\n",(int)ctx->savecoords));
   PetscCall(PetscPrintf(comm,"savesol     = %d\n",(int)ctx->savesol));

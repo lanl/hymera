@@ -258,6 +258,7 @@ typedef struct {
   PetscBool    f1_inertia;
   PetscBool    f3_resistive;
   PetscBool    f3_jre;
+  PetscBool    f1_advection;  /* production only: include n_i (V.grad)V for real */
   const char * label;
 } MFD_ResidualTerms;
 
@@ -278,7 +279,7 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
   PetscInt startr, startphi, startz, nr, nphi, nz;
   PetscScalar dt, cellvolume;
   Vec fLocal, xLocal, bcLocal, xdotLocal, pLocal;
-  Vec VxBe, VxBeLocal, VxB, Vf, VfLocal, nif, nifLocal, niv, nivLocal, Bv, BvLocal, curlBv, curlBvLocal, GradEP, GradEPLocal, F1, F2, F3, GradV1, GradV1Local, GradV2, GradV2Local, GradV3, GradV3Local, Fcopy, FcopyLocal, LapV, LapVLocal ;
+  Vec VxBe, VxBeLocal, VxB, Vf, VfLocal, nif, nifLocal, niv = NULL, nivLocal = NULL, Bv, BvLocal, curlBv, curlBvLocal, GradEP, GradEPLocal, F1 = NULL, F2 = NULL, F3 = NULL, GradV1 = NULL, GradV1Local = NULL, GradV2 = NULL, GradV2Local = NULL, GradV3 = NULL, GradV3Local = NULL, Fcopy, FcopyLocal, LapV, LapVLocal ;
   Vec x, potential;
   Vec coordLocal;
   PetscInt N[3], er, ephi, ez, d;
@@ -310,7 +311,7 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda;
 
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrP, ** ** arrx, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrXdot, ** ** arrBv, ** ** arrcurlBv, ** ** arrnif, ** ** arrniv, ** ** arrVf, ** ** arrVxBe, ** ** arrGradEP, ** ** arrFcopy, ** ** arrGradV3, ** ** arrGradV2, ** ** arrGradV1, ** ** arrLapV;
+  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrP, ** ** arrx, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrXdot, ** ** arrBv, ** ** arrcurlBv, ** ** arrnif, ** ** arrniv = NULL, ** ** arrVf, ** ** arrVxBe, ** ** arrGradEP, ** ** arrFcopy, ** ** arrGradV3 = NULL, ** ** arrGradV2 = NULL, ** ** arrGradV1 = NULL, ** ** arrLapV;
 
   PetscInt steps=0;
 
@@ -359,7 +360,15 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
     PetscCall(DMGlobalToLocalEnd(da, GradEP, INSERT_VALUES, GradEPLocal));
     PetscCall(DMStagVecGetArrayRead(da, GradEPLocal, & arrGradEP));
   }
-  {
+  /* niv feeds n_i dV/dt (relaxation) and the advective inertia term (production);
+     GradV1/2/3 feed only the latter. Production builds both whether or not
+     user->inertia is set: with the flag off the term is still evaluated, multiplied
+     by 0.0, because removing it changes the result in the last bit (see the comment
+     at the f1 statements). Relaxation never reads GradV, so it skips that work. */
+  const PetscBool build_niv   = PETSC_TRUE;
+  const PetscBool build_gradV = (PetscBool) (!terms->f1_inertia);
+  if (build_gradV) {
+#line 3068
     /* Compute the gradient of V */
     PetscCall(VecDuplicate(X, & F1));
     PetscCall(VecCopy(X, F1));
@@ -381,12 +390,16 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
   }
   /* Compute the projection vectors */
   /* P_{c->v}(ni) */
+  if (build_niv) {
+#line 3089
   PetscCall(DMCreateGlobalVector(da, & niv));
   CellToVertexProjectionScalar(ts, X, niv, user);
   PetscCall(DMGetLocalVector(da, & nivLocal));
   PetscCall(DMGlobalToLocalBegin(da, niv, INSERT_VALUES, nivLocal));
   PetscCall(DMGlobalToLocalEnd(da, niv, INSERT_VALUES, nivLocal));
   PetscCall(DMStagVecGetArrayRead(da, nivLocal, & arrniv));
+  }
+#line 3095
   /* P_{c->f}(ni) */
   PetscCall(DMCreateGlobalVector(da, & nif));
   CellToFaceProjection(ts, X, nif, user);
@@ -416,6 +429,8 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
   PetscCall(DMGlobalToLocalEnd(da, curlBv, INSERT_VALUES, curlBvLocal));
   PetscCall(DMStagVecGetArrayRead(da, curlBvLocal, & arrcurlBv));
   /* P_{e->v}(prim_grad(V)) */
+  if (build_gradV) {
+#line 3124
   PetscCall(DMCreateGlobalVector(da, & GradV1));
   EdgeToVertexProjection(ts, F1, GradV1, user);
   PetscCall(VecDestroy( & F1));
@@ -439,6 +454,8 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
   PetscCall(DMGlobalToLocalBegin(da, GradV2, INSERT_VALUES, GradV2Local));
   PetscCall(DMGlobalToLocalEnd(da, GradV2, INSERT_VALUES, GradV2Local));
   PetscCall(DMStagVecGetArrayRead(da, GradV2Local, & arrGradV2));
+  }
+#line 3147
   /* Compute the reconstruction vectors */
   /* R_{v->f}(V) */
   PetscCall(DMCreateGlobalVector(da, & Vf));
@@ -576,9 +593,21 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
 
             arrF[ez][ephi][er][ivVrmphimzm[2]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[0]] * arrBv[ez][ephi][er][ivVrmphimzm[1]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[0]]) + arrniv[ez][ephi][er][ivVrmphimzm[0]] * arrXdot[ez][ephi][er][ivVrmphimzm[2]] - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[2]];
           } else {
-            arrF[ez][ephi][er][ivVrmphimzm[0]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[2]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[2]] * arrBv[ez][ephi][er][ivVrmphimzm[1]]) + 0.0 * arrniv[ez][ephi][er][ivVrmphimzm[0]] * (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrGradV1[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrGradV1[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrGradV1[ez][ephi][er][ivVrmphimzm[2]] - arrX[ez][ephi][er][ivVrmphimzm[1]] * arrX[ez][ephi][er][ivVrmphimzm[1]] / arrCoorda[ez][ephi][er][icrmphimzm[0]] ) - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[0]];
+            /* Advective inertia n_i (V.grad)V, enabled by MHD_Config/inertia (default 0).
+             * The default branch keeps the original statement, term multiplied by 0.0,
+             * verbatim: deleting the term instead lets GCC contract the remaining
+             * products into FMAs differently, which moves 30 entries of the residual by
+             * 1-14 ULP and so breaks bit-for-bit agreement with earlier runs. Do not
+             * simplify it without re-baselining. */
+            if (terms->f1_advection) {
+              arrF[ez][ephi][er][ivVrmphimzm[0]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[2]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[2]] * arrBv[ez][ephi][er][ivVrmphimzm[1]]) + arrniv[ez][ephi][er][ivVrmphimzm[0]] * (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrGradV1[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrGradV1[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrGradV1[ez][ephi][er][ivVrmphimzm[2]] - arrX[ez][ephi][er][ivVrmphimzm[1]] * arrX[ez][ephi][er][ivVrmphimzm[1]] / arrCoorda[ez][ephi][er][icrmphimzm[0]] ) - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[0]];
 
-            arrF[ez][ephi][er][ivVrmphimzm[2]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[0]] * arrBv[ez][ephi][er][ivVrmphimzm[1]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[0]]) + 0.0 * arrniv[ez][ephi][er][ivVrmphimzm[0]] * (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrGradV3[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrGradV3[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrGradV3[ez][ephi][er][ivVrmphimzm[2]]) - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[2]];
+              arrF[ez][ephi][er][ivVrmphimzm[2]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[0]] * arrBv[ez][ephi][er][ivVrmphimzm[1]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[0]]) + arrniv[ez][ephi][er][ivVrmphimzm[0]] * (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrGradV3[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrGradV3[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrGradV3[ez][ephi][er][ivVrmphimzm[2]]) - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[2]];
+            } else {
+              arrF[ez][ephi][er][ivVrmphimzm[0]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[2]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[2]] * arrBv[ez][ephi][er][ivVrmphimzm[1]]) + 0.0 * arrniv[ez][ephi][er][ivVrmphimzm[0]] * (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrGradV1[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrGradV1[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrGradV1[ez][ephi][er][ivVrmphimzm[2]] - arrX[ez][ephi][er][ivVrmphimzm[1]] * arrX[ez][ephi][er][ivVrmphimzm[1]] / arrCoorda[ez][ephi][er][icrmphimzm[0]] ) - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[0]];
+
+              arrF[ez][ephi][er][ivVrmphimzm[2]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[0]] * arrBv[ez][ephi][er][ivVrmphimzm[1]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[0]]) + 0.0 * arrniv[ez][ephi][er][ivVrmphimzm[0]] * (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrGradV3[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrGradV3[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrGradV3[ez][ephi][er][ivVrmphimzm[2]]) - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[2]];
+            }
           }
 #line 3327
 
@@ -754,6 +783,8 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
   PetscCall(DMRestoreLocalVector(da, & LapVLocal));
   PetscCall(VecDestroy(& LapV));
 
+  if (build_gradV) {
+#line 3504
   PetscCall(DMStagVecRestoreArrayRead(da, GradV1Local, & arrGradV1));
   PetscCall(DMRestoreLocalVector(da, & GradV1Local));
   PetscCall(VecDestroy( & GradV1));
@@ -765,6 +796,8 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
   PetscCall(DMStagVecRestoreArrayRead(da, GradV3Local, & arrGradV3));
   PetscCall(DMRestoreLocalVector(da, & GradV3Local));
   PetscCall(VecDestroy( & GradV3));
+  }
+#line 3515
 
   PetscCall(DMStagVecRestoreArray(da, pLocal, & arrP));
   PetscCall(DMRestoreLocalVector(da, & pLocal));
@@ -775,9 +808,13 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
   PetscCall(DMRestoreLocalVector(da, & nifLocal));
   PetscCall(VecDestroy( & nif));
 
+  if (build_niv) {
+#line 3525
   PetscCall(DMStagVecRestoreArrayRead(da, nivLocal, & arrniv));
   PetscCall(DMRestoreLocalVector(da, & nivLocal));
   PetscCall(VecDestroy( & niv));
+  }
+#line 3528
 
   PetscCall(DMStagVecRestoreArrayRead(da, BvLocal, & arrBv));
   PetscCall(DMRestoreLocalVector(da, & BvLocal));
@@ -1187,9 +1224,20 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
 
 /* Production residual, every time step (registered in mhd.c). */
 PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void * ptr) {
+  /* MHD_Config/inertia picks between two separately compiled specializations.
+   * The flag must not reach vperp_residual as a runtime value: a runtime branch
+   * there lets GCC share code across the alternatives, which changed 30 entries
+   * of the default (inertia off) residual by 1-14 ULP. With the choice made here
+   * and each call inlined on a constant, the default path compiles exactly as it
+   * did before the flag existed. */
   static const MFD_ResidualTerms terms = {
     .f1_inertia = PETSC_FALSE, .f3_resistive = PETSC_TRUE, .f3_jre = PETSC_TRUE,
-    .label = "FormIFunction_Vperp_viscosity"};
+    .f1_advection = PETSC_FALSE, .label = "FormIFunction_Vperp_viscosity"};
+  static const MFD_ResidualTerms terms_advection = {
+    .f1_inertia = PETSC_FALSE, .f3_resistive = PETSC_TRUE, .f3_jre = PETSC_TRUE,
+    .f1_advection = PETSC_TRUE, .label = "FormIFunction_Vperp_viscosity"};
+  User * user = (User *) ptr;
+  if (user->inertia) return vperp_residual(ts, t, X, Xdot, F, ptr, &terms_advection);
   return vperp_residual(ts, t, X, Xdot, F, ptr, &terms);
 }
 

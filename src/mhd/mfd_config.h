@@ -141,6 +141,9 @@ typedef struct {
   PetscInt    monitor;          /* Flag for running the per-step Monitor diagnostics
                                    (step norms, div B, toroidal currents). Costs a
                                    nested solve per step, so off by default. */
+  PetscInt    inertia;          /* Flag enabling the advective inertia term n_i (V.grad)V in the
+                                   production momentum constraint (FormIFunction_Vperp_viscosity).
+                                   Off by default: the term was previously multiplied by 0.0. */
   PetscInt    prestep;          /* Flag for activating the prestep to approximate the runaway current contribution */
   Vec 	      X;
   Vec         X0;

@@ -216,6 +216,9 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
     // The regression harness turns this on and uses the output as its
     // per-step fingerprint.
     mhd_context->monitor                = pin->GetOrAddInteger("MHD_Config", "monitor",  0);
+    // Advective inertia n_i (V.grad)V in the production momentum residual.
+    // Off by default (it used to be multiplied by 0.0).
+    mhd_context->inertia                = pin->GetOrAddInteger("MHD_Config", "inertia",  0);
     mhd_context->savecoords             = pin->GetOrAddInteger("MHD_Config", "savecoords",  0);
     mhd_context->isB                    = NULL;
     mhd_context->isEP                   = NULL;

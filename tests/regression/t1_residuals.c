@@ -200,6 +200,8 @@ int main(int argc, char **argv) {
   PetscCall(PetscInitialize(&argc, &argv, NULL, NULL));
 
   static double jre[NR * NZ * 3];
+  static double inertia_out[2][600000];
+  PetscInt inertia_n[2] = {0, 0};
   long count = 0;
 
   for (PetscInt b = 0; b <= 1; ++b) {
@@ -231,6 +233,30 @@ int main(int argc, char **argv) {
       PetscCall(VecDestroy(&F));
     }
 
+    /* The production residual with MHD_Config/inertia = 1: advective inertia
+     * n_i (V.grad)V included. Appended after everything else so that the
+     * default-path output above is unchanged. This freezes the ON path's current
+     * behaviour; it is not a physical validation of that term. */
+    {
+      Vec F;
+      PetscCall(DMCreateGlobalVector(u.da, &F));
+      PetscCall(VecZeroEntries(F));
+      u.inertia = 1;
+      PetscCall(FormIFunction_Vperp_viscosity(ts, 0.0, X, Xdot, F, &u));
+      u.inertia = 0;
+      PetscInt           n;
+      const PetscScalar *f;
+      PetscCall(VecGetSize(F, &n));
+      PetscCall(VecGetArrayRead(F, &f));
+      for (PetscInt i = 0; i < n; ++i) {
+        inertia_out[b][i] = f[i];
+        ++count;
+      }
+      PetscCall(VecRestoreArrayRead(F, &f));
+      PetscCall(VecDestroy(&F));
+      inertia_n[b] = n;
+    }
+
     /* The RHS half of the production split, registered with TSSetRHSFunction. */
     {
       Vec F;
@@ -253,6 +279,11 @@ int main(int argc, char **argv) {
     PetscCall(teardown(&u, &ts));
   }
 
+  for (int b = 0; b < 2; ++b) {
+    printf("# inertia=1 phibtype=%d\n", b);
+    for (PetscInt i = 0; i < inertia_n[b]; ++i)
+      printf("FormIFunction_Vperp_viscosity_inertia %d %a\n", (int)i, inertia_out[b][i]);
+  }
   fprintf(stderr, "t1_residuals: %ld values\n", count);
   PetscCall(PetscFinalize());
   return 0;
