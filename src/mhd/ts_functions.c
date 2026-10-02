@@ -5593,7 +5593,7 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
     /* Use coloring to compute finite difference J efficiently */
     PetscCall(SNESSetJacobian(dummysnes, J, J, SNESComputeJacobianDefaultColor, PETSC_NULLPTR));
     PetscCall(TSSetIFunction(dummyts, NULL, FormIFunction_newequilibrium_Vperp, user));
-    PetscCall(TSSetRHSFunction(dummyts, NULL, FormRHSFunction_BImplicit, user));
+    /* No RHS: FormRHSFunction_BImplicit is identically zero; see mhd.c. */
 
     PetscCall(SNESSetUseMatrixFree(dummysnes,PETSC_TRUE,PETSC_FALSE));
     PetscCall(SNESSetOptionsPrefix(dummysnes, "dummySNES_"));

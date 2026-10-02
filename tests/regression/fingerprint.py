@@ -163,10 +163,12 @@ def parse_log(path: Path) -> dict:
                 if m2 := re.search(pat, line):
                     fp["derived"][key] = m2.group(1)
 
-    if snes_run:
-        fp["snes_counts"].append(len(snes_run) - 1)
-    if ksp_run:
-        fp["ksp_counts"].append(len(ksp_run) - 1)
+    # A run that is stopped (or times out) mid-solve leaves a final, unfinished
+    # iteration sequence. Counting it would report a spurious iteration-count
+    # change against a baseline that ran that solve to completion, so the
+    # trailing run is recorded separately and never compared.
+    fp["incomplete_trailing_snes"] = len(snes_run) - 1 if snes_run else None
+    fp["incomplete_trailing_ksp"] = len(ksp_run) - 1 if ksp_run else None
 
     return fp
 
@@ -238,16 +240,16 @@ def compare(base: dict, cand: dict, rtol: float) -> int:
 
     # Iteration counts are reported but not fatal: a shifted Krylov path is
     # expected for REASSOC-class changes. Surface it, do not fail on it.
-    if base["ksp_counts"] != cand["ksp_counts"]:
-        print(
-            f"note: KSP iteration counts changed "
-            f"{base['ksp_counts']} -> {cand['ksp_counts']}"
-        )
-    if base["snes_counts"] != cand["snes_counts"]:
-        print(
-            f"note: SNES iteration counts changed "
-            f"{base['snes_counts']} -> {cand['snes_counts']}"
-        )
+    # Compare only the solves both runs completed: a shorter run is a prefix,
+    # not a change.
+    for key in ("ksp_counts", "snes_counts"):
+        n = min(len(base[key]), len(cand[key]))
+        if base[key][:n] != cand[key][:n]:
+            print(
+                f"note: {key.split('_')[0].upper()} iteration counts changed "
+                f"over the {n} solves both runs completed: "
+                f"{base[key][:n]} -> {cand[key][:n]}"
+            )
 
     if problems:
         print(f"FAIL: {len(problems)} difference(s) beyond rtol={rtol:g}")

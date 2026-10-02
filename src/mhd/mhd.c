@@ -314,7 +314,12 @@ int mhd_initialize(User* user) {
     }
     //TSSetIFunction(user->ts, NULL, FormIFunction_DampingV, user);
     PetscCall(TSSetIFunction(user->ts, NULL, FormIFunction_Vperp_viscosity, user));
-    PetscCall(TSSetRHSFunction(user->ts, NULL, FormRHSFunction_BImplicit, user));
+    /* No RHS function on the implicit path. FormRHSFunction_BImplicit returns
+     * exactly zero everywhere (its header comment says so, and the tier-1 test
+     * confirms all entries are 0), so registering it only made every Newton
+     * iteration build auxiliary fields and geometry to add zero to the residual.
+     * TS treats an absent RHS as G = 0. */
+#line 318
   } else {
     PetscCall(TSSetRHSFunction(user->ts, NULL, FormRHSFunction_BImplicit, user));
   }
