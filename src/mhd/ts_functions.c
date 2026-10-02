@@ -224,16 +224,53 @@ PetscErrorCode FormIJacobian_BImplicit(TS ts, PetscReal t, Vec X, Vec Xdot, Pets
 
 #line 1934
 
+/* Which terms the shared V_perp residual body includes. FormIFunction_Vperp_viscosity
+ * (production time step) and FormIFunction_newequilibrium_Vperp (initial-condition
+ * relaxation) were 830- and 671-line copies of vperp_residual differing only in:
+ *
+ *   f1_inertia    r/z momentum rows on plasma vertices:
+ *                   TRUE : - (curl B x B) + n_i dV/dt - Re^-1 Lap V            (relaxation)
+ *                   FALSE: - (curl B x B) + 0.0 * n_i (V.grad V ...) - Re^-1 Lap V
+ *                          (production; the `0.0 *` advective term is kept verbatim)
+ *   f3_resistive  inner-edge Ohm's-law rows subtract derived_mimetic_curl2(B)
+ *                   (the betaf/betae2 term). FALSE = ideal Ohm's law, which the
+ *                   relaxation uses by owner decision (consistency with previous runs).
+ *   f3_jre        inner-edge Ohm's-law rows add the edge-averaged runaway current
+ *                   user->jre (open question Q2). Kept separate from f3_resistive.
+ *   label         PETSc log-event name.
+ *
+ *                                       f1_inertia  f3_resistive  f3_jre
+ *   FormIFunction_Vperp_viscosity        FALSE       TRUE          TRUE
+ *   FormIFunction_newequilibrium_Vperp   TRUE        FALSE         FALSE
+ *
+ * Every switch selects between complete, verbatim statements: the build contracts
+ * to FMA (-ffp-contract=fast), so changing an expression's shape could change bits.
+ * Only the two combinations above are covered by tests/regression/t1_residuals.c;
+ * the f3 branches for (resistive, no jre) and (jre, not resistive) are untested.
+ *
+ * vperp_residual is always_inline so each wrapper gets a body specialised on its
+ * constant `terms`, with the unused branches folded away before optimisation. As
+ * a plain out-of-line static (runtime `terms`) GCC merged code across the
+ * branches and the residual changed in the last ULP at 32 entries of the t1
+ * fixture; inlined, both wrappers are bit-identical to the pre-merge functions
+ * (same fmadd/fmsub counts, 61 and 52). Do not drop the attribute. */
+typedef struct {
+  PetscBool    f1_inertia;
+  PetscBool    f3_resistive;
+  PetscBool    f3_jre;
+  const char * label;
+} MFD_ResidualTerms;
+
 #line 2909
 
-PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void * ptr) {
+static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void * ptr, const MFD_ResidualTerms * terms) {
   PetscFunctionBeginUser;
 
   PetscLogEvent  USER_EVENT;
   PetscClassId   classid;
 
   PetscCall(PetscClassIdRegister("class name",&classid));
-  PetscCall(PetscLogEventRegister("FormIFunction_Vperp_viscosity",classid,&USER_EVENT));
+  PetscCall(PetscLogEventRegister(terms->label,classid,&USER_EVENT));
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
   User * user = (User * ) ptr;
@@ -532,9 +569,18 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
         }
 
         if (er > 0 && ez > 0 && fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7 && fabs(user -> dataC[er + ephi * N[0] + (ez - 1) * N[1] * N[0]] - 1.5) < 0.7 && fabs(user -> dataC[er - 1 + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7 && fabs(user -> dataC[er - 1 + ephi * N[0] + (ez - 1) * N[1] * N[0]] - 1.5) < 0.7) {
-          arrF[ez][ephi][er][ivVrmphimzm[0]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[2]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[2]] * arrBv[ez][ephi][er][ivVrmphimzm[1]]) + 0.0 * arrniv[ez][ephi][er][ivVrmphimzm[0]] * (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrGradV1[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrGradV1[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrGradV1[ez][ephi][er][ivVrmphimzm[2]] - arrX[ez][ephi][er][ivVrmphimzm[1]] * arrX[ez][ephi][er][ivVrmphimzm[1]] / arrCoorda[ez][ephi][er][icrmphimzm[0]] ) - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[0]];
+          /* f1_inertia selects whole statements (never a 0/1 factor) so each variant keeps
+             its original expression tree, and hence its FMA contraction, bit for bit. */
+          if (terms->f1_inertia) {
+            arrF[ez][ephi][er][ivVrmphimzm[0]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[2]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[2]] * arrBv[ez][ephi][er][ivVrmphimzm[1]]) + arrniv[ez][ephi][er][ivVrmphimzm[0]] * arrXdot[ez][ephi][er][ivVrmphimzm[0]] - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[0]];
 
-          arrF[ez][ephi][er][ivVrmphimzm[2]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[0]] * arrBv[ez][ephi][er][ivVrmphimzm[1]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[0]]) + 0.0 * arrniv[ez][ephi][er][ivVrmphimzm[0]] * (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrGradV3[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrGradV3[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrGradV3[ez][ephi][er][ivVrmphimzm[2]]) - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[2]];
+            arrF[ez][ephi][er][ivVrmphimzm[2]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[0]] * arrBv[ez][ephi][er][ivVrmphimzm[1]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[0]]) + arrniv[ez][ephi][er][ivVrmphimzm[0]] * arrXdot[ez][ephi][er][ivVrmphimzm[2]] - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[2]];
+          } else {
+            arrF[ez][ephi][er][ivVrmphimzm[0]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[2]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[2]] * arrBv[ez][ephi][er][ivVrmphimzm[1]]) + 0.0 * arrniv[ez][ephi][er][ivVrmphimzm[0]] * (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrGradV1[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrGradV1[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrGradV1[ez][ephi][er][ivVrmphimzm[2]] - arrX[ez][ephi][er][ivVrmphimzm[1]] * arrX[ez][ephi][er][ivVrmphimzm[1]] / arrCoorda[ez][ephi][er][icrmphimzm[0]] ) - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[0]];
+
+            arrF[ez][ephi][er][ivVrmphimzm[2]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[0]] * arrBv[ez][ephi][er][ivVrmphimzm[1]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[0]]) + 0.0 * arrniv[ez][ephi][er][ivVrmphimzm[0]] * (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrGradV3[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrGradV3[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrGradV3[ez][ephi][er][ivVrmphimzm[2]]) - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[2]];
+          }
+#line 3327
 
           arrF[ez][ephi][er][ivVrmphimzm[1]] = (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrBv[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrBv[ez][ephi][er][ivVrmphimzm[2]]) ;
 
@@ -769,16 +815,34 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
 
         /* f3(V,EP,tau,B,ni) = tau - derived_mimetic_curl2(B) + (eta/(V_A*B_0)) j_RE; for all inner edges */
         if (!(er == 0 || ez == 0)) {
-          arrF[ez][ephi][er][ivErmzm] = arrX[ez][ephi][er][ivErmzm] - ((arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) -
-                arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) -
-                arrX[ez - 1][ephi][er][ivBrm] * betaf(er, ephi, ez - 1, LEFT, user) / surface(er, ephi, ez - 1, LEFT, user) +
-                arrX[ez][ephi][er - 1][ivBzm] * betaf(er - 1, ephi, ez, BACK, user) / surface(er - 1, ephi, ez, BACK, user)) * rmzmedgelength / betae2(er, ephi, ez, BACK_LEFT, user))
-            + .25 * (
-                jre.data[(er    ) * jre.stride0 +  (ez    ) * jre.stride1 + 1 * jre.stride2] +
-                jre.data[(er - 1) * jre.stride0 +  (ez    ) * jre.stride1 + 1 * jre.stride2] +
-                jre.data[(er    ) * jre.stride0 +  (ez - 1) * jre.stride1 + 1 * jre.stride2] +
-                jre.data[(er - 1) * jre.stride0 +  (ez - 1) * jre.stride1 + 1 * jre.stride2]
-              );
+          if (terms->f3_resistive && terms->f3_jre) {
+            arrF[ez][ephi][er][ivErmzm] = arrX[ez][ephi][er][ivErmzm] - ((arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) -
+                  arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) -
+                  arrX[ez - 1][ephi][er][ivBrm] * betaf(er, ephi, ez - 1, LEFT, user) / surface(er, ephi, ez - 1, LEFT, user) +
+                  arrX[ez][ephi][er - 1][ivBzm] * betaf(er - 1, ephi, ez, BACK, user) / surface(er - 1, ephi, ez, BACK, user)) * rmzmedgelength / betae2(er, ephi, ez, BACK_LEFT, user))
+              + .25 * (
+                  jre.data[(er    ) * jre.stride0 +  (ez    ) * jre.stride1 + 1 * jre.stride2] +
+                  jre.data[(er - 1) * jre.stride0 +  (ez    ) * jre.stride1 + 1 * jre.stride2] +
+                  jre.data[(er    ) * jre.stride0 +  (ez - 1) * jre.stride1 + 1 * jre.stride2] +
+                  jre.data[(er - 1) * jre.stride0 +  (ez - 1) * jre.stride1 + 1 * jre.stride2]
+                );
+          } else if (terms->f3_resistive) { /* not used by any wrapper; NOT covered by the t1 baseline */
+            arrF[ez][ephi][er][ivErmzm] = arrX[ez][ephi][er][ivErmzm] - ((arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) -
+                  arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) -
+                  arrX[ez - 1][ephi][er][ivBrm] * betaf(er, ephi, ez - 1, LEFT, user) / surface(er, ephi, ez - 1, LEFT, user) +
+                  arrX[ez][ephi][er - 1][ivBzm] * betaf(er - 1, ephi, ez, BACK, user) / surface(er - 1, ephi, ez, BACK, user)) * rmzmedgelength / betae2(er, ephi, ez, BACK_LEFT, user));
+          } else if (terms->f3_jre) { /* not used by any wrapper; NOT covered by the t1 baseline */
+            arrF[ez][ephi][er][ivErmzm] = arrX[ez][ephi][er][ivErmzm]
+              + .25 * (
+                  jre.data[(er    ) * jre.stride0 +  (ez    ) * jre.stride1 + 1 * jre.stride2] +
+                  jre.data[(er - 1) * jre.stride0 +  (ez    ) * jre.stride1 + 1 * jre.stride2] +
+                  jre.data[(er    ) * jre.stride0 +  (ez - 1) * jre.stride1 + 1 * jre.stride2] +
+                  jre.data[(er - 1) * jre.stride0 +  (ez - 1) * jre.stride1 + 1 * jre.stride2]
+                );
+          } else {
+            arrF[ez][ephi][er][ivErmzm] = arrX[ez][ephi][er][ivErmzm];
+          }
+#line 3609
           /* DEBUG PRINT*/
           if (user -> debug) {
             PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F(Ermzm) = %E\n", (double) arrF[ez][ephi][er][ivErmzm]));
@@ -786,28 +850,60 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
         }
         if (!(user -> phibtype)) {
           if (!(ephi == 0 || ez == 0)) {
-            arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm] - ((-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-                  arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
-                  arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
-                  arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betae2(er, ephi, ez, BACK_DOWN, user))
-              + .5 * (
-                  jre.data[er * jre.stride0 + (ez    ) * jre.stride1] +
-                  jre.data[er * jre.stride0 + (ez - 1) * jre.stride1]
-                );
+            if (terms->f3_resistive && terms->f3_jre) {
+              arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm] - ((-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                    arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
+                    arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
+                    arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betae2(er, ephi, ez, BACK_DOWN, user))
+                + .5 * (
+                    jre.data[er * jre.stride0 + (ez    ) * jre.stride1] +
+                    jre.data[er * jre.stride0 + (ez - 1) * jre.stride1]
+                  );
+            } else if (terms->f3_resistive) { /* not used by any wrapper; NOT covered by the t1 baseline */
+              arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm] - ((-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                    arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
+                    arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
+                    arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betae2(er, ephi, ez, BACK_DOWN, user));
+            } else if (terms->f3_jre) { /* not used by any wrapper; NOT covered by the t1 baseline */
+              arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm]
+                + .5 * (
+                    jre.data[er * jre.stride0 + (ez    ) * jre.stride1] +
+                    jre.data[er * jre.stride0 + (ez - 1) * jre.stride1]
+                  );
+            } else {
+              arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm];
+            }
+#line 3624
             /* DEBUG PRINT*/
             if (user -> debug) {
               PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F(Ephimzm) = %g\n", (double) arrF[ez][ephi][er][ivEphimzm]));
             }
           }
           if (!(er == 0 || ephi == 0)) {
-            arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim] - ((-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
-                  arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-                  arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
-                  arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betae2(er, ephi, ez, DOWN_LEFT, user))
-              + .5 * (
-                  jre.data[(er - 1) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2] +
-                  jre.data[(er    ) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2]
-                );
+            if (terms->f3_resistive && terms->f3_jre) {
+              arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim] - ((-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
+                    arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                    arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
+                    arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betae2(er, ephi, ez, DOWN_LEFT, user))
+                + .5 * (
+                    jre.data[(er - 1) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2] +
+                    jre.data[(er    ) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2]
+                  );
+            } else if (terms->f3_resistive) { /* not used by any wrapper; NOT covered by the t1 baseline */
+              arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim] - ((-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
+                    arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                    arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
+                    arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betae2(er, ephi, ez, DOWN_LEFT, user));
+            } else if (terms->f3_jre) { /* not used by any wrapper; NOT covered by the t1 baseline */
+              arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim]
+                + .5 * (
+                    jre.data[(er - 1) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2] +
+                    jre.data[(er    ) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2]
+                  );
+            } else {
+              arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim];
+            }
+#line 3638
 
             /* DEBUG PRINT*/
             if (user -> debug) {
@@ -836,28 +932,60 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
           }
         } else {
           if (!(ez == 0)) {
-            arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm] - ((-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-                  arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
-                  arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
-                  arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betae2(er, ephi, ez, BACK_DOWN, user))
-              + .5 * (
-                  jre.data[er * jre.stride0 + (ez    ) * jre.stride1 + 0 * jre.stride2] +
-                  jre.data[er * jre.stride0 + (ez - 1) * jre.stride1 + 0 * jre.stride2]
-                );
+            if (terms->f3_resistive && terms->f3_jre) {
+              arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm] - ((-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                    arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
+                    arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
+                    arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betae2(er, ephi, ez, BACK_DOWN, user))
+                + .5 * (
+                    jre.data[er * jre.stride0 + (ez    ) * jre.stride1 + 0 * jre.stride2] +
+                    jre.data[er * jre.stride0 + (ez - 1) * jre.stride1 + 0 * jre.stride2]
+                  );
+            } else if (terms->f3_resistive) { /* not used by any wrapper; NOT covered by the t1 baseline */
+              arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm] - ((-arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                    arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user) / surface(er, ephi, ez, BACK, user) +
+                    arrX[ez - 1][ephi][er][ivBphim] * betaf(er, ephi, ez - 1, DOWN, user) / surface(er, ephi, ez - 1, DOWN, user) -
+                    arrX[ez][ephi - 1][er][ivBzm] * betaf(er, ephi - 1, ez, BACK, user) / surface(er, ephi - 1, ez, BACK, user)) * phimzmedgelength / betae2(er, ephi, ez, BACK_DOWN, user));
+            } else if (terms->f3_jre) { /* not used by any wrapper; NOT covered by the t1 baseline */
+              arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm]
+                + .5 * (
+                    jre.data[er * jre.stride0 + (ez    ) * jre.stride1 + 0 * jre.stride2] +
+                    jre.data[er * jre.stride0 + (ez - 1) * jre.stride1 + 0 * jre.stride2]
+                  );
+            } else {
+              arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm];
+            }
+#line 3674
             /* DEBUG PRINT*/
             if (user -> debug) {
               PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F(Ephimzm) = %g\n", (double) arrF[ez][ephi][er][ivEphimzm]));
             }
           }
           if (!(er == 0)) {
-            arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim] - ((-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
-                  arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
-                  arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
-                  arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betae2(er, ephi, ez, DOWN_LEFT, user))
-              + .5 * (
-                  jre.data[(er - 1) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2] +
-                  jre.data[(er    ) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2]
-                );
+            if (terms->f3_resistive && terms->f3_jre) {
+              arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim] - ((-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
+                    arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                    arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
+                    arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betae2(er, ephi, ez, DOWN_LEFT, user))
+                + .5 * (
+                    jre.data[(er - 1) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2] +
+                    jre.data[(er    ) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2]
+                  );
+            } else if (terms->f3_resistive) { /* not used by any wrapper; NOT covered by the t1 baseline */
+              arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim] - ((-arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user) / surface(er, ephi, ez, LEFT, user) +
+                    arrX[ez][ephi][er][ivBphim] * betaf(er, ephi, ez, DOWN, user) / surface(er, ephi, ez, DOWN, user) +
+                    arrX[ez][ephi - 1][er][ivBrm] * betaf(er, ephi - 1, ez, LEFT, user) / surface(er, ephi - 1, ez, LEFT, user) -
+                    arrX[ez][ephi][er - 1][ivBphim] * betaf(er - 1, ephi, ez, DOWN, user) / surface(er - 1, ephi, ez, DOWN, user)) * rmphimedgelength / betae2(er, ephi, ez, DOWN_LEFT, user));
+            } else if (terms->f3_jre) { /* not used by any wrapper; NOT covered by the t1 baseline */
+              arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim]
+                + .5 * (
+                    jre.data[(er - 1) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2] +
+                    jre.data[(er    ) * jre.stride0 + ez * jre.stride1 + 2 * jre.stride2]
+                  );
+            } else {
+              arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim];
+            }
+#line 3688
             /* DEBUG PRINT*/
             if (user -> debug) {
               PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F(Ermphim,%d,%d,%d) = %g\n", er, ephi, ez, (double) arrF[ez][ephi][er][ivErmphim]));
@@ -1055,6 +1183,14 @@ PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot
 
 
   PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+/* Production residual, every time step (registered in mhd.c). */
+PetscErrorCode FormIFunction_Vperp_viscosity(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void * ptr) {
+  static const MFD_ResidualTerms terms = {
+    .f1_inertia = PETSC_FALSE, .f3_resistive = PETSC_TRUE, .f3_jre = PETSC_TRUE,
+    .label = "FormIFunction_Vperp_viscosity"};
+  return vperp_residual(ts, t, X, Xdot, F, ptr, &terms);
 }
 
 #line 4866
@@ -1523,676 +1659,15 @@ PetscErrorCode FormIFunction_InitializeEP_halo(TS ts, PetscReal t, Vec X, Vec Xd
 
 #line 12103
 
+/* Initial-condition relaxation residual (ictype 9/15, see FormInitialSolution_psi):
+ * f1 has inertia n_i dV/dt and no advection; Ohm's law is IDEAL (no resistive
+ * curl_2(B) term -- owner decision, kept for consistency with previous runs);
+ * no runaway-current source. */
 PetscErrorCode FormIFunction_newequilibrium_Vperp(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, void * ptr) {
-  PetscFunctionBeginUser;
-
-  PetscLogEvent  USER_EVENT;
-  PetscClassId   classid;
-
-  PetscCall(PetscClassIdRegister("class name",&classid));
-  PetscCall(PetscLogEventRegister("FormIFunction_newequilibrium_Vperp",classid,&USER_EVENT));
-  PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
-
-  User * user = (User * ) ptr;
-  DM da, coordDA = user -> coorda;
-  PetscInt startr, startphi, startz, nr, nphi, nz;
-  PetscScalar dt, cellvolume;
-  Vec fLocal, xLocal, bcLocal, xdotLocal, pLocal;
-  Vec VxBe, VxBeLocal, VxB, Vf, VfLocal, nif, nifLocal, niv, nivLocal, Bv, BvLocal, curlBv, curlBvLocal, GradEP, GradEPLocal, F1, F2, F3, GradV1, GradV1Local, GradV2, GradV2Local, GradV3, GradV3Local, Fcopy, FcopyLocal, curlBxB, curlBxBLocal, LapV, LapVLocal ;
-  Vec x, potential;
-  Vec coordLocal;
-  PetscInt N[3], er, ephi, ez, d;
-
-  PetscInt icp[3];
-  PetscInt icBrp[3], icBphip[3], icBzp[3], icBrm[3], icBphim[3], icBzm[3];
-  PetscInt icErmzm[3], icErmzp[3], icErpzm[3], icErpzp[3];
-
-  PetscInt icEphimzm[3], icEphipzm[3], icEphimzp[3], icEphipzp[3];
-  PetscInt icErmphim[3], icErpphim[3], icErmphip[3], icErpphip[3];
-  PetscInt icrmphimzm[3], icrmphimzp[3], icrmphipzm[3], icrmphipzp[3];
-  PetscInt icrpphimzm[3], icrpphimzp[3], icrpphipzm[3], icrpphipzp[3];
-
-  PetscInt ivn;
-
-  PetscInt ivBrp, ivBphip, ivBzp, ivBrm, ivBphim, ivBzm;
-
-  PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
-  PetscInt ivEphimzm, ivEphipzm, ivEphimzp, ivEphipzp;
-  PetscInt ivErmphim, ivErpphim, ivErmphip, ivErpphip;
-
-  PetscInt ivVrmphimzm[4], ivVrmphimzp[4], ivVrmphipzm[4], ivVrmphipzp[4];
-  PetscInt ivVrpphimzm[4], ivVrpphipzm[4], ivVrpphipzp[4], ivVrpphimzp[4];
-
-  DM dmCoord;
-  DM dmCoorda;
-  Vec coordaLocal;
-  PetscScalar ** ** arrCoorda;
-
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrP, ** ** arrx, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrXdot, ** ** arrBv, ** ** arrcurlBv, ** ** arrnif, ** ** arrniv, ** ** arrVf, ** ** arrVxBe, ** ** arrGradEP, ** ** arrFcopy, ** ** arrcurlBxB, ** ** arrGradV3, ** ** arrGradV2, ** ** arrGradV1, ** ** arrLapV;
-
-  PetscInt steps=0;
-
-  PetscCall(TSGetStepNumber(ts,&steps));
-  PetscCall(VecZeroEntries(F));
-  PetscCall(TSGetDM(ts, & da));
-
-  PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
-  PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
-
-  MFD_Slots S;
-  PetscCall(MFD_GetSlotsSolution(da, & S));
-#line 12194
-  PetscCall(DMGetCoordinateDM(da, & dmCoord));
-  PetscCall(DMGetCoordinatesLocal(da, & coordLocal));
-  PetscCall(DMStagVecGetArrayRead(dmCoord, coordLocal, & arrCoord));
-  PetscCall(DMGetCoordinateDM(coordDA, & dmCoorda));
-  PetscCall(DMGetCoordinatesLocal(coordDA, & coordaLocal));
-  PetscCall(DMStagVecGetArrayRead(dmCoorda, coordaLocal, & arrCoorda));
-  PetscCall(MFD_GetSlotsCoords(dmCoord, dmCoorda, & S));
-  MFD_UNPACK_SLOTS(S);
-#line 12233
-  /* Compute the source term potential for time-dependent manufactured solution */
-  PetscCall(DMCreateGlobalVector(da, & potential));
-  FormSourceTermPotential(ts, t, potential, user);
-  PetscCall(DMGetLocalVector(da, & pLocal));
-  PetscCall(DMGlobalToLocalBegin(da, potential, INSERT_VALUES, pLocal));
-  PetscCall(DMGlobalToLocalEnd(da, potential, INSERT_VALUES, pLocal));
-  PetscCall(DMStagVecGetArray(da, pLocal, & arrP));
-
-  /* Compute the exact solution to set boundary conditions */
-  PetscCall(DMCreateGlobalVector(da, & x));
-  FormExactSolution(t, ts, & x, user);
-  PetscCall(DMGetLocalVector(da, & bcLocal));
-  PetscCall(DMGlobalToLocalBegin(da, x, INSERT_VALUES, bcLocal));
-  PetscCall(DMGlobalToLocalEnd(da, x, INSERT_VALUES, bcLocal));
-  PetscCall(DMStagVecGetArrayRead(da, bcLocal, & arrx));
-  PetscCall(TSGetTimeStep(ts, & dt));
-  {
-    /* Compute the gradient of EP */
-    PetscCall(VecDuplicate(X, & GradEP));
-    PetscCall(VecCopy(X, GradEP));
-    FormDiscreteGradientEP_noMat(ts, X, GradEP, user);
-    PetscCall(DMGetLocalVector(da, & GradEPLocal));
-    PetscCall(DMGlobalToLocalBegin(da, GradEP, INSERT_VALUES, GradEPLocal));
-    PetscCall(DMGlobalToLocalEnd(da, GradEP, INSERT_VALUES, GradEPLocal));
-    PetscCall(DMStagVecGetArrayRead(da, GradEPLocal, & arrGradEP));
-  }
-  {
-    /* Compute the gradient of V */
-    PetscCall(VecDuplicate(X, & F1));
-    PetscCall(VecCopy(X, F1));
-    PetscCall(VecDuplicate(X, & F2));
-    PetscCall(VecCopy(X, F2));
-    PetscCall(VecDuplicate(X, & F3));
-    PetscCall(VecCopy(X, F3));
-    FormDiscreteGradientVectorField(ts, X, F1, F2, F3, user);
-  }
-  {
-    /* Compute the vector laplacian of V */
-    PetscCall(VecDuplicate(X, & LapV));
-    PetscCall(VecZeroEntries(LapV));
-    ApplyVectorLaplacian(ts, X, LapV, user);
-    PetscCall(DMGetLocalVector(da, & LapVLocal));
-    PetscCall(DMGlobalToLocalBegin(da, LapV, INSERT_VALUES, LapVLocal));
-    PetscCall(DMGlobalToLocalEnd(da, LapV, INSERT_VALUES, LapVLocal));
-    PetscCall(DMStagVecGetArrayRead(da, LapVLocal, & arrLapV));
-  }
-  /* Compute the projection vectors */
-  /* P_{c->v}(ni) */
-  PetscCall(DMCreateGlobalVector(da, & niv));
-  CellToVertexProjectionScalar(ts, X, niv, user);
-  PetscCall(DMGetLocalVector(da, & nivLocal));
-  PetscCall(DMGlobalToLocalBegin(da, niv, INSERT_VALUES, nivLocal));
-  PetscCall(DMGlobalToLocalEnd(da, niv, INSERT_VALUES, nivLocal));
-  PetscCall(DMStagVecGetArrayRead(da, nivLocal, & arrniv));
-  /* P_{c->f}(ni) */
-  PetscCall(DMCreateGlobalVector(da, & nif));
-  CellToFaceProjection(ts, X, nif, user);
-  PetscCall(DMGetLocalVector(da, & nifLocal));
-  PetscCall(DMGlobalToLocalBegin(da, nif, INSERT_VALUES, nifLocal));
-  PetscCall(DMGlobalToLocalEnd(da, nif, INSERT_VALUES, nifLocal));
-  PetscCall(DMStagVecGetArrayRead(da, nifLocal, & arrnif));
-  /* P_{f->v}(B) */
-  PetscCall(DMCreateGlobalVector(da, & Bv));
-  FaceToVertexProjection(ts, X, Bv, user);
-  PetscCall(DMGetLocalVector(da, & BvLocal));
-  PetscCall(DMGlobalToLocalBegin(da, Bv, INSERT_VALUES, BvLocal));
-  PetscCall(DMGlobalToLocalEnd(da, Bv, INSERT_VALUES, BvLocal));
-  PetscCall(DMStagVecGetArrayRead(da, BvLocal, & arrBv));
-  /* P_{e->v}(der_curl_no_mp(B)) */
-  PetscCall(DMCreateGlobalVector(da, & curlBv));
-  PetscCall(VecZeroEntries(curlBv));
-  Vec curlB;
-  PetscCall(VecDuplicate(X, & curlB));
-  PetscCall(VecCopy(X, curlB));
-  FormDerivedCurlnomp(ts, X, curlB, user); //This updates only the E field part in curlB by computing the derived mimetic curl operator applied to B field of X that does not include material properties
-  EdgeToVertexProjection(ts, curlB, curlBv, user);
-  //PetscBarrier((PetscObject) curlB);
-  PetscCall(VecDestroy( & curlB));
-  PetscCall(DMGetLocalVector(da, & curlBvLocal));
-  PetscCall(DMGlobalToLocalBegin(da, curlBv, INSERT_VALUES, curlBvLocal));
-  PetscCall(DMGlobalToLocalEnd(da, curlBv, INSERT_VALUES, curlBvLocal));
-  PetscCall(DMStagVecGetArrayRead(da, curlBvLocal, & arrcurlBv));
-  /* P_{e->v}(prim_grad(V)) */
-  PetscCall(DMCreateGlobalVector(da, & GradV1));
-  EdgeToVertexProjection(ts, F1, GradV1, user);
-  PetscCall(VecDestroy( & F1));
-  PetscCall(DMGetLocalVector(da, & GradV1Local));
-  PetscCall(DMGlobalToLocalBegin(da, GradV1, INSERT_VALUES, GradV1Local));
-  PetscCall(DMGlobalToLocalEnd(da, GradV1, INSERT_VALUES, GradV1Local));
-  PetscCall(DMStagVecGetArrayRead(da, GradV1Local, & arrGradV1));
-
-  PetscCall(DMCreateGlobalVector(da, & GradV3));
-  EdgeToVertexProjection(ts, F3, GradV3, user);
-  PetscCall(VecDestroy( & F3));
-  PetscCall(DMGetLocalVector(da, & GradV3Local));
-  PetscCall(DMGlobalToLocalBegin(da, GradV3, INSERT_VALUES, GradV3Local));
-  PetscCall(DMGlobalToLocalEnd(da, GradV3, INSERT_VALUES, GradV3Local));
-  PetscCall(DMStagVecGetArrayRead(da, GradV3Local, & arrGradV3));
-
-  PetscCall(DMCreateGlobalVector(da, & GradV2));
-  EdgeToVertexProjection(ts, F2, GradV2, user);
-  PetscCall(VecDestroy( & F2));
-  PetscCall(DMGetLocalVector(da, & GradV2Local));
-  PetscCall(DMGlobalToLocalBegin(da, GradV2, INSERT_VALUES, GradV2Local));
-  PetscCall(DMGlobalToLocalEnd(da, GradV2, INSERT_VALUES, GradV2Local));
-  PetscCall(DMStagVecGetArrayRead(da, GradV2Local, & arrGradV2));
-  /* Compute the reconstruction vectors */
-  /* R_{v->f}(V) */
-  PetscCall(DMCreateGlobalVector(da, & Vf));
-  VertexToFaceReconstruction(ts, X, Vf, user);
-  PetscCall(DMGetLocalVector(da, & VfLocal));
-  PetscCall(DMGlobalToLocalBegin(da, Vf, INSERT_VALUES, VfLocal));
-  PetscCall(DMGlobalToLocalEnd(da, Vf, INSERT_VALUES, VfLocal));
-  PetscCall(DMStagVecGetArrayRead(da, VfLocal, & arrVf));
-  /* R_{v->e}(VxP_{f->v}(B)) */
-  PetscCall(DMCreateGlobalVector(da, & VxB));
-  PetscCall(VecZeroEntries(VxB));
-  VertexCrossProduct(ts, X, Bv, VxB, user);
-  PetscCall(DMCreateGlobalVector(da, & VxBe));
-  VertexToEdgeReconstruction(ts, VxB, VxBe, user);
-  PetscCall(VecDestroy( & VxB));
-  PetscCall(DMGetLocalVector(da, & VxBeLocal));
-  PetscCall(DMGlobalToLocalBegin(da, VxBe, INSERT_VALUES, VxBeLocal));
-  PetscCall(DMGlobalToLocalEnd(da, VxBe, INSERT_VALUES, VxBeLocal));
-  PetscCall(DMStagVecGetArrayRead(da, VxBeLocal, & arrVxBe));
-
-  /* Compute function over the locally owned part of the grid */
-  /* f1(V,EP,tau,B,ni) . e_r = [P_{c->v}(n_i) (dV/dt) - P_{e->v}(der_mim_curl_no_mp(B)) x P_{f->v}(B) - Re^{-1} (\nabla^2 V)] . e_r ; on plasma vertices
-     f1(V,EP,tau,B,ni) . e_phi = V . P_{f->v}(B) ; on plasma vertices
-     f1(V,EP,tau,B,ni) . e_z = [P_{c->v}(n_i) (dV/dt) - P_{e->v}(der_mim_curl_no_mp(B)) x P_{f->v}(B) - Re^{-1} (\nabla^2 V)] . e_z ; on plasma vertices
-     f1(V,EP,tau,B,ni) = V; on other vertices
-     f2(V,EP,tau,B,ni) = - derived_mimetic_div(primary_mimetic_grad(EP)); on all vertices
-     f2(V,EP,tau,B,ni) += derived_mimetic_div(R_ve(VxP_fv(B))); on plasma vertices
-     f3(V,EP,tau,B,ni) = tau - primary_mimetic_grad(EP); on all edges
-     f3(V,EP,tau,B,ni) += R_{v->e}(VxP_{f->v}(B)) ; on inner plasma edges
-     f4(V,EP,tau,B,ni) = dB/dt + primary_mimetic_curl(tau); on all faces
-     f5(V,EP,tau,B,ni) = dni/dt ; in all cells
-     f5(V,EP,tau,B,ni) += primary_mimetic_divergence(P_{c->f}(ni)*R_{v->f}(V)); in plasma cells
-     */
-  PetscCall(DMGetLocalVector(da, & fLocal));
-  PetscCall(DMGlobalToLocalBegin(da, F, INSERT_VALUES, fLocal));
-  PetscCall(DMGlobalToLocalEnd(da, F, INSERT_VALUES, fLocal));
-  PetscCall(DMStagVecGetArray(da, fLocal, & arrF));
-
-  PetscCall(DMGetLocalVector(da, & xLocal));
-  PetscCall(DMGlobalToLocalBegin(da, X, INSERT_VALUES, xLocal));
-  PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, xLocal));
-  PetscCall(DMStagVecGetArrayRead(da, xLocal, & arrX));
-
-  PetscCall(DMGetLocalVector(da, & xdotLocal));
-  PetscCall(DMGlobalToLocalBegin(da, Xdot, INSERT_VALUES, xdotLocal));
-  PetscCall(DMGlobalToLocalEnd(da, Xdot, INSERT_VALUES, xdotLocal));
-  PetscCall(DMStagVecGetArrayRead(da, xdotLocal, & arrXdot));
-
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-
-        cellvolume = MFD_CellVolume(arrCoord, er, ephi, ez, N, user -> dphi, icBrm, icBphim, icBzm, icBrp, icBphip, icBzp);
-#line 12397
-
-        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
-          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
-          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
-          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
-#line 12437
-
-        /* Set boundary conditions for tau field */
-        /* f3(V,EP,tau,B,ni) = (tau - Eboundarycondition) */
-        if (er == 0 || ez == 0) {
-          arrF[ez][ephi][er][ivErmzm] = (arrX[ez][ephi][er][ivErmzm] - arrx[ez][ephi][er][ivErmzm]);
-        }
-        if (!(user -> phibtype)) {
-          if (er == 0 || ephi == 0) {
-            arrF[ez][ephi][er][ivErmphim] = (arrX[ez][ephi][er][ivErmphim] - arrx[ez][ephi][er][ivErmphim]);
-            if (user -> debug) {
-              PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F(Ermphim,%d,%d,%d) = %g\n", er, ephi, ez, (double) arrF[ez][ephi][er][ivErmphim]));
-            }
-          }
-          if (ephi == 0 || ez == 0) {
-            arrF[ez][ephi][er][ivEphimzm] = (arrX[ez][ephi][er][ivEphimzm] - arrx[ez][ephi][er][ivEphimzm]);
-          }
-        } else {
-          if (er == 0) {
-            arrF[ez][ephi][er][ivErmphim] = (arrX[ez][ephi][er][ivErmphim] - arrx[ez][ephi][er][ivErmphim]);
-            if (user -> debug) {
-              PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F(Ermphim,%d,%d,%d) = %g\n", er, ephi, ez, (double) arrF[ez][ephi][er][ivErmphim]));
-            }
-          }
-          if (ez == 0) {
-            arrF[ez][ephi][er][ivEphimzm] = (arrX[ez][ephi][er][ivEphimzm] - arrx[ez][ephi][er][ivEphimzm]);
-          }
-        }
-        if (er == N[0] - 1) {
-          arrF[ez][ephi][er][ivErpzm] = (arrX[ez][ephi][er][ivErpzm] - arrx[ez][ephi][er][ivErpzm]);
-          arrF[ez][ephi][er][ivErpphim] = (arrX[ez][ephi][er][ivErpphim] - arrx[ez][ephi][er][ivErpphim]);
-        }
-        if (!(user -> phibtype)) {
-          if (ephi == N[1] - 1) {
-            arrF[ez][ephi][er][ivEphipzm] = (arrX[ez][ephi][er][ivEphipzm] - arrx[ez][ephi][er][ivEphipzm]);
-            arrF[ez][ephi][er][ivErmphip] = (arrX[ez][ephi][er][ivErmphip] - arrx[ez][ephi][er][ivErmphip]);
-          }
-        }
-        if (ez == N[2] - 1) {
-          arrF[ez][ephi][er][ivErmzp] = (arrX[ez][ephi][er][ivErmzp] - arrx[ez][ephi][er][ivErmzp]);
-          arrF[ez][ephi][er][ivEphimzp] = (arrX[ez][ephi][er][ivEphimzp] - arrx[ez][ephi][er][ivEphimzp]);
-        }
-        if (!(user -> phibtype)) {
-          if (er == N[0] - 1 && ephi == N[1] - 1) {
-            arrF[ez][ephi][er][ivErpphip] = (arrX[ez][ephi][er][ivErpphip] - arrx[ez][ephi][er][ivErpphip]);
-          }
-          if (ephi == N[1] - 1 && ez == N[2] - 1) {
-            arrF[ez][ephi][er][ivEphipzp] = (arrX[ez][ephi][er][ivEphipzp] - arrx[ez][ephi][er][ivEphipzp]);
-          }
-        }
-        if (er == N[0] - 1 && ez == N[2] - 1) {
-          arrF[ez][ephi][er][ivErpzp] = (arrX[ez][ephi][er][ivErpzp] - arrx[ez][ephi][er][ivErpzp]);
-        }
-
-        /* f1(V,EP,tau,B,ni) . e_r = [P_{c->v}(n_i) (dV/dt) - P_{e->v}(der_mim_curl_no_mp(B)) x P_{f->v}(B) - Re^{-1} (\nabla^2 V)] . e_r ; on plasma vertices
-           f1(V,EP,tau,B,ni) . e_phi = V . P_{f->v}(B) ; on plasma vertices
-           f1(V,EP,tau,B,ni) . e_z = [P_{c->v}(n_i) (dV/dt) - P_{e->v}(der_mim_curl_no_mp(B)) x P_{f->v}(B) - Re^{-1} (\nabla^2 V)] . e_z ; on plasma vertices
-           f1(V,EP,tau,B,ni) = V; on other vertices
-           f5(V,EP,tau,B,ni) = dni/dt ; in all cells
-           f5(V,EP,tau,B,ni) += primary_mimetic_divergence(P_{c->f}(ni)*R_{v->f}(V)); in plasma cells
-           */
-        arrF[ez][ephi][er][ivn] = arrXdot[ez][ephi][er][ivn];
-
-        if (fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7) {
-          arrF[ez][ephi][er][ivn] += (-surface(er, ephi, ez, LEFT, user) / cellvolume) * arrnif[ez][ephi][er][ivBrm] * arrVf[ez][ephi][er][ivBrm] + (surface(er, ephi, ez, RIGHT, user) / cellvolume) * arrnif[ez][ephi][er][ivBrp] * arrVf[ez][ephi][er][ivBrp] + (-surface(er, ephi, ez, DOWN, user) / cellvolume) * arrnif[ez][ephi][er][ivBphim] * arrVf[ez][ephi][er][ivBphim] + (surface(er, ephi, ez, UP, user) / cellvolume) * arrnif[ez][ephi][er][ivBphip] * arrVf[ez][ephi][er][ivBphip] + (-surface(er, ephi, ez, BACK, user) / cellvolume) * arrnif[ez][ephi][er][ivBzm] * arrVf[ez][ephi][er][ivBzm] + (surface(er, ephi, ez, FRONT, user) / cellvolume) * arrnif[ez][ephi][er][ivBzp] * arrVf[ez][ephi][er][ivBzp];
-        }
-
-        if (er > 0 && ez > 0 && fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7 && fabs(user -> dataC[er + ephi * N[0] + (ez - 1) * N[1] * N[0]] - 1.5) < 0.7 && fabs(user -> dataC[er - 1 + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7 && fabs(user -> dataC[er - 1 + ephi * N[0] + (ez - 1) * N[1] * N[0]] - 1.5) < 0.7) {
-          arrF[ez][ephi][er][ivVrmphimzm[0]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[2]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[2]] * arrBv[ez][ephi][er][ivVrmphimzm[1]]) + arrniv[ez][ephi][er][ivVrmphimzm[0]] * arrXdot[ez][ephi][er][ivVrmphimzm[0]] - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[0]];
-
-          arrF[ez][ephi][er][ivVrmphimzm[2]] = - (arrcurlBv[ez][ephi][er][ivVrmphimzm[0]] * arrBv[ez][ephi][er][ivVrmphimzm[1]] - arrcurlBv[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[0]]) + arrniv[ez][ephi][er][ivVrmphimzm[0]] * arrXdot[ez][ephi][er][ivVrmphimzm[2]] - (1.0 / user->Re) * arrLapV[ez][ephi][er][ivVrmphimzm[2]];
-
-          arrF[ez][ephi][er][ivVrmphimzm[1]] = (arrX[ez][ephi][er][ivVrmphimzm[0]] * arrBv[ez][ephi][er][ivVrmphimzm[0]] + arrX[ez][ephi][er][ivVrmphimzm[1]] * arrBv[ez][ephi][er][ivVrmphimzm[1]] + arrX[ez][ephi][er][ivVrmphimzm[2]] * arrBv[ez][ephi][er][ivVrmphimzm[2]]);
-
-        } else if (fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] - 1.5) >= 0.7) {
-          arrF[ez][ephi][er][ivVrmphimzm[0]] = arrX[ez][ephi][er][ivVrmphimzm[0]] - arrx[ez][ephi][er][ivVrmphimzm[0]];
-          arrF[ez][ephi][er][ivVrmphimzm[1]] = arrX[ez][ephi][er][ivVrmphimzm[1]] - arrx[ez][ephi][er][ivVrmphimzm[1]];
-          arrF[ez][ephi][er][ivVrmphimzm[2]] = arrX[ez][ephi][er][ivVrmphimzm[2]] - arrx[ez][ephi][er][ivVrmphimzm[2]];
-          arrF[ez][ephi][er][ivVrmphimzp[0]] = arrX[ez][ephi][er][ivVrmphimzp[0]] - arrx[ez][ephi][er][ivVrmphimzp[0]];
-          arrF[ez][ephi][er][ivVrmphimzp[1]] = arrX[ez][ephi][er][ivVrmphimzp[1]] - arrx[ez][ephi][er][ivVrmphimzp[1]];
-          arrF[ez][ephi][er][ivVrmphimzp[2]] = arrX[ez][ephi][er][ivVrmphimzp[2]] - arrx[ez][ephi][er][ivVrmphimzp[2]];
-          arrF[ez][ephi][er][ivVrmphipzm[0]] = arrX[ez][ephi][er][ivVrmphipzm[0]] - arrx[ez][ephi][er][ivVrmphipzm[0]];
-          arrF[ez][ephi][er][ivVrmphipzm[1]] = arrX[ez][ephi][er][ivVrmphipzm[1]] - arrx[ez][ephi][er][ivVrmphipzm[1]];
-          arrF[ez][ephi][er][ivVrmphipzm[2]] = arrX[ez][ephi][er][ivVrmphipzm[2]] - arrx[ez][ephi][er][ivVrmphipzm[2]];
-          arrF[ez][ephi][er][ivVrmphipzp[0]] = arrX[ez][ephi][er][ivVrmphipzp[0]] - arrx[ez][ephi][er][ivVrmphipzp[0]];
-          arrF[ez][ephi][er][ivVrmphipzp[1]] = arrX[ez][ephi][er][ivVrmphipzp[1]] - arrx[ez][ephi][er][ivVrmphipzp[1]];
-          arrF[ez][ephi][er][ivVrmphipzp[2]] = arrX[ez][ephi][er][ivVrmphipzp[2]] - arrx[ez][ephi][er][ivVrmphipzp[2]];
-          arrF[ez][ephi][er][ivVrpphimzm[0]] = arrX[ez][ephi][er][ivVrpphimzm[0]] - arrx[ez][ephi][er][ivVrpphimzm[0]];
-          arrF[ez][ephi][er][ivVrpphimzm[1]] = arrX[ez][ephi][er][ivVrpphimzm[1]] - arrx[ez][ephi][er][ivVrpphimzm[1]];
-          arrF[ez][ephi][er][ivVrpphimzm[2]] = arrX[ez][ephi][er][ivVrpphimzm[2]] - arrx[ez][ephi][er][ivVrpphimzm[2]];
-          arrF[ez][ephi][er][ivVrpphimzp[0]] = arrX[ez][ephi][er][ivVrpphimzp[0]] - arrx[ez][ephi][er][ivVrpphimzp[0]];
-          arrF[ez][ephi][er][ivVrpphimzp[1]] = arrX[ez][ephi][er][ivVrpphimzp[1]] - arrx[ez][ephi][er][ivVrpphimzp[1]];
-          arrF[ez][ephi][er][ivVrpphimzp[2]] = arrX[ez][ephi][er][ivVrpphimzp[2]] - arrx[ez][ephi][er][ivVrpphimzp[2]];
-          arrF[ez][ephi][er][ivVrpphipzm[0]] = arrX[ez][ephi][er][ivVrpphipzm[0]] - arrx[ez][ephi][er][ivVrpphipzm[0]];
-          arrF[ez][ephi][er][ivVrpphipzm[1]] = arrX[ez][ephi][er][ivVrpphipzm[1]] - arrx[ez][ephi][er][ivVrpphipzm[1]];
-          arrF[ez][ephi][er][ivVrpphipzm[2]] = arrX[ez][ephi][er][ivVrpphipzm[2]] - arrx[ez][ephi][er][ivVrpphipzm[2]];
-          arrF[ez][ephi][er][ivVrpphipzp[0]] = arrX[ez][ephi][er][ivVrpphipzp[0]] - arrx[ez][ephi][er][ivVrpphipzp[0]];
-          arrF[ez][ephi][er][ivVrpphipzp[1]] = arrX[ez][ephi][er][ivVrpphipzp[1]] - arrx[ez][ephi][er][ivVrpphipzp[1]];
-          arrF[ez][ephi][er][ivVrpphipzp[2]] = arrX[ez][ephi][er][ivVrpphipzp[2]] - arrx[ez][ephi][er][ivVrpphipzp[2]];
-        } else {
-          arrF[ez][ephi][er][ivVrmphimzm[0]] = arrX[ez][ephi][er][ivVrmphimzm[0]] - arrx[ez][ephi][er][ivVrmphimzm[0]];
-          arrF[ez][ephi][er][ivVrmphimzm[1]] = arrX[ez][ephi][er][ivVrmphimzm[1]] - arrx[ez][ephi][er][ivVrmphimzm[1]];
-          arrF[ez][ephi][er][ivVrmphimzm[2]] = arrX[ez][ephi][er][ivVrmphimzm[2]] - arrx[ez][ephi][er][ivVrmphimzm[2]];
-        }
-
-        /* f4(V,EP,tau,B,ni) = dB/dt + primary_mimetic_curl(tau) */
-        arrF[ez][ephi][er][ivBrm] = arrXdot[ez][ephi][er][ivBrm] + (rmzmedgelength * arrX[ez][ephi][er][ivErmzm] - rmzpedgelength * arrX[ez][ephi][er][ivErmzp] + rmphipedgelength * arrX[ez][ephi][er][ivErmphip] - rmphimedgelength * arrX[ez][ephi][er][ivErmphim]) / surface(er, ephi, ez, LEFT, user); /* Left face */
-
-        arrF[ez][ephi][er][ivBphim] = arrXdot[ez][ephi][er][ivBphim] + (-phimzmedgelength * arrX[ez][ephi][er][ivEphimzm] + phimzpedgelength * arrX[ez][ephi][er][ivEphimzp] - rpphimedgelength * arrX[ez][ephi][er][ivErpphim] + rmphimedgelength * arrX[ez][ephi][er][ivErmphim]) / surface(er, ephi, ez, DOWN, user); /* Down face */
-
-        arrF[ez][ephi][er][ivBzm] = arrXdot[ez][ephi][er][ivBzm] + (phimzmedgelength * arrX[ez][ephi][er][ivEphimzm] - phipzmedgelength * arrX[ez][ephi][er][ivEphipzm] + rpzmedgelength * arrX[ez][ephi][er][ivErpzm] - rmzmedgelength * arrX[ez][ephi][er][ivErmzm]) / surface(er, ephi, ez, BACK, user); /* Back face */
-
-        if (er == N[0] - 1) {
-          arrF[ez][ephi][er][ivBrp] = arrXdot[ez][ephi][er][ivBrp] + (rpzmedgelength * arrX[ez][ephi][er][ivErpzm] - rpzpedgelength * arrX[ez][ephi][er][ivErpzp] + rpphipedgelength * arrX[ez][ephi][er][ivErpphip] - rpphimedgelength * arrX[ez][ephi][er][ivErpphim]) / surface(er, ephi, ez, RIGHT, user); /* Right face */
-        }
-
-        if (ephi == N[1] - 1 && !(user -> phibtype)) {
-          arrF[ez][ephi][er][ivBphip] = arrXdot[ez][ephi][er][ivBphip] + (-phipzmedgelength * arrX[ez][ephi][er][ivEphipzm] + phipzpedgelength * arrX[ez][ephi][er][ivEphipzp] - rpphipedgelength * arrX[ez][ephi][er][ivErpphip] + rmphipedgelength * arrX[ez][ephi][er][ivErmphip]) / surface(er, ephi, ez, UP, user); /* Up face */
-        }
-
-        if (ez == N[2] - 1) {
-          arrF[ez][ephi][er][ivBzp] = arrXdot[ez][ephi][er][ivBzp] + (phimzpedgelength * arrX[ez][ephi][er][ivEphimzp] - phipzpedgelength * arrX[ez][ephi][er][ivEphipzp] + rpzpedgelength * arrX[ez][ephi][er][ivErpzp] - rmzpedgelength * arrX[ez][ephi][er][ivErmzp]) / surface(er, ephi, ez, FRONT, user); /* Front face */
-        }
-
-        /* Adding source term to balance the PDE: f4(B,E) = f4(B,E) - primary_mimetic_curl(potential) */
-        if(user->ictype == 11 && ephi == 0){
-          arrP[ez][ephi][er][ivEphimzm] = - condu(er, ephi, ez, BACK_DOWN, user) * PetscSinReal((condu(er, ephi, ez, BACK_DOWN, user) / user->mu0) * t) * (arrCoord[ez][ephi][er][icEphimzm[2]] ) / user->mu0;
-          arrP[ez][ephi][er][ivEphimzp] = - condu(er, ephi, ez, FRONT_DOWN, user) * PetscSinReal((condu(er, ephi, ez, FRONT_DOWN, user) / user->mu0) * t) * (arrCoord[ez][ephi][er][icEphimzp[2]] ) / user->mu0;
-        }
-        if(user->ictype == 11 && ephi == N[1]-1){
-          arrP[ez][ephi][er][ivEphipzm] = - condu(er, ephi, ez, BACK_UP, user) * PetscSinReal((condu(er, ephi, ez, BACK_UP, user) / user->mu0) * t) * (arrCoord[ez][ephi][er][icEphipzm[2]] - arrCoord[ez][ephi][er][icEphipzm[0]] * PETSC_PI * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icEphipzm[0]]))) / user->mu0;
-          if(ez == N[2]-1){
-            arrP[ez][ephi][er][ivEphipzp] = - condu(er, ephi, ez, FRONT_UP, user) * PetscSinReal((condu(er, ephi, ez, FRONT_UP, user) / user->mu0) * t) * (arrCoord[ez][ephi][er][icEphipzp[2]] - arrCoord[ez][ephi][er][icEphipzp[0]] * PETSC_PI * PetscSqrtScalar(2.0 * PetscLogReal(2.0 * user->rmax / arrCoord[ez][ephi][er][icEphipzp[0]]))) / user->mu0;
-          }
-        }
-
-        arrF[ez][ephi][er][ivBrm] -= (rmzmedgelength * arrP[ez][ephi][er][ivErmzm] - rmzpedgelength * arrP[ez][ephi][er][ivErmzp] + rmphipedgelength * arrP[ez][ephi][er][ivErmphip] - rmphimedgelength * arrP[ez][ephi][er][ivErmphim]) / surface(er, ephi, ez, LEFT, user); /* Left face */
-
-        if (!(user -> phibtype)) {
-          if (ephi == N[1] - 1) {
-            arrF[ez][ephi][er][ivBphip] -= (-phipzmedgelength * arrP[ez][ephi][er][ivEphipzm] + phipzpedgelength * arrP[ez][ephi][er][ivEphipzp] - rpphipedgelength * arrP[ez][ephi][er][ivErpphip] + rmphipedgelength * arrP[ez][ephi][er][ivErmphip]) / surface(er, ephi, ez, UP, user); /* Up face */
-          }
-        }
-
-        arrF[ez][ephi][er][ivBphim] -= (-phimzmedgelength * arrP[ez][ephi][er][ivEphimzm] + phimzpedgelength * arrP[ez][ephi][er][ivEphimzp] - rpphimedgelength * arrP[ez][ephi][er][ivErpphim] + rmphimedgelength * arrP[ez][ephi][er][ivErmphim]) / surface(er, ephi, ez, DOWN, user); /* Face down */
-
-        arrF[ez][ephi][er][ivBzm] -= (phimzmedgelength * arrP[ez][ephi][er][ivEphimzm] - phipzmedgelength * arrP[ez][ephi][er][ivEphipzm] + rpzmedgelength * arrP[ez][ephi][er][ivErpzm] - rmzmedgelength * arrP[ez][ephi][er][ivErmzm]) / surface(er, ephi, ez, BACK, user); /* Back face */
-
-        if (er == N[0] - 1) {
-          arrF[ez][ephi][er][ivBrp] -= (rpzmedgelength * arrP[ez][ephi][er][ivErpzm] - rpzpedgelength * arrP[ez][ephi][er][ivErpzp] + rpphipedgelength * arrP[ez][ephi][er][ivErpphip] - rpphimedgelength * arrP[ez][ephi][er][ivErpphim]) / surface(er, ephi, ez, RIGHT, user); /* Right face */
-        }
-
-        if (ez == N[2] - 1) {
-          arrF[ez][ephi][er][ivBzp] -= (phimzpedgelength * arrP[ez][ephi][er][ivEphimzp] - phipzpedgelength * arrP[ez][ephi][er][ivEphipzp] + rpzpedgelength * arrP[ez][ephi][er][ivErpzp] - rmzpedgelength * arrP[ez][ephi][er][ivErmzp]) / surface(er, ephi, ez, FRONT, user); /* Front face */
-        }
-
-        /* Set boundary conditions for EP field */
-        /* f2(V,EP,tau,B,ni) = (EP - EPboundarycondition) */
-        if (er == 0 || ez == 0 || (ephi == 0 && !(user -> phibtype))) {
-          arrF[ez][ephi][er][ivVrmphimzm[3]] = arrX[ez][ephi][er][ivVrmphimzm[3]] - arrx[ez][ephi][er][ivVrmphimzm[3]];
-        }
-        if (er == N[0] - 1) {
-          arrF[ez][ephi][er][ivVrpphimzm[3]] = arrX[ez][ephi][er][ivVrpphimzm[3]] - arrx[ez][ephi][er][ivVrpphimzm[3]];
-        }
-        if (ez == N[2] - 1) {
-          arrF[ez][ephi][er][ivVrmphimzp[3]] = arrX[ez][ephi][er][ivVrmphimzp[3]] - arrx[ez][ephi][er][ivVrmphimzp[3]];
-        }
-        if (ephi == N[1] - 1 && !(user -> phibtype)) {
-          arrF[ez][ephi][er][ivVrmphipzm[3]] = arrX[ez][ephi][er][ivVrmphipzm[3]] - arrx[ez][ephi][er][ivVrmphipzm[3]];
-        }
-        if (ez == N[2] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
-          arrF[ez][ephi][er][ivVrmphipzp[3]] = arrX[ez][ephi][er][ivVrmphipzp[3]] - arrx[ez][ephi][er][ivVrmphipzp[3]];
-        }
-        if (er == N[0] - 1 && ez == N[2] - 1) {
-          arrF[ez][ephi][er][ivVrpphimzp[3]] = arrX[ez][ephi][er][ivVrpphimzp[3]] - arrx[ez][ephi][er][ivVrpphimzp[3]];
-        }
-        if (er == N[0] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
-          arrF[ez][ephi][er][ivVrpphipzm[3]] = arrX[ez][ephi][er][ivVrpphipzm[3]] - arrx[ez][ephi][er][ivVrpphipzm[3]];
-        }
-        if (er == N[0] - 1 && ez == N[2] - 1 && ephi == N[1] - 1 && !(user -> phibtype)) {
-          arrF[ez][ephi][er][ivVrpphipzp[3]] = arrX[ez][ephi][er][ivVrpphipzp[3]] - arrx[ez][ephi][er][ivVrpphipzp[3]];
-        }
-      }
-    }
-  }
-  /* End of triple for loop */
-
-  PetscCall(DMStagVecRestoreArrayRead(da, LapVLocal, & arrLapV));
-  PetscCall(DMRestoreLocalVector(da, & LapVLocal));
-  PetscCall(VecDestroy(& LapV));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, GradV1Local, & arrGradV1));
-  PetscCall(DMRestoreLocalVector(da, & GradV1Local));
-  PetscCall(VecDestroy( & GradV1));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, GradV2Local, & arrGradV2));
-  PetscCall(DMRestoreLocalVector(da, & GradV2Local));
-  PetscCall(VecDestroy( & GradV2));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, GradV3Local, & arrGradV3));
-  PetscCall(DMRestoreLocalVector(da, & GradV3Local));
-  PetscCall(VecDestroy( & GradV3));
-
-  PetscCall(DMStagVecRestoreArray(da, pLocal, & arrP));
-  PetscCall(DMRestoreLocalVector(da, & pLocal));
-  PetscCall(VecDestroy( & potential));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, nifLocal, & arrnif));
-  PetscCall(DMRestoreLocalVector(da, & nifLocal));
-  PetscCall(VecDestroy( & nif));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, nivLocal, & arrniv));
-  PetscCall(DMRestoreLocalVector(da, & nivLocal));
-  PetscCall(VecDestroy( & niv));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, BvLocal, & arrBv));
-  PetscCall(DMRestoreLocalVector(da, & BvLocal));
-  PetscCall(VecDestroy( & Bv));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, VfLocal, & arrVf));
-  PetscCall(DMRestoreLocalVector(da, & VfLocal));
-  PetscCall(VecDestroy( & Vf));
-
-  PetscCall(DMStagVecRestoreArrayRead(da, curlBvLocal, & arrcurlBv));
-  PetscCall(DMRestoreLocalVector(da, & curlBvLocal));
-  PetscCall(VecDestroy( & curlBv));
-
-  if (user -> phibtype) {
-    PetscCall(DMStagVecRestoreArray(da, fLocal, & arrF));
-    PetscCall(DMLocalToGlobal(da, fLocal, INSERT_VALUES, F));
-    PetscCall(DMGlobalToLocalBegin(da, F, INSERT_VALUES, fLocal));
-    PetscCall(DMGlobalToLocalEnd(da, F, INSERT_VALUES, fLocal));
-    PetscCall(DMStagVecGetArray(da, fLocal, & arrF));
-  }
-
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-
-        MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
-          icrmphimzm, icrpphimzm, icrmphipzm, icrpphipzm, icrmphimzp, icrpphimzp, icrmphipzp, icrpphipzp,
-          & rmzmedgelength, & rmphimedgelength, & rmzpedgelength, & rmphipedgelength, & phimzmedgelength, & phimzpedgelength,
-          & rpphimedgelength, & rpzmedgelength, & phipzmedgelength, & rpzpedgelength, & rpphipedgelength, & phipzpedgelength);
-#line 12714
-
-        /* f3(V,EP,tau,B,ni) = tau; for all inner edges */
-        if (!(er == 0 || ez == 0)) {
-          arrF[ez][ephi][er][ivErmzm] = arrX[ez][ephi][er][ivErmzm];
-        }
-        if (!(user -> phibtype)) {
-          if (!(ephi == 0 || ez == 0)) {
-            arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm];
-          }
-          if (!(er == 0 || ephi == 0)) {
-            arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim];
-          }
-        } else {
-          if (!(ez == 0)) {
-            arrF[ez][ephi][er][ivEphimzm] = arrX[ez][ephi][er][ivEphimzm];
-          }
-          if (!(er == 0)) {
-            arrF[ez][ephi][er][ivErmphim] = arrX[ez][ephi][er][ivErmphim];
-          }
-        }
-      }
-    }
-  }
-
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-        //F3(V,EP,tau,B,ni) += R_{v->e}(VxP_fv(B)) ; on inner plasma edges
-        if (!(er == 0 || ez == 0)) {
-          if ((fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7) && (fabs(user -> dataC[er - 1 + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7) && (fabs(user -> dataC[er + ephi * N[0] + (ez - 1) * N[1] * N[0]] - 1.5) < 0.7) && (fabs(user -> dataC[er - 1 + ephi * N[0] + (ez - 1) * N[1] * N[0]] - 1.5) < 0.7)) {
-            arrF[ez][ephi][er][ivErmzm] += arrVxBe[ez][ephi][er][ivErmzm];
-          }
-        }
-        if (!(user -> phibtype)) {
-          if (!(ephi == 0 || ez == 0)) {
-            if ((fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7) && (fabs(user -> dataC[er + ephi * N[0] + (ez - 1) * N[1] * N[0]] - 1.5) < 0.7)) {
-              arrF[ez][ephi][er][ivEphimzm] += arrVxBe[ez][ephi][er][ivEphimzm];
-            }
-          }
-          if (!(er == 0 || ephi == 0)) {
-            if ((fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7) && (fabs(user -> dataC[er - 1 + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7)) {
-              arrF[ez][ephi][er][ivErmphim] += arrVxBe[ez][ephi][er][ivErmphim];
-            }
-          }
-        } else {
-          if (!(ez == 0)) {
-            if ((fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7) && (fabs(user -> dataC[er + ephi * N[0] + (ez - 1) * N[1] * N[0]] - 1.5) < 0.7)) {
-              arrF[ez][ephi][er][ivEphimzm] += arrVxBe[ez][ephi][er][ivEphimzm];
-            }
-          }
-          if (!(er == 0)) {
-            if ((fabs(user -> dataC[er + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7) && (fabs(user -> dataC[er - 1 + ephi * N[0] + ez * N[1] * N[0]] - 1.5) < 0.7)) {
-              arrF[ez][ephi][er][ivErmphim] += arrVxBe[ez][ephi][er][ivErmphim];
-            }
-          }
-        }
-      }
-    }
-  }
-
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-        //F3(V,EP,tau,B,ni) -= prim_grad(EP) ; on inner edges
-        if (!(er == 0 || ez == 0)) {
-          arrF[ez][ephi][er][ivErmzm] -= arrGradEP[ez][ephi][er][ivErmzm];
-        }
-        if (!(user -> phibtype)) {
-          if (!(ephi == 0 || ez == 0)) {
-            arrF[ez][ephi][er][ivEphimzm] -= arrGradEP[ez][ephi][er][ivEphimzm];
-          }
-          if (!(er == 0 || ephi == 0)) {
-            arrF[ez][ephi][er][ivErmphim] -= arrGradEP[ez][ephi][er][ivErmphim];
-          }
-        } else {
-          if (!(ez == 0)) {
-            arrF[ez][ephi][er][ivEphimzm] -= arrGradEP[ez][ephi][er][ivEphimzm];
-          }
-          if (!(er == 0)) {
-            arrF[ez][ephi][er][ivErmphim] -= arrGradEP[ez][ephi][er][ivErmphim];
-          }
-        }
-        /* Set boundary conditions for velocity */
-        /* f1(V,EP,tau,B,ni) = dV/dt */
-        if (er == 0 || ez == 0) {
-          arrF[ez][ephi][er][ivVrmphimzm[0]] = arrXdot[ez][ephi][er][ivVrmphimzm[0]];
-          arrF[ez][ephi][er][ivVrmphimzm[1]] = arrXdot[ez][ephi][er][ivVrmphimzm[1]];
-          arrF[ez][ephi][er][ivVrmphimzm[2]] = arrXdot[ez][ephi][er][ivVrmphimzm[2]];
-          arrF[ez][ephi][er][ivVrmphipzm[0]] = arrXdot[ez][ephi][er][ivVrmphipzm[0]];
-          arrF[ez][ephi][er][ivVrmphipzm[1]] = arrXdot[ez][ephi][er][ivVrmphipzm[1]];
-          arrF[ez][ephi][er][ivVrmphipzm[2]] = arrXdot[ez][ephi][er][ivVrmphipzm[2]];
-        }
-        if (er == 0 || ez == N[2]-1) {
-          arrF[ez][ephi][er][ivVrmphimzp[0]] = arrXdot[ez][ephi][er][ivVrmphimzp[0]];
-          arrF[ez][ephi][er][ivVrmphimzp[1]] = arrXdot[ez][ephi][er][ivVrmphimzp[1]];
-          arrF[ez][ephi][er][ivVrmphimzp[2]] = arrXdot[ez][ephi][er][ivVrmphimzp[2]];
-          arrF[ez][ephi][er][ivVrmphipzp[0]] = arrXdot[ez][ephi][er][ivVrmphipzp[0]];
-          arrF[ez][ephi][er][ivVrmphipzp[1]] = arrXdot[ez][ephi][er][ivVrmphipzp[1]];
-          arrF[ez][ephi][er][ivVrmphipzp[2]] = arrXdot[ez][ephi][er][ivVrmphipzp[2]];
-        }
-        if (ez == 0 || er == N[0]-1) {
-          arrF[ez][ephi][er][ivVrpphimzm[0]] = arrXdot[ez][ephi][er][ivVrpphimzm[0]];
-          arrF[ez][ephi][er][ivVrpphimzm[1]] = arrXdot[ez][ephi][er][ivVrpphimzm[1]];
-          arrF[ez][ephi][er][ivVrpphimzm[2]] = arrXdot[ez][ephi][er][ivVrpphimzm[2]];
-          arrF[ez][ephi][er][ivVrpphipzm[0]] = arrXdot[ez][ephi][er][ivVrpphipzm[0]];
-          arrF[ez][ephi][er][ivVrpphipzm[1]] = arrXdot[ez][ephi][er][ivVrpphipzm[1]];
-          arrF[ez][ephi][er][ivVrpphipzm[2]] = arrXdot[ez][ephi][er][ivVrpphipzm[2]];
-        }
-        if (ez == N[2]-1 || er == N[0]-1) {
-          arrF[ez][ephi][er][ivVrpphimzp[0]] = arrXdot[ez][ephi][er][ivVrpphimzp[0]];
-          arrF[ez][ephi][er][ivVrpphimzp[1]] = arrXdot[ez][ephi][er][ivVrpphimzp[1]];
-          arrF[ez][ephi][er][ivVrpphimzp[2]] = arrXdot[ez][ephi][er][ivVrpphimzp[2]];
-          arrF[ez][ephi][er][ivVrpphipzp[0]] = arrXdot[ez][ephi][er][ivVrpphipzp[0]];
-          arrF[ez][ephi][er][ivVrpphipzp[1]] = arrXdot[ez][ephi][er][ivVrpphipzp[1]];
-          arrF[ez][ephi][er][ivVrpphipzp[2]] = arrXdot[ez][ephi][er][ivVrpphipzp[2]];
-        }
-      }
-    }
-  }
-
-  PetscCall(DMStagVecRestoreArray(da, fLocal, & arrF));
-  PetscCall(DMLocalToGlobal(da, fLocal, INSERT_VALUES, F));
-  PetscCall(DMRestoreLocalVector(da,&fLocal));
-
-  PetscCall(VecDuplicate(F, & Fcopy));
-  PetscCall(VecCopy(F, Fcopy));
-  //VecScale(Fcopy, -1.0);
-  PetscCall(DMGetLocalVector(da, & FcopyLocal));
-  PetscCall(DMGlobalToLocalBegin(da, Fcopy, INSERT_VALUES, FcopyLocal));
-  PetscCall(DMGlobalToLocalEnd(da, Fcopy, INSERT_VALUES, FcopyLocal));
-  PetscCall(DMStagVecGetArray(da, FcopyLocal, & arrFcopy));
-
-  for (ez = startz; ez < startz + nz; ++ez) {
-    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
-      for (er = startr; er < startr + nr; ++er) {
-        //F3copy(V,EP,tau,B,ni) -= tau ; on inner edges
-        if (!(er == 0 || ez == 0)) {
-          arrFcopy[ez][ephi][er][ivErmzm] -= arrX[ez][ephi][er][ivErmzm];
-        }
-        if (!(user -> phibtype)) {
-          if (!(ephi == 0 || ez == 0)) {
-            arrFcopy[ez][ephi][er][ivEphimzm] -= arrX[ez][ephi][er][ivEphimzm];
-          }
-          if (!(er == 0 || ephi == 0)) {
-            arrFcopy[ez][ephi][er][ivErmphim] -= arrX[ez][ephi][er][ivErmphim];
-          }
-        } else {
-          if (!(ez == 0)) {
-            arrFcopy[ez][ephi][er][ivEphimzm] -= arrX[ez][ephi][er][ivEphimzm];
-          }
-          if (!(er == 0)) {
-            arrFcopy[ez][ephi][er][ivErmphim] -= arrX[ez][ephi][er][ivErmphim];
-          }
-        }
-      }
-    }
-  }
-  PetscCall(DMStagVecRestoreArray(da, FcopyLocal, & arrFcopy));
-  PetscCall(DMLocalToGlobal(da, FcopyLocal, INSERT_VALUES, Fcopy));
-  PetscCall(DMRestoreLocalVector(da, & FcopyLocal));
-
-  ApplyDerivedDivergence(ts, Fcopy, F, user);
-
-  /* Restore vectors */
-  PetscCall(DMStagVecRestoreArrayRead(da, GradEPLocal, & arrGradEP));
-  PetscCall(DMRestoreLocalVector(da, & GradEPLocal));
-  PetscCall(DMStagVecRestoreArrayRead(da, VxBeLocal, & arrVxBe));
-  PetscCall(DMRestoreLocalVector(da, & VxBeLocal));
-
-
-  PetscCall(DMStagVecRestoreArrayRead(da, xLocal, & arrX));
-  PetscCall(DMRestoreLocalVector(da, & xLocal));
-  PetscCall(DMStagVecRestoreArrayRead(da, xdotLocal, & arrXdot));
-  PetscCall(DMRestoreLocalVector(da, & xdotLocal));
-  PetscCall(DMStagVecRestoreArrayRead(da, bcLocal, & arrx));
-  PetscCall(DMRestoreLocalVector(da, & bcLocal));
-
-  PetscCall(DMStagVecRestoreArrayRead(dmCoord, coordLocal, & arrCoord));
-  PetscCall(DMStagVecRestoreArrayRead(dmCoorda, coordaLocal, & arrCoorda));
-  if (user -> debug) {
-    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "F = \n"));
-    PetscCall(VecView(F, PETSC_VIEWER_STDOUT_WORLD));
-  }
-
-  PetscCall(VecDestroy( & GradEP));
-  PetscCall(VecDestroy( & VxBe));
-  PetscCall(VecDestroy( & Fcopy));
-  PetscCall(VecDestroy( & x));
-
-  PetscCall(PetscLogEventEnd(USER_EVENT,0,0,0,0));
-
-
-  PetscFunctionReturn(PETSC_SUCCESS);
+  static const MFD_ResidualTerms terms = {
+    .f1_inertia = PETSC_TRUE, .f3_resistive = PETSC_FALSE, .f3_jre = PETSC_FALSE,
+    .label = "FormIFunction_newequilibrium_Vperp"};
+  return vperp_residual(ts, t, X, Xdot, F, ptr, &terms);
 }
 
 #line 13805
@@ -5844,7 +5319,7 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
 
     PetscMPIInt size;
     MPI_Comm_size(PETSC_COMM_WORLD, &size);
-    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Saving solution after relaxation with resitivity %le, MPI size = %d", user->etaplasma, size));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Saving relaxed solution (run etaplasma %le, not used by the ideal relaxation), MPI size = %d", user->etaplasma, size));
     PetscViewer viewer;
     PetscCall(PetscViewerBinaryOpen(PETSC_COMM_WORLD, user->ic_binary_path, FILE_MODE_WRITE, & viewer));
     PetscCall(stag_vec_io(user, viewer, X, PETSC_FALSE));

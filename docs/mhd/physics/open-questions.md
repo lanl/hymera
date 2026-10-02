@@ -76,6 +76,23 @@ not, why is `jre` absent there?
 become an explicit parameter rather than being silently harmonised in either
 direction.
 
+**Status (P6-MERGE-RES):** `FormIFunction_Vperp_viscosity` and
+`FormIFunction_newequilibrium_Vperp` now share one body, `vperp_residual`, which
+takes an `MFD_ResidualTerms` switch struct. `jre` is the explicit switch
+`f3_jre`, separate from the resistive switch `f3_resistive`. It is ON for
+production and OFF for the relaxation, which matches today's behaviour. See
+`residual-differences.md`.
+
+**Note: the relaxation is ideal.** The owner decided that the initial-condition
+relaxation (`FormIFunction_newequilibrium_Vperp`) uses ideal Ohm's law, with no
+resistive `curl2(B)` term (`f3_resistive = FALSE`), for consistency with previous
+runs. This is deliberate, not drift. The log line after the relaxation solve in
+`FormInitialSolution_psi` used to read "Saving solution after relaxation with
+resitivity %le". That implied the relaxation used `user->etaplasma`, which it does
+not. It now reads "Saving relaxed solution (run etaplasma %le, not used by the
+ideal relaxation), MPI size = %d". The format arguments are unchanged and no
+computed value is affected.
+
 ---
 
 ## Q3 — Is the "plain halo" initial condition meant to be unreachable? (HIGH)
