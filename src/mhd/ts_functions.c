@@ -286,12 +286,12 @@ static inline __attribute__((always_inline)) PetscErrorCode vperp_residual(TS ts
 
   view3d_t jre = user->jre;
 
-  PetscInt icp[3];
+  PetscInt icp[3] PETSC_UNUSED;
   PetscInt icBrp[3], icBphip[3], icBzp[3], icBrm[3], icBphim[3], icBzm[3];
-  PetscInt icErmzm[3], icErmzp[3], icErpzm[3], icErpzp[3];
+  PetscInt icErmzm[3] PETSC_UNUSED, icErmzp[3] PETSC_UNUSED, icErpzm[3] PETSC_UNUSED, icErpzp[3] PETSC_UNUSED;
 
   PetscInt icEphimzm[3], icEphipzm[3], icEphimzp[3], icEphipzp[3];
-  PetscInt icErmphim[3], icErpphim[3], icErmphip[3], icErpphip[3];
+  PetscInt icErmphim[3] PETSC_UNUSED, icErpphim[3] PETSC_UNUSED, icErmphip[3] PETSC_UNUSED, icErpphip[3] PETSC_UNUSED;
   PetscInt icrmphimzm[3], icrmphimzp[3], icrmphipzm[3], icrmphipzp[3];
   PetscInt icrpphimzm[3], icrpphimzp[3], icrpphipzm[3], icrpphipzp[3];
 
@@ -1284,19 +1284,19 @@ static PetscErrorCode initialize_ep(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, 
   User * user = (User * ) ptr;
   DM da, coordDA = user -> coorda;
   PetscInt startr, startphi, startz, nr, nphi, nz;
-  PetscScalar dt, cellvolume;
+  PetscScalar dt;
   Vec fLocal, xLocal, bcLocal, xdotLocal, pLocal;
-  Vec VxBe, VxBeLocal, VxB, Vf, VfLocal, nif, nifLocal, niv, nivLocal, Bv, BvLocal, curlBv, curlBvLocal, GradEP, GradEPLocal, Fcopy, FcopyLocal;
+  Vec GradEP, GradEPLocal, Fcopy, FcopyLocal;
   Vec x, potential;
   Vec coordLocal;
   PetscInt N[3], er, ephi, ez, d;
 
-  PetscInt icp[3];
-  PetscInt icBrp[3], icBphip[3], icBzp[3], icBrm[3], icBphim[3], icBzm[3];
-  PetscInt icErmzm[3], icErmzp[3], icErpzm[3], icErpzp[3];
+  PetscInt icp[3] PETSC_UNUSED;
+  PetscInt icBrp[3] PETSC_UNUSED, icBphip[3] PETSC_UNUSED, icBzp[3] PETSC_UNUSED, icBrm[3] PETSC_UNUSED, icBphim[3] PETSC_UNUSED, icBzm[3] PETSC_UNUSED;
+  PetscInt icErmzm[3] PETSC_UNUSED, icErmzp[3] PETSC_UNUSED, icErpzm[3] PETSC_UNUSED, icErpzp[3] PETSC_UNUSED;
 
-  PetscInt icEphimzm[3], icEphipzm[3], icEphimzp[3], icEphipzp[3];
-  PetscInt icErmphim[3], icErpphim[3], icErmphip[3], icErpphip[3];
+  PetscInt icEphimzm[3] PETSC_UNUSED, icEphipzm[3] PETSC_UNUSED, icEphimzp[3] PETSC_UNUSED, icEphipzp[3] PETSC_UNUSED;
+  PetscInt icErmphim[3] PETSC_UNUSED, icErpphim[3] PETSC_UNUSED, icErmphip[3] PETSC_UNUSED, icErpphip[3] PETSC_UNUSED;
   PetscInt icrmphimzm[3], icrmphimzp[3], icrmphipzm[3], icrmphipzp[3];
   PetscInt icrpphimzm[3], icrpphimzp[3], icrpphipzm[3], icrpphipzp[3];
 
@@ -1316,7 +1316,7 @@ static PetscErrorCode initialize_ep(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, 
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda;
 
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrP, ** ** arrx, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrXdot, ** ** arrBv, ** ** arrcurlBv, ** ** arrnif, ** ** arrniv, ** ** arrVf, ** ** arrVxBe, ** ** arrGradEP, ** ** arrFcopy;
+  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrP, ** ** arrx, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrXdot, ** ** arrGradEP, ** ** arrFcopy;
 
   PetscCall(VecZeroEntries(F));
   PetscCall(TSGetDM(ts, & da));
@@ -1389,7 +1389,6 @@ static PetscErrorCode initialize_ep(TS ts, PetscReal t, Vec X, Vec Xdot, Vec F, 
     for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
       for (er = startr; er < startr + nr; ++er) {
 
-        cellvolume = MFD_CellVolume(arrCoord, er, ephi, ez, N, user -> dphi, icBrm, icBphim, icBzm, icBrp, icBphip, icBzp);
 #line 9587
 
         MFD_CellEdgeLengths(arrCoorda, er, ephi, ez, N, user -> dphi,
@@ -1734,7 +1733,7 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
   DM da, coordDA = user -> coorda;
   PetscInt startr, startphi, startz, nr, nphi, nz;
   Vec fLocal, xLocal;
-  Vec VxBe, VxBeLocal, VxB, Bv, BvLocal, curlBv, curlBvLocal, niv, nivLocal;
+
 #line 13823
   Vec coordLocal;
   PetscInt N[3], er, ephi, ez, d;
@@ -1764,7 +1763,7 @@ PetscErrorCode FormRHSFunction_BImplicit(TS ts, PetscReal t, Vec X, Vec F, void 
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda;
 
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength, ** ** arrBv, ** ** arrcurlBv, ** ** arrVxBe, ** ** arrniv;
+  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength;
 
   PetscCall(VecZeroEntries(F));
   PetscCall(TSGetDM(ts, & da));
@@ -4340,7 +4339,7 @@ PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) 
   PetscReal norm2, normmax, dt;
   PetscInt nr, nphi, nz;
   DM da, newda;
-  PetscScalar Iphi1, Iphi2;
+
 
   PetscCall(TSGetTimeStep(ts, & dt));
   /* Adjust the viscosity coefficient and step size over time*/
@@ -4534,9 +4533,9 @@ PetscErrorCode Monitor(TS ts, PetscInt step, PetscReal time, Vec X, void * ptr) 
 PetscErrorCode FormDummyIJacobian4(TS ts, Vec X, Vec Xdot, PetscReal a, Mat J, Mat Jpre, void * ptr) {
   PetscFunctionBeginUser;
   User * user = (User * ) ptr;
-  DM da, coordDA = user -> coorda;
+  DM da;
   PetscInt startr, startphi, startz, nr, nphi, nz;
-  PetscInt N[3], er, ephi, ez, d;
+  PetscInt N[3], er, ephi, ez;
 
   PetscCall(MatZeroEntries(Jpre));
   PetscCall(TSGetDM(ts, & da));
@@ -4705,7 +4704,7 @@ PetscErrorCode SampleShellPCSetUp(PC pc){
   SNES snes;
   Mat J;
   KSP KSP_ETBN;
-  PC PC_ETBN, PC_V, PC_B, PC_EP;
+  PC PC_ETBN, PC_V;
   PetscErrorCode ierr = 0;
 
   PCShellGetContext(pc,&user);
@@ -4929,7 +4928,7 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
   PetscInt ivVrpphimzm[4], ivVrpphipzm[4], ivVrpphipzp[4], ivVrpphimzp[4];
 
   DM dmCoord;
-  PetscScalar ** ** arrCoord, ** ** arrX, ** ** arrXcopy, time = 0.0;
+  PetscScalar ** ** arrCoord, ** ** arrX, ** ** arrXcopy;
   PetscInt countg = 0, countpsi = 0;
 
   PetscCall(VecZeroEntries(X));
