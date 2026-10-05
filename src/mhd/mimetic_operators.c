@@ -209,7 +209,7 @@ PetscErrorCode ApplyDerivedDivergence(TS ts, Vec X, Vec F, void * ptr) {
   PetscInt icrmphimzm[3], icrmphimzp[3], icrmphipzm[3], icrmphipzp[3];
   PetscInt icrpphimzm[3], icrpphimzp[3], icrpphipzm[3], icrpphipzp[3];
 
-  PetscInt ivBrp, ivBphip, ivBzp, ivBrm, ivBphim, ivBzm;
+
   PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
   PetscInt ivEphimzm, ivEphipzm, ivEphimzp, ivEphipzp;
   PetscInt ivErmphim, ivErpphim, ivErmphip, ivErpphip;
@@ -222,7 +222,7 @@ PetscErrorCode ApplyDerivedDivergence(TS ts, Vec X, Vec F, void * ptr) {
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda;
 
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength;
+  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, rmzmedgelength, rmphimedgelength, phimzmedgelength;
 
   PetscCall(TSGetDM(ts, & da));
   PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
@@ -315,38 +315,8 @@ PetscErrorCode ApplyDerivedDivergence(TS ts, Vec X, Vec F, void * ptr) {
 
         rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
         phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
-
+#line 3130
         /* f(E) = - primary_mimetic_gradient^T (beta_e_nomp E)/beta_v_nomp ≡ - M_v^{-1} Grad^T M_e E  */
         /* Inner Back Down Left Vertex */
         if (er != 0 && ez != 0 && (ephi != 0 || user -> phibtype)) {
@@ -405,7 +375,7 @@ PetscErrorCode ApplyVectorLaplacian(TS ts, Vec X, Vec F, void * ptr) {
   PetscInt icrmphimzm[3], icrmphimzp[3], icrmphipzm[3], icrmphipzp[3];
   PetscInt icrpphimzm[3], icrpphimzp[3], icrpphipzm[3], icrpphipzp[3];
 
-  PetscInt ivBrp, ivBphip, ivBzp, ivBrm, ivBphim, ivBzm;
+
   PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
   PetscInt ivEphimzm, ivEphipzm, ivEphimzp, ivEphipzp;
   PetscInt ivErmphim, ivErpphim, ivErmphip, ivErpphip;
@@ -418,7 +388,7 @@ PetscErrorCode ApplyVectorLaplacian(TS ts, Vec X, Vec F, void * ptr) {
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda;
 
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrF3, ** ** arrF1, ** ** arrF2, ** ** arrGradV1, ** ** arrGradV2, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength;
+  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, ** ** arrF3, ** ** arrF1, ** ** arrF2, ** ** arrGradV1, ** ** arrGradV2, rmzmedgelength, rmphimedgelength, phimzmedgelength;
 
   {
     /* Compute the gradient of V */
@@ -553,38 +523,8 @@ PetscErrorCode ApplyVectorLaplacian(TS ts, Vec X, Vec F, void * ptr) {
 
         rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
         phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
-
+#line 3500
         /* f_r(V) = - primary_mimetic_gradient^T (beta_e_nomp primary_mimetic_gradient(V_r))/beta_v_nomp - V_r/r^2 - (2/r) primary_mimetic_gradient_{phi,phi}(V) ≡ - M_v^{-1} Grad^T M_e primary_mimetic_gradient(V_r) - V_r/r^2 - (2/r) primary_mimetic_gradient_{phi,phi}(V)
            f_phi(V) = - primary_mimetic_gradient^T (beta_e_nomp primary_mimetic_gradient(V_phi))/beta_v_nomp - V_phi/r^2 - (2/r) primary_mimetic_gradient_{r,phi}(V) ≡ - M_v^{-1} Grad^T M_e primary_mimetic_gradient(V_phi) - V_phi/r^2 - (2/r) primary_mimetic_gradient_{r,phi}(V)
            f_z(V) = - primary_mimetic_gradient^T (beta_e_nomp primary_mimetic_gradient(V_z))/beta_v_nomp ≡ - M_v^{-1} Grad^T M_e primary_mimetic_gradient(V_z)
@@ -888,7 +828,7 @@ static PetscErrorCode derived_curl(TS ts, Vec X, Vec F, void * ptr, mfd_edge_coe
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda;
 
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength;
+  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX, rmzmedgelength, rmphimedgelength, phimzmedgelength;
 
   PetscCall(TSGetDM(ts, & da));
   PetscCall(DMStagGetCorners(da, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
@@ -979,38 +919,8 @@ static PetscErrorCode derived_curl(TS ts, Vec X, Vec F, void * ptr, mfd_edge_coe
 
         rmphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]]); /* down left = rmphim */
 
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rmzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrmphimzp[0]];
-        } else {
-          rmzpedgelength = arrCoorda[ez][ephi][er][icrmphimzp[0]] * (arrCoorda[ez][ephi][er][icrmphipzp[1]] - arrCoorda[ez][ephi][er][icrmphimzp[1]]); /* front left = rmzp */
-        }
-
-        rmphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]]); /* up left = rmphip */
-
         phimzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzm[0]], arrCoorda[ez][ephi][er][icrmphimzm[1]], arrCoorda[ez][ephi][er][icrmphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]]); /* back down = phimzm */
-
-        phimzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphimzp[0]], arrCoorda[ez][ephi][er][icrmphimzp[1]], arrCoorda[ez][ephi][er][icrmphimzp[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* front down = phimzp */
-
-        rpphimedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphimzm[0]], arrCoorda[ez][ephi][er][icrpphimzm[1]], arrCoorda[ez][ephi][er][icrpphimzm[2]], arrCoorda[ez][ephi][er][icrpphimzp[0]], arrCoorda[ez][ephi][er][icrpphimzp[1]], arrCoorda[ez][ephi][er][icrpphimzp[2]]); /* down right = rpphim */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzmedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzm[0]];
-        } else {
-          rpzmedgelength = arrCoorda[ez][ephi][er][icrpphimzm[0]] * (arrCoorda[ez][ephi][er][icrpphipzm[1]] - arrCoorda[ez][ephi][er][icrpphimzm[1]]); /* back right = rpzm */
-        }
-
-        phipzmedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzm[0]], arrCoorda[ez][ephi][er][icrmphipzm[1]], arrCoorda[ez][ephi][er][icrmphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]]); /* back up = phipzm */
-
-        if (ephi == -1 || ephi == N[1] - 1 || ephi == N[1]) {
-          rpzpedgelength = user -> dphi * arrCoorda[ez][ephi][er][icrpphimzp[0]];
-        } else {
-          rpzpedgelength = arrCoorda[ez][ephi][er][icrpphimzp[0]] * (arrCoorda[ez][ephi][er][icrpphipzp[1]] - arrCoorda[ez][ephi][er][icrpphimzp[1]]);
-        }
-
-        rpphipedgelength = cyldistance(arrCoorda[ez][ephi][er][icrpphipzm[0]], arrCoorda[ez][ephi][er][icrpphipzm[1]], arrCoorda[ez][ephi][er][icrpphipzm[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* up right = rpphip */
-
-        phipzpedgelength = cyldistance(arrCoorda[ez][ephi][er][icrmphipzp[0]], arrCoorda[ez][ephi][er][icrmphipzp[1]], arrCoorda[ez][ephi][er][icrmphipzp[2]], arrCoorda[ez][ephi][er][icrpphipzp[0]], arrCoorda[ez][ephi][er][icrpphipzp[1]], arrCoorda[ez][ephi][er][icrpphipzp[2]]); /* front up = phipzp */
-
+#line 4620
         /* f(B) = primary_mimetic_curl^T (beta_f B)/beta_e ≡ M_e^{-1} Curl^T M_f B  */
         /* Back Left edge */
         //if (er == 0 && ez == 0) {arrF[ez][ephi][er][ivErmzm] = ( arrX[ez][ephi][er][ivBrm] * betaf(er, ephi, ez, LEFT, user)/surface(er, ephi, ez, LEFT, user) - arrX[ez][ephi][er][ivBzm] * betaf(er, ephi, ez, BACK, user)/surface(er, ephi, ez, BACK, user)) * rmzmedgelength / edgecoeff(er, ephi, ez, BACK_LEFT, user);} /* Back Left boundary edge */
@@ -1473,7 +1383,7 @@ PetscErrorCode FormDiscreteGradientEP(TS ts, Mat G, Vec X, Vec F, void * ptr) {
   User * user = (User * ) ptr;
   DM da, coordDA = user -> coorda;
   PetscInt startr, startphi, startz, nr, nphi, nz;
-  Vec coordLocal, fLocal, xLocal;
+  Vec fLocal, xLocal;
   PetscInt N[3], er, ephi, ez, d;
 
   PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
@@ -1489,7 +1399,7 @@ PetscErrorCode FormDiscreteGradientEP(TS ts, Mat G, Vec X, Vec F, void * ptr) {
   DM dmCoorda;
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength;
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX;
+  PetscScalar ** ** arrF, ** ** arrX;
 
   PetscCall(VecZeroEntries(F));
   PetscCall(MatZeroEntries(G));
@@ -1894,7 +1804,7 @@ PetscErrorCode FormDiscreteGradientEP_noMat(TS ts, Vec X, Vec F, void * ptr) {
   User * user = (User * ) ptr;
   DM da, coordDA = user -> coorda;
   PetscInt startr, startphi, startz, nr, nphi, nz;
-  Vec coordLocal, fLocal, xLocal;
+  Vec fLocal, xLocal;
   PetscInt N[3], er, ephi, ez, d;
 
   PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
@@ -1910,7 +1820,7 @@ PetscErrorCode FormDiscreteGradientEP_noMat(TS ts, Vec X, Vec F, void * ptr) {
   DM dmCoorda;
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength;
-  PetscScalar ** ** arrCoord, ** ** arrF, ** ** arrX;
+  PetscScalar ** ** arrF, ** ** arrX;
 
   PetscCall(VecZeroEntries(F));
   PetscCall(TSGetDM(ts, & da));
@@ -2075,7 +1985,7 @@ PetscErrorCode FormDiscreteGradientVectorField(TS ts, Vec X, Vec F1, Vec F2, Vec
   User * user = (User * ) ptr;
   DM da, coordDA = user -> coorda;
   PetscInt startr, startphi, startz, nr, nphi, nz;
-  Vec coordLocal, f1Local, f2Local, f3Local, xLocal;
+  Vec f1Local, f2Local, f3Local, xLocal;
   PetscInt N[3], er, ephi, ez, d;
 
   PetscInt ivErmzm, ivErmzp, ivErpzm, ivErpzp;
@@ -2091,7 +2001,7 @@ PetscErrorCode FormDiscreteGradientVectorField(TS ts, Vec X, Vec F1, Vec F2, Vec
   DM dmCoorda;
   Vec coordaLocal;
   PetscScalar ** ** arrCoorda, rmzmedgelength, rmphimedgelength, rmzpedgelength, rmphipedgelength, phimzmedgelength, phimzpedgelength, rpphimedgelength, rpzmedgelength, phipzmedgelength, rpzpedgelength, rpphipedgelength, phipzpedgelength;
-  PetscScalar ** ** arrCoord, ** ** arrF1, ** ** arrF2, ** ** arrF3, ** ** arrX;
+  PetscScalar ** ** arrF1, ** ** arrF2, ** ** arrF3, ** ** arrX;
 
   PetscCall(VecZeroEntries(F1));
   PetscCall(VecZeroEntries(F2));
