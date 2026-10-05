@@ -27,9 +27,9 @@
 PetscErrorCode DumpVelocity_Cell(TS ts, PetscInt step, Vec X, char* prefix, void * ptr) {
   PetscFunctionBeginUser;
   User * user = (User * ) ptr;
-  DM da, dmC, daC, dmBAvg, daBAvg, dmEAvg, daEAvg, dmJAvg, daJAvg, dmV, daV, dmEP, daEP;
+  DM da, dmV, daV;
   PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz;
-  Vec J, J_local, X_local, vecC, C, vecBAvg, BAvg, vecEAvg, EAvg, vecJAvg, JAvg, vecV, V, vecEP, EP;
+  Vec X_local, vecV, V;
   PetscReal time = 0.0;
 
   PetscCall(TSGetDM(ts, & da));
@@ -219,9 +219,9 @@ PetscErrorCode DumpVelocity_Cell(TS ts, PetscInt step, Vec X, char* prefix, void
 
   /* Dump element-based fields to a .vtr file and create a .pvd file */
   {
-    PetscViewer viewerC, viewerB, viewerE, viewerJ, viewerV, viewerEP;
+    PetscViewer viewerV;
     char filename[PETSC_MAX_PATH_LEN];
-    FILE * pvdfile;
+
 
 
     PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_%savg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", prefix, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
@@ -1741,9 +1741,9 @@ PetscErrorCode ComputeCurrent(TS ts, Vec X, void * ptr) {
 PetscErrorCode DumpEdgeField(TS ts, PetscInt step, Vec X, void * ptr) {
   PetscFunctionBeginUser;
   User * user = (User * ) ptr;
-  DM da, dmC, daC, dmBAvg, daBAvg, dmEAvg, daEAvg, dmJAvg, daJAvg, dmV, daV, dmEP, daEP;
+  DM da, dmEAvg, daEAvg;
   PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz;
-  Vec X_local, vecC, C, vecBAvg, BAvg, vecEAvg, EAvg, vecJAvg, JAvg, vecV, V, vecEP, EP;
+  Vec X_local, vecEAvg, EAvg;
   PetscReal time = 0.0;
 
   PetscCall(TSGetDM(ts, & da));
@@ -1863,9 +1863,9 @@ PetscErrorCode DumpEdgeField(TS ts, PetscInt step, Vec X, void * ptr) {
 
   /* Dump element-based fields to a .vtr file and create a .pvd file */
   {
-    PetscViewer viewerC, viewerB, viewerE, viewerJ, viewerV, viewerEP;
+    PetscViewer viewerE;
     char filename[PETSC_MAX_PATH_LEN];
-    FILE * pvdfile;
+
 
     PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_edgeavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
     PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daEAvg), filename, FILE_MODE_WRITE, & viewerE));
