@@ -150,37 +150,17 @@ PetscErrorCode SaveSolution(TS ts, Vec X, void *ptr)
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
-    DM             daC, dmC;
+    DM             da;
     DM             dmFr, dmFphi,dmFz, daFr, daFphi,daFz;
-    DM             dmEr, dmEphi,dmEz, daEr, daEphi,daEz;
-    DM             dmV, daV;
 
     PetscInt       startr,startphi,startz,nr,nphi,nz;
 
-    Vec            vecC, C, C2, vecFr, vecFphi, vecFz, F_r2, F_phi2, F_z2, vecEr, vecEphi, vecEz, E_r, E_r2, E_phi, E_phi2, E_z, E_z2, vecV, V, V2;
+    Vec            vecFr, vecFphi, vecFz, F_r2, F_phi2, F_z2;
 
-    Vec            C_rLocal, C_phiLocal, C_zLocal, F_rLocal, F_phiLocal, F_zLocal, V_rLocal, V_phiLocal, V_zLocal, XLocal;
-    Vec            coordLocal, coordaLocal;
-    PetscInt       N[3],er,ephi,ez,d;
+    Vec            XLocal;
+    PetscInt       N[3],er,ephi,ez;
 
-    PetscInt       icBrp[3],icBphip[3],icBzp[3],icBrm[3],icBphim[3],icBzm[3];
-    PetscInt       icErmzm[3],icErmzp[3],icErpzm[3],icErpzp[3];
-    PetscInt       icEphimzm[3],icEphipzm[3],icEphimzp[3],icEphipzp[3];
-    PetscInt       icErmphim[3],icErpphim[3],icErmphip[3],icErpphip[3];
-    PetscInt       icrmphimzm[3],icrpphimzm[3],icrmphipzm[3],icrpphipzm[3];
-    PetscInt       icrmphimzp[3],icrpphimzp[3],icrmphipzp[3],icrpphipzp[3];
-    PetscInt       icp[3];
-
-
-    PetscInt        ivBrp,ivBphip,ivBzp,ivBrm,ivBphim,ivBzm;
-
-    PetscInt          ivErmzm,ivErmzp,ivErpzm,ivErpzp;
-    PetscInt        ivEphimzm,ivEphipzm,ivEphimzp,ivEphipzp;
-    PetscInt        ivErmphim,ivErpphim,ivErmphip,ivErpphip;
-    DM              dmCoord,dmCoorda;
-    PetscScalar       ****arrCoord,****arrCoorda,****arrX,****arrCr,****arrCphi,****arrCz,****arrFr,****arrFphi,****arrFz,****arrVr,****arrVphi,****arrVz;
-
+#line 1349
     PetscCall(TSGetDM(ts,&da));
 
     DMStagCreateCompatibleDMStag(da,0,0,1,0,&dmFr); /* 1 dof per face */
@@ -343,37 +323,18 @@ PetscErrorCode SaveCoordinates(TS ts, void *ptr)
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+    DM             da;
     DM             daC, dmC;
     DM             dmFr, dmFphi,dmFz, daFr, daFphi,daFz;
     DM             dmEr, dmEphi,dmEz, daEr, daEphi,daEz;
-    DM             dmV, daV;
 
     PetscInt       startr,startphi,startz,nr,nphi,nz;
 
-    Vec            vecC, C, C2, vecFr, vecFphi, vecFz, F_r, F_r2, F_phi, F_phi2, F_z, F_z2, vecEr, vecEphi, vecEz, E_r, E_r2, E_phi, E_phi2, E_z, E_z2, vecV, V, V2;
+    Vec            vecC, C, C2, vecFr, vecFphi, vecFz, F_r, F_r2, F_phi, F_phi2, F_z, F_z2, vecEr, vecEphi, vecEz, E_r, E_r2, E_phi, E_phi2, E_z, E_z2;
 
-    Vec            C_rLocal, C_phiLocal, C_zLocal, F_rLocal, F_phiLocal, F_zLocal, V_rLocal, V_phiLocal, V_zLocal, xLocal;
-    Vec            coordLocal, coordaLocal;
-    PetscInt       N[3],er,ephi,ez,d;
+    PetscInt       N[3],er,ephi,ez;
 
-    PetscInt       icBrp[3],icBphip[3],icBzp[3],icBrm[3],icBphim[3],icBzm[3];
-    PetscInt       icErmzm[3],icErmzp[3],icErpzm[3],icErpzp[3];
-    PetscInt       icEphimzm[3],icEphipzm[3],icEphimzp[3],icEphipzp[3];
-    PetscInt       icErmphim[3],icErpphim[3],icErmphip[3],icErpphip[3];
-    PetscInt       icrmphimzm[3],icrpphimzm[3],icrmphipzm[3],icrpphipzm[3];
-    PetscInt       icrmphimzp[3],icrpphimzp[3],icrmphipzp[3],icrpphipzp[3];
-    PetscInt       icp[3];
-
-
-    PetscInt        ivBrp,ivBphip,ivBzp,ivBrm,ivBphim,ivBzm;
-
-    PetscInt          ivErmzm,ivErmzp,ivErpzm,ivErpzp;
-    PetscInt        ivEphimzm,ivEphipzm,ivEphimzp,ivEphipzp;
-    PetscInt        ivErmphim,ivErpphim,ivErmphip,ivErpphip;
-    DM              dmCoord,dmCoorda;
-    PetscScalar       ****arrCoord,****arrCoorda,****arrX,****arrCr,****arrCphi,****arrCz,****arrFr,****arrFphi,****arrFz,****arrVr,****arrVphi,****arrVz;
-
+#line 1542
     PetscCall(TSGetDM(ts,&da));
 
     DMStagCreateCompatibleDMStag(da,0,0,3,0,&dmFr); /* 3 dofs per face */
@@ -769,12 +730,12 @@ PetscErrorCode CellToVertexProjectionScalar(TS ts, Vec C, Vec V, void *ptr)
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+    DM             da;
     Vec            CLocal;
     PetscInt startr, startphi, startz, nr, nphi, nz;
-    PetscInt N[3], er, ephi, ez, n = 1;
+    PetscInt N[3], er, ephi, ez;
 
-    PetscErrorCode ierr = 0;
+
 
     PetscCall(VecZeroEntries(V));
     PetscCall(TSGetDM(ts, & da));
@@ -868,14 +829,12 @@ PetscErrorCode VertexToEdgeReconstruction(TS ts, Vec V, Vec E, void *ptr)
   PetscCall(PetscLogEventRegister("VertexToEdgeReconstruction",classid,&USER_EVENT));
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
-    User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+
+    DM             da;
     Vec            VLocal;
     PetscInt startr, startphi, startz, nr, nphi, nz;
-    PetscInt N[3], er, ephi, ez, n = 1;
-
-    PetscErrorCode ierr = 0;
-
+    PetscInt N[3], er, ephi, ez;
+#line 1499
     PetscCall(VecZeroEntries(E));
     PetscCall(TSGetDM(ts, & da));
     PetscCall(DMStagGetGlobalSizes(da, & N[0], & N[1], & N[2]));
@@ -1108,13 +1067,13 @@ PetscErrorCode VertexToFaceReconstruction(TS ts, Vec V, Vec F, void *ptr)
   PetscCall(PetscLogEventRegister("VertexToFaceReconstruction",classid,&USER_EVENT));
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
-    User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+
+    DM             da;
     Vec            VLocal;
     PetscInt startr, startphi, startz, nr, nphi, nz;
-    PetscInt N[3], er, ephi, ez, n = 1;
+    PetscInt N[3], er, ephi, ez;
 
-    PetscErrorCode ierr = 0;
+
 
     PetscCall(VecZeroEntries(F));
     PetscCall(TSGetDM(ts, & da));
@@ -1312,13 +1271,13 @@ PetscErrorCode EdgeToCellReconstruction_r(TS ts, Vec E, Vec C, void *ptr)
   PetscCall(PetscLogEventRegister("EdgeToCellReconstruction_r",classid,&USER_EVENT));
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
-    User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+
+    DM             da;
     Vec            ELocal;
     PetscInt startr, startphi, startz, nr, nphi, nz;
-    PetscInt N[3], er, ephi, ez, n = 1;
+    PetscInt N[3], er, ephi, ez;
 
-    PetscErrorCode ierr = 0;
+
 
     PetscCall(VecZeroEntries(C));
     PetscCall(TSGetDM(ts, & da));
@@ -1385,13 +1344,13 @@ PetscErrorCode EdgeToCellReconstruction_phi(TS ts, Vec E, Vec C, void *ptr)
   PetscCall(PetscLogEventRegister("EdgeToCellReconstruction_phi",classid,&USER_EVENT));
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
-    User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+
+    DM             da;
     Vec            ELocal;
     PetscInt startr, startphi, startz, nr, nphi, nz;
-    PetscInt N[3], er, ephi, ez, n = 1;
+    PetscInt N[3], er, ephi, ez;
 
-    PetscErrorCode ierr = 0;
+
 
     PetscCall(VecZeroEntries(C));
     PetscCall(TSGetDM(ts, & da));
@@ -1458,13 +1417,13 @@ PetscErrorCode EdgeToCellReconstruction_z(TS ts, Vec E, Vec C, void *ptr)
   PetscCall(PetscLogEventRegister("EdgeToCellReconstruction_z",classid,&USER_EVENT));
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
-    User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+
+    DM             da;
     Vec            ELocal;
     PetscInt startr, startphi, startz, nr, nphi, nz;
-    PetscInt N[3], er, ephi, ez, n = 1;
+    PetscInt N[3], er, ephi, ez;
 
-    PetscErrorCode ierr = 0;
+
 
     PetscCall(VecZeroEntries(C));
     PetscCall(TSGetDM(ts, & da));
@@ -1536,12 +1495,12 @@ PetscErrorCode FaceToVertexProjection(TS ts, Vec F, Vec V, void *ptr)
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+    DM             da;
     Vec            FLocal;
     PetscInt startr, startphi, startz, nr, nphi, nz;
-    PetscInt N[3], er, ephi, ez, n = 1;
+    PetscInt N[3], er, ephi, ez;
 
-    PetscErrorCode ierr = 0;
+
 
     PetscCall(VecZeroEntries(V));
     PetscCall(TSGetDM(ts, & da));
@@ -2446,12 +2405,12 @@ PetscErrorCode EdgeToVertexProjection(TS ts, Vec E, Vec V, void *ptr)
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+    DM             da;
     Vec            ELocal;
     PetscInt startr, startphi, startz, nr, nphi, nz;
-    PetscInt N[3], er, ephi, ez, n = 1;
+    PetscInt N[3], er, ephi, ez;
 
-    PetscErrorCode ierr = 0;
+
 
     PetscCall(VecZeroEntries(V));
     PetscCall(TSGetDM(ts, & da));
@@ -3083,12 +3042,12 @@ PetscErrorCode CellToFaceProjection(TS ts, Vec C, Vec F, void *ptr)
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+    DM             da;
     Vec            CLocal;
     PetscInt startr, startphi, startz, nr, nphi, nz;
-    PetscInt N[3], er, ephi, ez, n = 1;
+    PetscInt N[3], er, ephi, ez;
 
-    PetscErrorCode ierr = 0;
+
 
     PetscCall(VecZeroEntries(F));
     PetscCall(TSGetDM(ts, & da));
@@ -3314,12 +3273,12 @@ PetscErrorCode VertexCrossProduct(TS ts, Vec A, Vec B, Vec C, void *ptr)
   PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+    DM             da;
     Vec            ALocal, BLocal;
     PetscInt startr, startphi, startz, nr, nphi, nz;
-    PetscInt N[3], er, ephi, ez, n = 1;
+    PetscInt N[3], er, ephi, ez;
 
-    PetscErrorCode ierr = 0;
+
 
     PetscCall(VecZeroEntries(C));
     PetscCall(TSGetDM(ts, & da));
@@ -3790,15 +3749,15 @@ PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, 
     PetscCall(PetscLogEventBegin(USER_EVENT,0,0,0,0));
 
     User           *user = (User*)ptr;
-    DM             da, coordDA = user->coorda;
+    DM             da;
     DM             dmEr, dmEphi,dmEz, daEr, daEphi,daEz;
     PetscInt       startr,startphi,startz,nr,nphi,nz;
-    Vec            F, C, vecEr, vecEphi, vecEz, E_r, E_r2, E_phi, E_phi2, E_z, E_z2, Xr, Xphi, Xz;
-    Vec            E_rLocal, E_phiLocal, E_zLocal, XLocal;
-    PetscInt       N[3],er,ephi,ez,d;
+    Vec            F, C, vecEr, vecEphi, vecEz, E_r2, E_phi2, E_z2;
+    Vec            XLocal;
+    PetscInt       N[3],er,ephi,ez;
     const PetscScalar *array;
-    int            len;
 
+#line 8647
     PetscCall(TSGetDM(ts,&da));
     PetscCall(VecDuplicate(X, & F));
     PetscCall(VecZeroEntries(F));
@@ -3917,7 +3876,7 @@ PetscErrorCode getEJArray(TS ts, Vec X, PetscScalar *ge_ER, PetscScalar *ge_EP, 
 
 
     PetscMPIInt rank;
-    MPI_Comm    comm;
+
     VecScatter  scat;
     Vec         Xseq, naturalX;
 
@@ -4045,10 +4004,10 @@ PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
   DM             da, dmV, daV;
   PetscInt       startr,startphi,startz,nr,nphi,nz;
   Vec            vecV, V, X_local;
-  PetscInt       er,ephi,ez,d;
+  PetscInt       er,ephi,ez;
   const PetscScalar *array;
-  int            len;
 
+#line 8897
   PetscCall(TSGetDM(ts,& da));
 
   DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmV); /* 3 dofs per element */
@@ -4113,7 +4072,7 @@ PetscErrorCode getVArray(TS ts, Vec X, PetscScalar *gf_V, void *ptr)
   PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity"));
 
   PetscMPIInt rank;
-  MPI_Comm    comm;
+
   VecScatter  scat;
   Vec         Xseq, naturalX;
 
@@ -4170,11 +4129,11 @@ PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivat
   User           *user = (User*)ptr;
   DM             da, dmCoord, dmB, daB;
   PetscInt       startr,startphi,startz,nr,nphi,nz;
-  Vec            RphiZ_global,  vecB, B, X_Local, coordLocal;
+  Vec            vecB, B, X_Local, coordLocal;
   PetscInt       N[3],er,ephi,ez;
   const PetscScalar *array;
-  int            len,i;
 
+#line 9143
   PetscCall(TSGetDM(ts, & da));
 
   PetscCall(DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmB)); /* 3 dofs per element */
@@ -4249,7 +4208,7 @@ PetscErrorCode getBArray(TS ts, Vec X, PetscScalar *gf_B, void *ptr, int derivat
   PetscCall(PetscObjectSetName((PetscObject) vecB, "Magneric field"));
 
   PetscMPIInt rank;
-  MPI_Comm    comm;
+
   VecScatter  scat;
   Vec         Xseq, naturalX;
 
