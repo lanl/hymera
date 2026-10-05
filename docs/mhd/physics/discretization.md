@@ -1,6 +1,6 @@
 # DMStag Discretization Decoder
 
-This document decodes the ~70 index variables (`ivVrmphimzm`, `ivErmzm`, `ivBphip`,
+This document decodes the index variables (`ivVrmphimzm`, `ivErmzm`, `ivBphip`,
 `icrpphipzp`, ...) that every residual function in `src/mhd/ts_functions.c` resolves at
 the top of its body before doing any physics. Without this key, the residual assembly
 code is unreadable: it is dense arithmetic indexed entirely by these opaque names.
@@ -307,34 +307,29 @@ the run's whole lifetime, separate from (but geometrically identical in content 
 per-call `arrCoorda` that each residual function re-derives locally from `coordDA` inside
 its own slot block.
 
-## 6. Why there are ~70 of these, repeated everywhere
+## 6. Where the slots come from now
 
-The slot-resolution block quoted above (`ts_functions.c:2960-3045`, ~85 lines, 54
-`DMStagGetLocationSlot` calls plus the corner/size queries and coordinate-array borrows
-around them) is **byte-identical across all residual variants in this file**. The same
-block (with only the enclosing function's local variable *declarations* differing
-slightly in which of the ~70 slots it happens to declare) recurs at minimum at the
-locations found while scanning for `coordDA` in this file: functions beginning near
-lines 36, 984, 1945, 2920, 3896, 4877, 5858, and more beyond — i.e. the "18 residual
-variants" this task's background states, each carrying this ~3200-line-file-wide
-duplicated block.
+When this document was first written, the slot-resolution block above was duplicated
+verbatim at the top of every residual -- 54 `DMStagGetLocationSlot` calls per
+function, across 18 variants. Most of those variants were unreachable and are now in
+`src/mhd/attic/`, and in the live residuals the block is shared (`f20302c`):
 
-`DMStagGetLocationSlot(dm, location, component, &slot)` is a pure function of its first
-three arguments: for a fixed DM (`da`, `dmCoord`, or `dmCoorda`), a fixed `LOCATION`
-macro, and a fixed component index, it always returns the same integer for the lifetime
-of that DM (slot layout is fixed at `DMSetUp` time and never changes). That means all
-54+ calls in this block, across all 18 residual variants, are recomputing values that
-are constant for the entire simulation run — the *only* reason there are ~70 near-
-identical local variables per function is that each function re-derives its own local
-copy of the same DM-constant lookup table instead of the lookup table being computed once
-and shared.
+- `MFD_Slots`, defined near the top of `ts_functions.c`, is a struct whose members
+  carry exactly the variable names in the table above (`ivVrmphimzm[4]`, `ivErmzm`,
+  `icrpphipzp[3]`, ...).
+- `MFD_GetSlotsSolution(da, &S)` fills the solution-DM slots (vertex, edge, face,
+  element); `MFD_GetSlotsCoords(dmCoord, dmCoorda, &S)` fills the coordinate slots.
+- `MFD_UNPACK_SLOTS(S)` copies them into each function's existing local variables,
+  so the residual arithmetic reads the same names this table decodes.
 
-**This is a documentation-only observation, not a change made here.** A natural follow-up
-refactor (not performed by this task, and no `src/` file was touched to produce this
-document) would be to resolve all `iv*`/`ic*` slots once — e.g. into a single struct
-attached to `User`/`KineticContext`, populated once in `mhd_initialize` right alongside
-`user->arrCoord` — and have every residual function read from that struct instead of
-calling `DMStagGetLocationSlot` ~54 times per call, per residual, per timestep.
+So this table still decodes the residuals directly; the lookups just happen in one
+place. `DMStagGetLocationSlot` is a pure function of the DM, so the values are
+constant for a run. They are still resolved once per residual call rather than once
+per run; caching them on `User` would be a small further step, not yet taken.
+
+The per-cell geometry that sits next to the slots in every cell loop is shared the
+same way: `MFD_CellEdgeLengths` gives the 12 edge lengths and `MFD_CellVolume` the
+cell volume (`c2c454f`).
 
 ## Verification summary
 

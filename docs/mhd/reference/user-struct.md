@@ -1,5 +1,11 @@
 # The `User` struct (`src/mhd/mfd_config.h`)
 
+> **Line numbers.** File:line references in this document were taken before the
+> refactor shrank `ts_functions.c` from 22,656 to ~5,800 lines; many no longer
+> point at the right place. Function names are still accurate -- grep for them.
+> The field list itself was re-checked against `mfd_config.h` and is current: 99
+> fields, including `numC`, `monitor` and `inertia`, added during the refactor.
+
 `User` (defined at `src/mhd/mfd_config.h:97-200`) is the single mutable-state
 struct of the entire `mhd_core` C library. It is passed by pointer (`User*`,
 aliased as `void*` in most PETSc callback signatures) to essentially every
@@ -185,6 +191,7 @@ diagnostics, and legacy save/test paths.
 | `debug` | `PetscInt` | DECK | `MHD_Config/debug`, default `0` | `mass_matrix_coefficients.c` (7 sites gating verbose `PetscPrintf`/`MatView`/`VecView` dumps), `mimetic_operators.c` (multiple `if(user->debug)` blocks) | Enables verbose debug printing throughout the mimetic-operator/mass-matrix assembly code. |
 | `dump` | `PetscInt` | DECK | `MHD_Config/dump`, default `0` | `ts_functions.c:17711,17715,17765` (`Monitor`'s `.vtr`/cell-solution dump path) | Enables saving solution snapshots in `.vtr`/cell-dump files via `Monitor`. |
 | `monitor` | `PetscInt` | DECK | `MHD_Config/monitor`, default `0` | `mhd.c:729` (`if (user->monitor) { ... Monitor(...) }`) | **Recently added.** Gates the per-step `Monitor` diagnostics (step norms, max\|div B\|, toroidal currents) that `mhd_step` now calls directly, since PETSc's own `TSMonitorSet` registration (`mhd.c:227`) never fires (the driver advances via `TSStep`, not `TSSolve`). Off by default because `Monitor` performs a nested linear solve per step; the regression harness turns it on and uses its printed output as a per-step fingerprint. |
+| `inertia` | `PetscInt` | DECK | `MHD_Config/inertia`, default `0` | `FormIFunction_Vperp_viscosity` in `ts_functions.c`, which picks one of two constant `MFD_ResidualTerms` from it | Enables the advective inertia term n_i (V.grad)V in the production momentum residual. Off by default: the term was historically multiplied by a literal `0.0`, and with the flag off it still is, verbatim, because deleting it moves results by 1-14 ULP. Read in the wrapper, not inside the shared body, so the default path compiles exactly as before. |
 | `prestep` | `PetscInt` | NEVER WRITTEN | — | none in `src/mhd/*.c` besides `mfd_config.c:69` (`AppCtxView` print) | Documented as "activate the prestep to approximate the runaway current contribution," but no assignment exists anywhere (not in `kinetic.cpp`, not in any `.c` file). **NEVER WRITTEN**, confirmed. |
 | `Ebc` | `PetscInt` | HARDCODED | `kinetic.cpp:235` sets it to `0` | `ts_functions.c:16489,17519` (`if (ictype==9 && user->Ebc)`) | Type of boundary condition for the E field; always `0` under the current deck wiring, so both gated branches are permanently dead in practice unless something else sets it (nothing does). |
 | `savecoords` | `PetscInt` | DECK | `MHD_Config/savecoords`, default `0` | `mhd.c:219` (`if (user->savecoords) { SaveCoordinates(...); return(0); }`) | If set, `mhd_initialize` saves cell/face/edge-center coordinates to `.m` files and returns immediately — a diagnostics-only early-exit mode. |

@@ -1,14 +1,17 @@
 # MHD regression harness
 
 Purpose: prove that a change to the C MHD solver does not change the numerical
-solution. The solver is 49,326 lines of inherited C with no test coverage, so
-every refactoring step needs an objective before/after check.
+solution. The solver was inherited with no test coverage; every refactoring step
+since has been gated by the checks described here.
 
 Everything here lives in `tests/regression/` and touches no solver source.
 
 ## Quick start
 
 ```sh
+# The inner loop: three exact-hash tests, a few seconds in total.
+cd build && ctest
+
 # One-time: provision numpy + matplotlib in a virtualenv (tooling only,
 # never linked into the solver).
 ./tests/regression/setup_env.sh
@@ -155,10 +158,47 @@ comparator.
 This repository already contains the failure mode being guarded against:
 `tests/kinetic/avalanche_test.cpp` is 692 lines that return 0 unconditionally.
 
-## Known gap
+## Tiers
 
-`tests/CMakeLists.txt` still has its test registrations commented out, so `ctest`
-reports zero tests. The harness currently runs via the shell scripts above.
-Wiring it into `ctest` needs a helper that links `mhd_core` — the existing
-`add_parthenon_test` links only Parthenon/HDF5/hflux and so cannot reach the MHD
-solver; copy the linking pattern from `src/CMakeLists.txt` instead.
+| Tier | Test | What it hashes | Time |
+|---|---|---|---|
+| 0 | `mhd_t0_coefficients` | every live mass-matrix coefficient over all indices, stencil locations and materials, 9.8M values | ~4 s |
+| 0 | `mhd_t0_operators` | 13 live mimetic operators applied to a fixed input, 6.3M values | ~2 s |
+| 1 | `mhd_t1_residuals` | every live residual and the RHS evaluated once on a fixed state, plus the production residual with `inertia` on, 2.9M values | ~3 s |
+| — | `run_baseline.sh` | a full production run, 100×2×200 | ~40 min |
+
+Each tier-0/1 test prints every value as an exact hexadecimal double and compares a
+SHA-256 against `tests/regression/baselines/<name>.sha256`. A hash mismatch says only
+that something changed; to see what, run `run_t0.sh <binary> --baseline <name>
+--keep FILE` on both revisions and diff the files. Every line names the function and
+the index, so the diff localizes the change exactly.
+
+Why tier 1 matters: a full time step cannot check a residual bit-exactly, because its
+output feeds an inexact Newton-Krylov solve that can amplify a one-ULP change into one
+at solver tolerance. A single evaluation has no such amplification. Use the full run
+for what only it covers: the composition of everything, the solver stack, restart I/O.
+
+**Re-recording a baseline** is legitimate only when the source tree equals HEAD, so
+that the baseline describes committed code. The tests' fixed state is synthetic: a
+50×2×186 grid with a tokamak-like nested-shell material layout (all five materials,
+four-plasma-neighbour vertices, and the three hardcoded isolated cells), and
+asymmetric nowhere-zero fields.
+
+## Tools
+
+| Tool | Use |
+|---|---|
+| `run_t0.sh` | run a tier-0/1 binary, check or record its hash |
+| `run_baseline.sh`, `fingerprint.py` | full production run and its log fingerprint |
+| `codegen_identity.sh`, `compare_asm.py` | compare generated code per function before/after; complete proof for pure deletions |
+| `decode_diff.py` | decide whether differing AArch64 instructions are only padding and relocated branches |
+| `verify_move.py` | prove a function move was byte-exact and that per-file counts reconcile |
+| `check_line_numbers.py` | prove every surviving `PetscCall`/`SETERRQ` keeps its `__LINE__` |
+| `find_dead_branches.py` | find, and optionally remove, constant-false `if` blocks |
+| `add_petsc_checks.py` | wrap bare PETSc calls in `PetscCall`, allow-list based |
+| `gen_grid_data.py` | generate grid data files at any resolution |
+| `setup_env.sh` | provision numpy/matplotlib in a virtualenv |
+| `viz/` | plot the material map and equilibrium inputs |
+
+The Python virtualenv lives in `~/.venv-hymera` and may need recreating with
+`setup_env.sh` after the environment is reset.

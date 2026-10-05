@@ -4,7 +4,12 @@ Decisions that only the code owner can make, because the answers are not in the
 code and the original author is unavailable. Each entry gives what the code does
 now, the evidence, what changing it would cost, and the risk of leaving it.
 
-Nothing here is a bug to be fixed unilaterally. Several of these change
+Nothing here is a bug to be fixed unilaterally.
+
+Status as of the refactor: Q2 and Q8 are resolved; Q3 is now a single argument
+away from either answer; the rest remain open. Line numbers in the bodies refer
+to the pre-refactor source and are kept for history -- use function names to find
+the current code. Several of these change
 production physics results.
 
 Severity: **HIGH** = affects production physics output; **MEDIUM** = affects
@@ -13,6 +18,12 @@ diagnostics or reproducibility; **LOW** = hygiene.
 ---
 
 ## Q1 — What are the three hardcoded "isolated cells"? (HIGH)
+
+> **Status.** Still open. After the coefficient merge (`fee16bd`) the three
+> indices appear once, in `alphaecphi_isolcell`, which now chooses between
+> `etawallphi_isol_cell` and `etawallphi` and calls the shared `alphaec_sum`. The
+> commented-out `z > 0` alternative was not carried over; it is quoted below.
+> Line numbers below are pre-refactor.
 
 `alphaecphi_isolcell` (`src/mhd/mass_matrix_coefficients.c:3361`) selects a
 special resistivity, `user->etawallphi_isol_cell`, for three cells named by
@@ -54,7 +65,13 @@ another resolution.
 
 ---
 
-## Q2 — Was the `jre` runaway-current source meant to be dropped? (HIGH)
+## Q2 — Was the `jre` runaway-current source meant to be dropped? (RESOLVED)
+
+> **Resolved.** `jre` and `view3d_t` are kept for the hybrid coupling (owner
+> decision). The halo variant that lacked `jre` was unreachable and is in the
+> attic. In the merged residual `jre` is its own switch, `f3_jre`: on for
+> production, off for relaxation, as before. The relaxation is ideal by decision
+> (`6ce3379`).
 
 The production residual `FormIFunction_Vperp_viscosity`
 (`ts_functions.c:2910-3885`) reads `user->jre` — the runaway-electron current
@@ -95,7 +112,14 @@ computed value is affected.
 
 ---
 
-## Q3 — Is the "plain halo" initial condition meant to be unreachable? (HIGH)
+## Q3 — Is the "plain halo" initial condition meant to be unreachable? (OPEN, now a one-word change)
+
+> **Status.** `InitializeEP` and `_halo` now share one body, `initialize_ep`
+> (`a404205`), taking the r-z and other-edge coefficients as arguments. Selecting
+> plain halo -- `betaephi2` instead of `betaephi_isolcell` on r-z edges -- is now a
+> single argument. The question of which is intended remains; answering it
+> changes the production initial condition. Line references below are
+> pre-refactor.
 
 For the `Vperp` residual family, the halo and isolated-cell treatments are two
 separate functions (`_halo` and `_halo_isolcell`), differing in a single token.
@@ -114,7 +138,12 @@ refactor.
 
 ---
 
-## Q4 — Which definition of the reported toroidal current is correct? (HIGH)
+## Q4 — Which definition of the reported toroidal current is correct? (OPEN)
+
+> **Status.** The disabled resistive block was deleted with the other never-true
+> branches (`20969e5`); the reported current is unchanged. The question stands: if
+> the resistive definition is wanted, it must be reinstated deliberately. Line
+> references below are pre-refactor.
 
 `ComputeCurrent` (`src/mhd/monitor_functions.c:2475`) is live and its output is
 printed each step as "Current intensity inside plasma". It contains an `if(0)`
@@ -135,6 +164,11 @@ numbers.
 ---
 
 ## Q5 — Dead features, or unfinished ones? (MEDIUM)
+
+> **Status.** Partly overtaken. `DiagMe1`, the latent crash listed below, is gone:
+> its only reader was in quarantined code. Several other fields named here are
+> now read nowhere at all; see [../reference/user-struct.md](../reference/user-struct.md)
+> for the current list.
 
 Several `User` fields are read but never assigned. Since the struct is `calloc`'d
 at `src/mhd/mhd.c:64`, they are permanently zero, so the code they guard never
@@ -199,7 +233,10 @@ both paths are unreachable.
 
 ---
 
-## Q8 — What are the magic constants in the diagnostic path? (LOW)
+## Q8 — What are the magic constants in the diagnostic path? (RESOLVED)
+
+> **Resolved by removal.** Both constants sat in never-true diagnostic branches and
+> were deleted with them (`20969e5`). Neither appears in the current code.
 
 Two unexplained literals near `Monitor` in `ts_functions.c`:
 
@@ -230,7 +267,9 @@ plasma is, with no diagnostic.
 ## Q10 — Is `stag_vec_io`'s format acceptable for long-term restarts? (MEDIUM)
 
 `mhd_savesolution`/`mhd_loadsolution` achieve genuine rank-independence via the
-DMDA permutation trick documented at `src/mhd/mhd.c:771-788`. That property is
+DMDA permutation trick documented above `stag_vec_io`, now in
+`src/mhd/ts_functions.c` (it moved from `mhd.c` in `7999840`, and `188f772`
+reworked the load path). That property is
 valuable and was clearly deliberate.
 
 But the file itself has no header, no magic number, no version, and no dimension

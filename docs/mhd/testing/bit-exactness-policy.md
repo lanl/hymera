@@ -193,3 +193,48 @@ damage. Do not attempt them as part of a refactoring pass.
   Regenerate `docs/mhd/reference/function-index.md` after each merge.
 - **Verify after every change:** clean build with no new warnings; the class's
   proof from above; symbol diff; and a diffstat whose size matches expectation.
+
+## Floating-point traps found in practice
+
+The build contracts to fused multiply-add (GCC's default `-ffp-contract=fast` for
+C, and AArch64 has FMA instructions). A fused `a*b + c` rounds once instead of
+twice, so *which* operations the compiler fuses changes the result bits. Every
+rule below comes from a change that looked behaviour-preserving and was not.
+
+- **Switch at statement level.** To select between two expressions, choose between
+  two complete statements under an `if`. Never mask a term with a flag inside an
+  expression (`x = a + (flag ? b : 0)`, or `a + flag*b`): that changes the
+  expression's shape and therefore what fuses.
+- **Specialize on constants, do not branch at run time.** A shared body that took
+  its switches as run-time values differed from the separate originals in the last
+  bit at 32 entries, because GCC shared code across the branches. Making the body
+  `always_inline` and calling it with constant switch structs gives each caller its
+  own copy, compiled as the original was. Where a switch comes from configuration,
+  resolve it in the wrapper and call the inlined body with one of two constant
+  structs (`MHD_Config/inertia` does this).
+- **A multiply-by-zero term can be load-bearing.** Deleting `+ 0.0 * niv * (...)`
+  from the production residual changed 30 entries by 1-14 ULP: the term's presence
+  fixed how its neighbours were grouped. An optimization barrier at the obvious
+  rounding point did not restore them, because the change came from how the whole
+  inlined body was optimized. So the term stays on the default path, commented as
+  load-bearing. Removing it is a deliberate re-baselining step, not a refactor.
+- **Count fused instructions when in doubt.** Comparing the number of
+  `fmadd`/`fmsub`/`fnmsub` instructions per function in the disassembly before and
+  after a change is a fast first check; equal counts are necessary for bit-exactness,
+  though not sufficient.
+
+## Harness traps found in practice
+
+- **Negative-test every harness.** Perturb a live line and confirm the test fails
+  before trusting it. The first tier-0 material layout alternated tags cell by cell,
+  so no vertex had four plasma neighbours and the interior-plasma branch of the
+  residuals was never evaluated; a deliberate perturbation there changed nothing.
+- **Check the guard before calling it a blind spot.** A perturbation inside
+  `if (0 && ...)` correctly changes nothing. That is the harness working.
+- **Do not count an unfinished solve.** A run stopped mid-solve leaves a partial
+  iteration sequence. Compare iteration counts only over solves both runs completed.
+- **objdump labels are not code.** References into `.rodata` carry no local symbol,
+  so objdump labels them with the nearest preceding function; deleting the first
+  function in an object relabels references everywhere. Alignment `nop` padding also
+  shifts. Neither is a change. `decode_diff.py` decodes the instructions and accepts
+  only padding and relocated branches.
