@@ -88,19 +88,19 @@ int mhd_PetscInit(int * argc, char *** argv, User** user) {
 
 int mhd_initialize(User* user) {
   PetscFunctionBeginUser;
-  KSP ksp, dummyksp, dummykspB, dummykspn, dummykspEP; /* scalable linear equations solver */
+  KSP ksp, dummykspEP; /* scalable linear equations solver */
   //char              *prefix[2];
-  PC dummypc, dummypcB, dummypcn, dummypcEP; /* preconditioner context */
+  PC dummypcEP; /* preconditioner context */
   PC pc;
   Vec dummyX; /* solution and right-hand side vectors */
-  Mat J, Jpre, dummyJ, dummyJn;
+  Mat J, Jpre, dummyJ;
   //,Jmf = NULL;       /* jacobian matrix */
   SNES snes;
-  PetscReal time, ftime;
+  PetscReal ftime;
 
   PetscBool matrix_free = PETSC_FALSE, matrix_free_FDprec = PETSC_FALSE, user_defined_pc = PETSC_FALSE;
-  KSP * subksp, * subsubksp, * subsubsubksp;
-  PC subsubsubpc[2] = {NULL,NULL}, subsubpc[2] = {NULL,NULL}, subpc[2] = {NULL,NULL};
+  KSP * subksp;
+  PC subpc[2] = {NULL,NULL};
   PetscInt n = 1;
   PetscBool removezero = PETSC_FALSE;
 
@@ -337,7 +337,7 @@ int mhd_initialize(User* user) {
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Set index sets
     - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-  IS isEPBVndup, isEPtauVndup, isEPtauBVdup, istauBVndup, isndup, isEPdup, isBdup, istaudup;
+  IS isEPdup;
 
   PetscCall(DMCreateGlobalVector(user->da, & dummyX));
   PetscCall(VecCopy(user->X, dummyX));
@@ -383,8 +383,7 @@ int mhd_initialize(User* user) {
 
   char ** namelist;
   IS * islist, isALL, isALL_V, isBV;
-  IS ISV;
-
+#line 383
   PetscInt len, d = 0;
   PetscCall(DMCreateFieldDecomposition(user->da, & len, & namelist, & islist, NULL));
   PetscCall(PetscPrintf(PETSC_COMM_WORLD, "The number of subproblems in the field decomposition is: %g\n", (double)(len)));
@@ -393,7 +392,7 @@ int mhd_initialize(User* user) {
     //PetscPrintf(PETSC_COMM_WORLD, "The global indices for field number %d are as follows.\n", d);
     //ISView(islist[d],PETSC_VIEWER_STDOUT_SELF);
   }
-  PetscBool flagV = PETSC_FALSE, flagE = PETSC_FALSE, flagF = PETSC_FALSE, flagC = PETSC_FALSE;
+#line 392
   PetscCall(ISDifference(islist[0], user->isEP, & user->isV));
 
   PetscCall(ISDuplicate(islist[1], & user->istau));
@@ -917,8 +916,8 @@ PetscErrorCode mhd_loadsolution(User *user, const char *filename)
  */
 PetscErrorCode mhd_save_hdf5(User *user, const char *filename)
 {
-    PetscViewer viewer;
-    Vec X;
+    PetscViewer viewer PETSC_UNUSED;
+    Vec X PETSC_UNUSED;
 
     PetscFunctionBeginUser;
 
@@ -944,8 +943,8 @@ PetscErrorCode mhd_save_hdf5(User *user, const char *filename)
 
 PetscErrorCode mhd_load_hdf5(User *user, const char *filename)
 {
-    PetscViewer viewer;
-    Vec X;
+    PetscViewer viewer PETSC_UNUSED;
+    Vec X PETSC_UNUSED;
 
     PetscFunctionBeginUser;
 
