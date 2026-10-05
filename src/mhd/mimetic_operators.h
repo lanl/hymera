@@ -34,7 +34,6 @@ PetscErrorCode FormDerivedCurl(TS,Vec,Vec,void*);
 PetscErrorCode FormDerivedCurlnores(TS,Vec,Vec,void*);
 PetscErrorCode FormDerivedCurlnomp(TS,Vec,Vec,void*);
 PetscErrorCode FormSourceTermPotential(TS,PetscReal,Vec,void*);
-PetscErrorCode FormDiscreteGradientEP(TS,Mat,Vec,Vec,void*);
 PetscErrorCode FormDiscreteGradientEP_noMat(TS,Vec,Vec,void*);
 PetscErrorCode FormDiscreteGradientVectorField(TS,Vec,Vec,Vec,Vec,void*);
 PetscErrorCode ApplyDerivedDivergence(TS,Vec,Vec,void*);

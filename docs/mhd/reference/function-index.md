@@ -1,5 +1,9 @@
 # MHD Solver Function Index
 
+> **Update:** the three DEAD functions listed below -- `FormDiscreteGradientEP`,
+> `DumpVelocity_Cell`, `DumpEdgeField` -- have since been quarantined to `src/mhd/attic/`.
+> Their rows are removed from the per-file tables; the summary counts predate that.
+
 This document is a mechanically generated function index for the C MHD solver (`/workspace/src/mhd`). It was produced by a Python script (`/tmp/gen_function_index.py`, not checked into the repo) that parses top-level function definitions out of the 8 files in scope, builds a call graph with comments and string literals stripped, and determines liveness transitively from a root set (the public API in `mhd.h`, plus every name referenced from `src/kinetic/*.cpp`, `src/tasks/*.cpp`, and `tests/regression/*.c`).
 
 It reflects git commit `7973092` (measured on branch `refactor/p0-harness`). A second agent was concurrently editing `src/mhd/*.c` and committing per file; this document was generated from the tree exactly as it stood at that commit.
@@ -85,7 +89,6 @@ It reflects git commit `7973092` (measured on branch `refactor/p0-harness`). A s
 | `FormDerivedCurlnores` | 1136-1138 | 3 | extern | LIVE | `src/mhd/monitor_functions.c:1667`, `tests/regression/t0_operators.c:42` |
 | `FormDerivedCurlnomp` | 1141-1143 | 3 | extern | LIVE | `src/mhd/ts_functions.c:423`, `src/mhd/geometry.c:3811`, `src/mhd/monitor_functions.c:289` +1 more |
 | `FormSourceTermPotential` | 1148-1469 | 322 | extern | LIVE | `src/mhd/ts_functions.c:339`, `src/mhd/ts_functions.c:1341` |
-| `FormDiscreteGradientEP` | 1471-1882 | 412 | extern | DEAD | - |
 | `FormDiscreteGradientEP_noMat` | 1884-2061 | 178 | extern | LIVE | `src/mhd/ts_functions.c:357`, `src/mhd/ts_functions.c:1359`, `src/mhd/mimetic_operators.c:2332` +1 more |
 | `FormDiscreteGradientVectorField` | 2065-2318 | 254 | extern | LIVE | `src/mhd/ts_functions.c:379`, `src/mhd/mimetic_operators.c:431` |
 | `FormElectricField` | 2320-2339 | 20 | extern | LIVE | `src/mhd/geometry.c:3809`, `tests/regression/t0_operators.c:46` |
@@ -133,14 +136,12 @@ It reflects git commit `7973092` (measured on branch `refactor/p0-harness`). A s
 
 | Function | Lines | Length | Linkage | Status | Called from |
 |---|---|---|---|---|---|
-| `DumpVelocity_Cell` | 27-240 | 214 | extern | DEAD | - |
 | `DumpSolution_Cell` | 242-918 | 677 | extern | LIVE | `src/mhd/ts_functions.c:4398` |
 | `DumpError` | 922-1482 | 561 | extern | LIVE | `src/mhd/ts_functions.c:4422` |
 | `DumpDivergence` | 1484-1555 | 72 | extern | LIVE | `src/mhd/ts_functions.c:4484` |
 | `DumpLevelSet` | 1557-1618 | 62 | extern | LIVE | `src/mhd/ts_functions.c:4400` |
 | `SaveIntermediateSolution` | 1620-1634 | 15 | extern | LIVE | `src/mhd/ts_functions.c:4384`, `src/mhd/ts_functions.c:5376`, `src/mhd/ts_functions.c:5383` |
 | `ComputeCurrent` | 1636-1737 | 102 | extern | LIVE | `src/mhd/ts_functions.c:4508` |
-| `DumpEdgeField` | 1741-1884 | 144 | extern | DEAD | - |
 
 **Summary:** 8 functions, 0 ENTRY, 6 LIVE, 2 DEAD, 0 static.
 

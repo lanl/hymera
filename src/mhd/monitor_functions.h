@@ -31,13 +31,11 @@
 #include <petsc/private/tsimpl.h>
 
 
-PetscErrorCode DumpVelocity_Cell(TS,PetscInt,Vec,char*,void*);
 PetscErrorCode DumpSolution_Cell(TS,PetscInt,Vec,void*);
 PetscErrorCode DumpError(TS,PetscInt,Vec,void*);
 PetscErrorCode DumpDivergence(TS,DM,PetscInt,Vec,void*);
 PetscErrorCode DumpLevelSet(TS,void*);
 PetscErrorCode SaveIntermediateSolution(TS,PetscInt,PetscReal,Vec,void*);
 PetscErrorCode ComputeCurrent(TS,Vec,void*);
-PetscErrorCode DumpEdgeField(TS,PetscInt,Vec,void*);
 
 #endif /* defined(MONITOR_FUNCTIONS_H) */

@@ -1445,3 +1445,363 @@ PetscErrorCode multiplybyR(PetscScalar *gf, const PetscScalar *g, const int N){
   }
   return (0);
 }
+
+PetscErrorCode DumpVelocity_Cell(TS ts, PetscInt step, Vec X, char* prefix, void * ptr) {
+  PetscFunctionBeginUser;
+  User * user = (User * ) ptr;
+  DM da, dmV, daV;
+  PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz;
+  Vec X_local, vecV, V;
+  PetscReal time = 0.0;
+
+  PetscCall(TSGetDM(ts, & da));
+  PetscCall(TSGetTime(ts, & time));
+
+  //PetscPrintf(PETSC_COMM_WORLD,"Current time: t = %f\n", time);
+
+  DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmV); /* 3 dofs per element */
+
+  PetscCall(DMSetUp(dmV));
+
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmV, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+
+  PetscCall(DMCreateGlobalVector(dmV, & V));
+
+  PetscCall(DMGetLocalVector(da, & X_local));
+  PetscCall(DMGlobalToLocal(da, X, INSERT_VALUES, X_local));
+
+  PetscCall(DMStagGetCorners(dmV, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+        DMStagStencil from[24], to[3];
+        PetscScalar valFrom[24], valTo[3];
+
+          from[0].i = er;
+          from[0].j = ephi;
+          from[0].k = ez;
+          from[0].loc = BACK_DOWN_LEFT;
+          from[0].c = 0;
+          from[1].i = er;
+          from[1].j = ephi;
+          from[1].k = ez;
+          from[1].loc = BACK_DOWN_RIGHT;
+          from[1].c = 0;
+          from[2].i = er;
+          from[2].j = ephi;
+          from[2].k = ez;
+          from[2].loc = BACK_UP_LEFT;
+          from[2].c = 0;
+          from[3].i = er;
+          from[3].j = ephi;
+          from[3].k = ez;
+          from[3].loc = BACK_UP_RIGHT;
+          from[3].c = 0;
+          from[4].i = er;
+          from[4].j = ephi;
+          from[4].k = ez;
+          from[4].loc = FRONT_DOWN_LEFT;
+          from[4].c = 0;
+          from[5].i = er;
+          from[5].j = ephi;
+          from[5].k = ez;
+          from[5].loc = FRONT_DOWN_RIGHT;
+          from[5].c = 0;
+          from[6].i = er;
+          from[6].j = ephi;
+          from[6].k = ez;
+          from[6].loc = FRONT_UP_LEFT;
+          from[6].c = 0;
+          from[7].i = er;
+          from[7].j = ephi;
+          from[7].k = ez;
+          from[7].loc = FRONT_UP_RIGHT;
+          from[7].c = 0;
+          from[8].i = er;
+          from[8].j = ephi;
+          from[8].k = ez;
+          from[8].loc = BACK_DOWN_LEFT;
+          from[8].c = 1;
+          from[9].i = er;
+          from[9].j = ephi;
+          from[9].k = ez;
+          from[9].loc = BACK_DOWN_RIGHT;
+          from[9].c = 1;
+          from[10].i = er;
+          from[10].j = ephi;
+          from[10].k = ez;
+          from[10].loc = BACK_UP_LEFT;
+          from[10].c = 1;
+          from[11].i = er;
+          from[11].j = ephi;
+          from[11].k = ez;
+          from[11].loc = BACK_UP_RIGHT;
+          from[11].c = 1;
+          from[12].i = er;
+          from[12].j = ephi;
+          from[12].k = ez;
+          from[12].loc = FRONT_DOWN_LEFT;
+          from[12].c = 1;
+          from[13].i = er;
+          from[13].j = ephi;
+          from[13].k = ez;
+          from[13].loc = FRONT_DOWN_RIGHT;
+          from[13].c = 1;
+          from[14].i = er;
+          from[14].j = ephi;
+          from[14].k = ez;
+          from[14].loc = FRONT_UP_LEFT;
+          from[14].c = 1;
+          from[15].i = er;
+          from[15].j = ephi;
+          from[15].k = ez;
+          from[15].loc = FRONT_UP_RIGHT;
+          from[15].c = 1;
+          from[16].i = er;
+          from[16].j = ephi;
+          from[16].k = ez;
+          from[16].loc = BACK_DOWN_LEFT;
+          from[16].c = 2;
+          from[17].i = er;
+          from[17].j = ephi;
+          from[17].k = ez;
+          from[17].loc = BACK_DOWN_RIGHT;
+          from[17].c = 2;
+          from[18].i = er;
+          from[18].j = ephi;
+          from[18].k = ez;
+          from[18].loc = BACK_UP_LEFT;
+          from[18].c = 2;
+          from[19].i = er;
+          from[19].j = ephi;
+          from[19].k = ez;
+          from[19].loc = BACK_UP_RIGHT;
+          from[19].c = 2;
+          from[20].i = er;
+          from[20].j = ephi;
+          from[20].k = ez;
+          from[20].loc = FRONT_DOWN_LEFT;
+          from[20].c = 2;
+          from[21].i = er;
+          from[21].j = ephi;
+          from[21].k = ez;
+          from[21].loc = FRONT_DOWN_RIGHT;
+          from[21].c = 2;
+          from[22].i = er;
+          from[22].j = ephi;
+          from[22].k = ez;
+          from[22].loc = FRONT_UP_LEFT;
+          from[22].c = 2;
+          from[23].i = er;
+          from[23].j = ephi;
+          from[23].k = ez;
+          from[23].loc = FRONT_UP_RIGHT;
+          from[23].c = 2;
+          PetscCall(DMStagVecGetValuesStencil(da, X_local, 24, from, valFrom));
+
+        to[0].i = er;
+        to[0].j = ephi;
+        to[0].k = ez;
+        to[0].loc = ELEMENT;
+        to[0].c = 0;
+        valTo[0] = (valFrom[0]+valFrom[1]+valFrom[2]+valFrom[3]+valFrom[4]+valFrom[5]+valFrom[6]+valFrom[7]) / 8.0;
+        to[1].i = er;
+        to[1].j = ephi;
+        to[1].k = ez;
+        to[1].loc = ELEMENT;
+        to[1].c = 1;
+        valTo[1] = (valFrom[8]+valFrom[9]+valFrom[10]+valFrom[11]+valFrom[12]+valFrom[13]+valFrom[14]+valFrom[15]) / 8.0;
+        to[2].i = er;
+        to[2].j = ephi;
+        to[2].k = ez;
+        to[2].loc = ELEMENT;
+        to[2].c = 2;
+        valTo[2] = (valFrom[16]+valFrom[17]+valFrom[18]+valFrom[19]+valFrom[20]+valFrom[21]+valFrom[22]+valFrom[23]) / 8.0;
+
+        PetscCall(DMStagVecSetValuesStencil(dmV, V, 3, to, valTo, INSERT_VALUES));
+      }
+    }
+  }
+  PetscCall(VecAssemblyBegin(V));
+  PetscCall(VecAssemblyEnd(V));
+
+  PetscCall(DMRestoreLocalVector(da, & X_local));
+
+  DMStagVecSplitToDMDA(dmV, V, ELEMENT, -3, & daV, & vecV); /* note -3 : pad with zero in 2D case */
+
+  if(prefix[0] == 'd'){
+    PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity time derivative"));
+  }
+  else if(prefix[0] == 'l'){
+    PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity laplacian"));
+  }
+  else{
+    PetscCall(PetscObjectSetName((PetscObject) vecV, "Velocity"));
+  }
+
+  /* Dump element-based fields to a .vtr file and create a .pvd file */
+  {
+    PetscViewer viewerV;
+    char filename[PETSC_MAX_PATH_LEN];
+
+
+
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_%savg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", prefix, user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daV), filename, FILE_MODE_WRITE, & viewerV));
+    PetscCall(VecView(vecV, viewerV));
+    PetscCall(PetscViewerDestroy( & viewerV));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
+  }
+
+  /* Destroy DMDAs and Vecs */
+  PetscCall(VecDestroy( & vecV));
+  PetscCall(DMDestroy( & daV));
+  PetscCall(VecDestroy( & V));
+  PetscCall(DMDestroy( & dmV));
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+PetscErrorCode DumpEdgeField(TS ts, PetscInt step, Vec X, void * ptr) {
+  PetscFunctionBeginUser;
+  User * user = (User * ) ptr;
+  DM da, dmEAvg, daEAvg;
+  PetscInt er, ephi, ez, startr, startphi, startz, nr, nphi, nz;
+  Vec X_local, vecEAvg, EAvg;
+  PetscReal time = 0.0;
+
+  PetscCall(TSGetDM(ts, & da));
+  PetscCall(TSGetTime(ts, & time));
+
+  // PetscPrintf(PETSC_COMM_WORLD,"Current time: t = %f\n", time);
+
+  DMStagCreateCompatibleDMStag(da, 0, 0, 0, 3, & dmEAvg); /* 3 dof per element */
+
+  PetscCall(DMSetUp(dmEAvg));
+
+  PetscCall(DMStagSetUniformCoordinatesExplicit(dmEAvg, user -> rmin, user -> rmax, user -> phimin, user -> phimax, user -> zmin, user -> zmax));
+
+  PetscCall(DMCreateGlobalVector(dmEAvg, & EAvg));
+
+  PetscCall(DMGetLocalVector(da, & X_local));
+  PetscCall(DMGlobalToLocal(da, X, INSERT_VALUES, X_local));
+
+  PetscCall(DMStagGetCorners(dmEAvg, & startr, & startphi, & startz, & nr, & nphi, & nz, NULL, NULL, NULL));
+  for (ez = startz; ez < startz + nz; ++ez) {
+    for (ephi = startphi; ephi < startphi + nphi; ++ephi) {
+      for (er = startr; er < startr + nr; ++er) {
+        DMStagStencil from[12], to[3];
+        PetscScalar valFrom[12], valTo[3];
+
+        from[0].i = er;
+        from[0].j = ephi;
+        from[0].k = ez;
+        from[0].loc = FRONT_UP;
+        from[0].c = 0;
+        from[1].i = er;
+        from[1].j = ephi;
+        from[1].k = ez;
+        from[1].loc = BACK_UP;
+        from[1].c = 0;
+        from[2].i = er;
+        from[2].j = ephi;
+        from[2].k = ez;
+        from[2].loc = FRONT_DOWN;
+        from[2].c = 0;
+        from[3].i = er;
+        from[3].j = ephi;
+        from[3].k = ez;
+        from[3].loc = BACK_DOWN;
+        from[3].c = 0;
+        from[4].i = er;
+        from[4].j = ephi;
+        from[4].k = ez;
+        from[4].loc = FRONT_RIGHT;
+        from[4].c = 0;
+        from[5].i = er;
+        from[5].j = ephi;
+        from[5].k = ez;
+        from[5].loc = BACK_RIGHT;
+        from[5].c = 0;
+        from[6].i = er;
+        from[6].j = ephi;
+        from[6].k = ez;
+        from[6].loc = FRONT_LEFT;
+        from[6].c = 0;
+        from[7].i = er;
+        from[7].j = ephi;
+        from[7].k = ez;
+        from[7].loc = BACK_LEFT;
+        from[7].c = 0;
+        from[8].i = er;
+        from[8].j = ephi;
+        from[8].k = ez;
+        from[8].loc = UP_RIGHT;
+        from[8].c = 0;
+        from[9].i = er;
+        from[9].j = ephi;
+        from[9].k = ez;
+        from[9].loc = DOWN_RIGHT;
+        from[9].c = 0;
+        from[10].i = er;
+        from[10].j = ephi;
+        from[10].k = ez;
+        from[10].loc = UP_LEFT;
+        from[10].c = 0;
+        from[11].i = er;
+        from[11].j = ephi;
+        from[11].k = ez;
+        from[11].loc = DOWN_LEFT;
+        from[11].c = 0;
+        PetscCall(DMStagVecGetValuesStencil(da, X_local, 12, from, valFrom));
+        to[0].i = er;
+        to[0].j = ephi;
+        to[0].k = ez;
+        to[0].loc = ELEMENT;
+        to[0].c = 0;
+        valTo[0] = 0.25 * (valFrom[0] + valFrom[1] + valFrom[2] + valFrom[3]);
+        to[1].i = er;
+        to[1].j = ephi;
+        to[1].k = ez;
+        to[1].loc = ELEMENT;
+        to[1].c = 1;
+        valTo[1] = 0.25 * (valFrom[4] + valFrom[5] + valFrom[6] + valFrom[7]);
+        to[2].i = er;
+        to[2].j = ephi;
+        to[2].k = ez;
+        to[2].loc = ELEMENT;
+        to[2].c = 2;
+        valTo[2] = 0.25 * (valFrom[8] + valFrom[9] + valFrom[10] + valFrom[11]);
+        PetscCall(DMStagVecSetValuesStencil(dmEAvg, EAvg, 3, to, valTo, INSERT_VALUES));
+      }
+    }
+  }
+  PetscCall(VecAssemblyBegin(EAvg));
+  PetscCall(VecAssemblyEnd(EAvg));
+
+  PetscCall(DMRestoreLocalVector(da, & X_local));
+
+  DMStagVecSplitToDMDA(dmEAvg, EAvg, ELEMENT, -3, & daEAvg, & vecEAvg); /* note -3 : pad with zero in 2D case */
+
+  PetscCall(PetscObjectSetName((PetscObject) vecEAvg, "Edge Field (Averaged)"));
+
+  /* Dump element-based fields to a .vtr file and create a .pvd file */
+  {
+    PetscViewer viewerE;
+    char filename[PETSC_MAX_PATH_LEN];
+
+
+    PetscCall(PetscSNPrintf(filename, sizeof(filename), "vtrfiles/mfd_edgeavg_ic%.1D_ts%.1D_grid%.2Dx%.2Dx%.2D_step%.3D.vtr", user -> ictype, user -> tstype, user -> Nr, user -> Nphi, user -> Nz, step));
+    PetscCall(PetscViewerVTKOpen(PetscObjectComm((PetscObject) daEAvg), filename, FILE_MODE_WRITE, & viewerE));
+    PetscCall(VecView(vecEAvg, viewerE));
+    PetscCall(PetscViewerDestroy( & viewerE));
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "Created %s\n", filename));
+  }
+
+  /* Destroy DMDAs and Vecs */
+  PetscCall(VecDestroy( & vecEAvg));
+  PetscCall(DMDestroy( & daEAvg));
+  PetscCall(VecDestroy( & EAvg));
+  PetscCall(DMDestroy( & dmEAvg));
+
+  PetscFunctionReturn(PETSC_SUCCESS);
+}

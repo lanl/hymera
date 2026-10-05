@@ -307,3 +307,16 @@ a header); that declaration was removed along with the move.
 - **view3d_zero** -- zeroes a 3D view's backing array element-by-element; no
   caller anywhere (`view4d_zero` and `subview_exclude_d1`, its neighbors in
   `mhd.c`, remain live).
+
+## Third pass
+
+Found by regenerating `docs/mhd/reference/function-index.md` with transitive
+reachability, after the residual merges.
+
+- **`FormDiscreteGradientEP`** (from `mimetic_operators.c`) -- the matrix-assembling
+  form of the EP gradient. Only its matrix-free sibling `FormDiscreteGradientEP_noMat`
+  is called.
+- **`DumpVelocity_Cell`** (from `monitor_functions.c`) -- writes cell-averaged velocity
+  to VTK. No caller.
+- **`DumpEdgeField`** (from `monitor_functions.c`) -- writes an edge field to VTK. Its
+  only references were commented-out lines in `geometry.c`.
