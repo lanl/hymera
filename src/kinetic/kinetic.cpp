@@ -12,7 +12,7 @@
 #include <memory>
 #include <numeric>
 #include <iostream>
-#include <format>
+
 #include <random>
 #include <typeinfo>  //for 'typeid' to work
 #include <parthenon/package.hpp>
@@ -35,6 +35,7 @@ using namespace parthenon;
 #include "tasks/Tasks.h"
 #include "mhd/mhd.h"
 #include "util/H5io.hpp"
+#include "util/fmt_support.hpp"
 
 using parthenon::constants::SI;
 using parthenon::constants::PhysicalConstants;
@@ -257,7 +258,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
   Real my_dtLA_over_tauC = (dt_mhd / nCD / tau_c) / nLA;
 
   if(Globals::my_rank == 0) std::cout <<
-    std::format("Adjusting dtLA to evenly devide RE current deposition step:\n {:g} -> {:g} x {:g} sec\n", dtLA_over_tauC, my_dtLA_over_tauC, tau_c);
+    format("Adjusting dtLA to evenly devide RE current deposition step:\n {:g} -> {:g} x {:g} sec\n", dtLA_over_tauC, my_dtLA_over_tauC, tau_c);
 
   pkg->AddParam("dtLA_over_tauC", my_dtLA_over_tauC);
   pkg->AddParam("nLA", nLA);
@@ -372,7 +373,7 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
                 accent,
                 Psi_min);
 
-    std::cout << std::format("New Mag. Axis center (R,Z) = {:g}, {:g}\n Psi_min = {:g}", Rc, Zc, Psi_min) << std::endl;
+    std::cout << format("New Mag. Axis center (R,Z) = {:g}, {:g}\n Psi_min = {:g}", Rc, Zc, Psi_min) << std::endl;
   }
 
   pkg->AddParam("Rc", Rc, Params::Mutability::Restart);
@@ -461,12 +462,12 @@ std::shared_ptr<StateDescriptor> Initialize(ParameterInput *pin, User* mhd_conte
 
   if (Globals::my_rank == 0) {
     std::ofstream ofs("collision_profiles.dat");
-    ofs << std::format("{:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s}",
+    ofs << format("{:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s}",
         "#     p", "gamma", "dtSA", "psi", "CB", "CF", "CouLogee ratio", "probability");
     Real p = momentum_(1. + 2.e-3);
     while (p < pkg->Param<Real>("pmax") + 20.0) {
       auto cc = sa.getCollisionCoefficients(p);
-      ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
+      ofs << format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
           p, gamma_(p),
           sa.getSmallAngleCollisionTimestep(p),
           cc.psi, cc.CB, cc.CF, cc.CouLogee_ratio,
@@ -668,7 +669,7 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
   Real my_dtLA_over_tauC = (dt_mhd / nCD / tau_c) / nLA;
 
   if(Globals::my_rank == 0) std::cout <<
-    std::format("Adjusting dtLA to evenly devide RE current deposition step:\n {:g} -> {:g} x {:g} sec\n", dtLA_over_tauC, my_dtLA_over_tauC, tau_c);
+    format("Adjusting dtLA to evenly devide RE current deposition step:\n {:g} -> {:g} x {:g} sec\n", dtLA_over_tauC, my_dtLA_over_tauC, tau_c);
 
   pkg->AddParam("dtLA_over_tauC", my_dtLA_over_tauC);
   pkg->AddParam("nLA", nLA);
@@ -753,12 +754,12 @@ std::shared_ptr<StateDescriptor> InitializeAnalytic(ParameterInput *pin) {
 
   if (Globals::my_rank == 0) {
     std::ofstream ofs("collision_profiles.dat");
-    ofs << std::format("{:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s}",
+    ofs << format("{:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s} {:20s}",
         "#     p", "gamma", "dtSA", "psi", "CB", "CF", "CouLogee ratio", "probability");
     Real p = momentum_(1. + 2.e-3);
     while (p < pkg->Param<Real>("pmax") + 20.0) {
       auto cc = sa.getCollisionCoefficients(p);
-      ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
+      ofs << format("{:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e} {:20.14e}",
           p, gamma_(p),
           sa.getSmallAngleCollisionTimestep(p),
           cc.psi, cc.CB, cc.CF, cc.CouLogee_ratio,
@@ -869,7 +870,7 @@ void SaveRawFieldData(Mesh * pm, const char* filename) {
   H5::writeScalar(sgroup, "Rc", Rc);
   H5::writeScalar(sgroup, "Zc", Zc);
 
-  std::cout << std::format("Saved raw field data to {}\n", filename);
+  std::cout << format("Saved raw field data to {}\n", filename);
 }
 
 // Inverse of SaveRawFieldData: fill the (already-constructed) FieldData grid and
@@ -894,7 +895,7 @@ void LoadRawFieldData(Mesh * pm, const char* filename) {
   H5::readScalar(sgroup, "hermite_nR", hermite_nR);
   H5::readScalar(sgroup, "hermite_nZ", hermite_nZ);
   if (hermite_nR != data.hermite_locator.nR || hermite_nZ != data.hermite_locator.nZ) {
-    throw std::runtime_error(std::format(
+    throw std::runtime_error(format(
         "LoadRawFieldData: grid mismatch. File hermite ({},{}) vs configured ({},{}). "
         "Match Numerical/NR,NZ and Geometry/* to the producing run.",
         hermite_nR, hermite_nZ, data.hermite_locator.nR, data.hermite_locator.nZ));
@@ -922,7 +923,7 @@ void LoadRawFieldData(Mesh * pm, const char* filename) {
   pkg->UpdateParam("Zc", Zc);
 
   if (Globals::my_rank == 0)
-    std::cout << std::format("Loaded raw field data from {}: Mag. Axis (R,Z) = {:g}, {:g}\n",
+    std::cout << format("Loaded raw field data from {}: Mag. Axis (R,Z) = {:g}, {:g}\n",
         filename, Rc, Zc);
 }
 
@@ -961,7 +962,7 @@ void PlotFieldsTime(Mesh *pm, ParameterInput * pin, SimTime const & tm, User* mh
               accent,
               Psi_min);
 
-  std::cout << std::format("New Mag. Axis center (R,Z) = {:g}, {:g}\n Psi_min = {:g}", Rc, Zc, Psi_min) << std::endl;
+  std::cout << format("New Mag. Axis center (R,Z) = {:g}, {:g}\n Psi_min = {:g}", Rc, Zc, Psi_min) << std::endl;
 
   data.psi_data.sync_device();
   Kokkos::parallel_for("Normalize psi",
@@ -1145,7 +1146,7 @@ void PlotCurrents(Mesh * pm, ParameterInput * pin, SimTime const & tm, User* mhd
   MPI_Allreduce(MPI_IN_PLACE,&I_re,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 
   if (Globals::my_rank == 0) {
-    std::cout << std::format("{:20.14e} {:20.14e} {:20.14e}",
+    std::cout << format("{:20.14e} {:20.14e} {:20.14e}",
         I_re * .5, I_re_integral * 5.3 * 2.0,
         I_ohmic_hermite * 5.3  * 2.0 / pc::mu0) << std::endl;
   }
@@ -1162,7 +1163,7 @@ void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters *
   auto signal = SignalHandler::CheckSignalFlags();
   std::string ext = pin->GetOrAddString("MHD_Config", "file_extention", "dat");
 
-  std::string filename = std::format("{}.{}.",
+  std::string filename = format("{}.{}.",
       op -> file_basename,
       op -> file_id);
 
@@ -1172,7 +1173,7 @@ void WorkBeforeRestartOutput(Mesh * pm, ParameterInput * pin, OutputParameters *
     filename.append("final");
     // default time based data dump
   } else {
-    filename.append(std::format("{:0>{}}", op->file_number, op -> file_number_width));
+    filename.append(format("{:0>{}}", op->file_number, op -> file_number_width));
   }
 
   filename.append(".r");
@@ -1373,7 +1374,7 @@ void ComputeParticleWeights(Mesh* pm) {
   Real w = seed_current / I_re;
 
   if (Globals::my_rank == 0)
-    std::cout << std::format("I_re = {:.8E}, w = {:.8E}\n", I_re, w) << std::endl;
+    std::cout << format("I_re = {:.8E}, w = {:.8E}\n", I_re, w) << std::endl;
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
                      DevExecSpace(), 0, pack_swarm_r.GetMaxFlatIndex(),
                      // new_n ranges from 0 to N_new_particles

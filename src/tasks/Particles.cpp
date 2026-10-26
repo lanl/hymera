@@ -1,7 +1,8 @@
 #include "Tasks.h"
 #include <fstream>
-#include <format>
+
 #include <globals.hpp>
+#include "util/fmt_support.hpp"
 #include "kinetic/ParticleVerificator.hpp"
 #include "kinetic/LargeAngleCollision.hpp"
 #include "kinetic/SmallAngleCollision.hpp"
@@ -257,7 +258,7 @@ TaskStatus ComputeConservedQuantities(Mesh *pm, Real t) {
   if (Globals::my_rank == 0) {
     const Real inv_w = (w_total > 0.0) ? 1.0 / w_total : 0.0;
     std::ofstream ofs(pkg->Param<std::string>("conservation_log"), std::ios::app);
-    ofs << std::format("{:20.14e} {:20.14e} {:20.14e} {:20.14e}",
+    ofs << format("{:20.14e} {:20.14e} {:20.14e} {:20.14e}",
                        t, p_phi_total * inv_w, mu_total * inv_w, w_total)
         << std::endl;
   }
