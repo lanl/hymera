@@ -54,6 +54,8 @@ endif()
 # We use Kokkos built through spack so it's consistent with the one used in PETSc. Parthenon will pick it up if we find it first.
 find_package(Kokkos REQUIRED)
 find_package(hflux REQUIRED)
+# fmt is only needed for older compiler versions
+find_package(fmt QUIET CONFIG)
 
 # If the user doesn't specify a build type, prefer RelWithDebInfo
 set(default_build_type "RelWithDebInfo")

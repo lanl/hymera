@@ -20,8 +20,13 @@ class Hflux(CMakePackage):
     version("main", branch="main")
     version("0.1.0-rc0", sha256="9c71e6e8b2a6ed18b3e7106fbb027981c6e398d2ade8381bf1b47021ad3d1ffb")
 
+    variant("tests", default=False, description="Build unit tests")
+
     depends_on("hdf5+cxx")
     depends_on("kokkos")
 
     depends_on("c", type="build")
     depends_on("cxx", type="build")
+
+    def cmake_args(self):
+        return [self.define_from_variant("ENABLE_UNIT_TESTS", "tests")]

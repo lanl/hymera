@@ -14,6 +14,8 @@
 #include <parthenon/package.hpp>
 #include <utils/error_checking.hpp>
 
+#include <fmt_support.hpp>
+
 using namespace parthenon;
 using namespace parthenon::package::prelude;
 
@@ -152,7 +154,7 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   f_h.eval(ev_center, Rc, Zc, 0.0);
   Real Jc = ev_center.J[1];
 
-  std::cout << std::format("Current on magnetic axis center {:g}\n", Jc);
+  std::cout << format("Current on magnetic axis center {:g}\n", Jc);
 
   // Pull out swarm object
   auto swarm = data->GetSwarmData()->Get("particles");
@@ -359,7 +361,7 @@ void GenerateParticlePoint(parthenon::MeshBlock *pmb, parthenon::ParameterInput 
   auto pack_status = desc_markers.GetPack(data.get());
 
 
-  std::cout << std::format("Placing particles at ({},{})", Rseed, Zseed);
+  std::cout << format("Placing particles at ({},{})", Rseed, Zseed);
 
   parthenon::par_for(DEFAULT_LOOP_PATTERN, PARTHENON_AUTO_LABEL,
       DevExecSpace(), 0,

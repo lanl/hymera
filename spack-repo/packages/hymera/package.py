@@ -27,6 +27,7 @@ class Hymera(CMakePackage):
     depends_on("kokkos")
     depends_on("petsc+mumps")
     depends_on("hflux@main")
+    depends_on("fmt", when="%cxx=gcc@:12", type=("build", "link"))
 
     depends_on("c", type="build")
     depends_on("cxx", type="build")
