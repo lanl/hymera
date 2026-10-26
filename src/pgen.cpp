@@ -14,8 +14,6 @@
 #include <parthenon/package.hpp>
 #include <utils/error_checking.hpp>
 
-#include <fmt_support.hpp>
-
 using namespace parthenon;
 using namespace parthenon::package::prelude;
 
@@ -24,6 +22,7 @@ using namespace parthenon::package::prelude;
 #include "kinetic/FieldEvaluator.hpp"
 #include "kinetic/CurrentDensity.hpp"
 #include "util/common.hpp"
+#include "util/fmt_support.hpp"
 
 void GenerateParticleSquare(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
   auto &data = pmb->meshblock_data.Get();
