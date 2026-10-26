@@ -17,7 +17,6 @@
 #include <iostream>
 #include <iomanip>
 #include <limits>
-#include <format>
 
 #include <Kokkos_Core.hpp>
 
