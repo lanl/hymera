@@ -1,0 +1,30 @@
+{
+  "checkpoint_iteration": 10000,
+  "checkpoint_sha256": "ef24b944bf264ee8148c60fca0850a99edd272a9ab19dc7c58334aea866d4ac8",
+  "domain_m": [
+    [
+      0.5,
+      -9
+    ],
+    [
+      14,
+      9
+    ]
+  ],
+  "psi_units": "Wb/radian = V s (flux / 2pi)",
+  "g_units": "T m",
+  "alpha_per_m": 0.16954326061202585,
+  "source_files": {
+    "analysis/expanded_current_47892285/step_10000/checkpoint.npz": "ef24b944bf264ee8148c60fca0850a99edd272a9ab19dc7c58334aea866d4ac8",
+    "experiments/iter_taper15_expanded_20261026/source/original_geometry.npz": "4ae0d4c7c566e55860478224630dc94e77830bbc8be46ea084ceefb4c286a247",
+    "exports/iter_taper15_cpp_20261027/export_model.py": "7d03e572d94d1bf517f2f7d8702ecc11be06cd357845972b84e9942ef3cbed1e",
+    "experiments/iter_taper15_expanded_20261026/source/PINN.py": "5e77480f69bc2bf59777525b2027d9227e19a84ad654cb8a28bd036d05503790",
+    "experiments/iter_taper15_expanded_20261026/source/PINN_free_boundary.py": "f94e548604b1c565d54cedc277e1fb449ed51e66737d0639afb4f2aba33d99ca",
+    "experiments/iter_taper15_expanded_20261026/source/PINN_equilibrium_design.py": "804bb4ef7dd819801ad2a09a88f4a283c51a6f20aeccc3d50385acc1e4136d50",
+    "experiments/iter_taper15_expanded_20261026/source/PINN_taylor.py": "f580be1a0f514253344598b9095e6c01fab5dbe010ad3ede6c1e82a87630fdb0",
+    "experiments/iter_taper15_expanded_20261026/source/PINN_taper.py": "75cd0eacd39e5afcd5232d8b9f0704cbb7560f98dd48d13045bf3242286f66cb",
+    "experiments/iter_taper15_expanded_20261026/source/finite_coils.py": "0b83cef34a281c2babfaaa58861b6b3b2e4ce0847d9c0a51de7ea7cb4c5789db",
+    "experiments/iter_taper15_expanded_20261026/source/train_expanded.py": "6fa7560f02cda8aaf2c097751509c98b3bc413d9393abad1c3b447a8da6181ba"
+  },
+  "model_data_sha256": "ad4931fd1bd5f03b5b4853208978fdfd0b511cac8fbaa6b1dee290f7372be1a1"
+}

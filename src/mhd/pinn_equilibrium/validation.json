@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "points": 1051,
+  "psi_max_abs_error_Vs": 1.7763568394002505e-13,
+  "g_max_abs_error_Tm": 7.105427357601002e-15,
+  "cached_plot_psi_max_abs_error_Vs": 1.6697754290362354e-13,
+  "cached_plot_g_max_abs_error_Tm": 7.105427357601002e-15,
+  "grid_psi_max_abs_error_Vs": 5.861977570020827e-14,
+  "grid_g_max_abs_error_Tm": 7.105427357601002e-15,
+  "source_axis_flux_Vs": 11.470304649330563,
+  "source_xpoint_flux_Vs": 3.321761565284822,
+  "all_toroidal_planes_identical": true,
+  "grid_counts": [
+    40602,
+    60000
+  ],
+  "seconds": 19.92415047902614,
+  "checkpoint_sha256": "ef24b944bf264ee8148c60fca0850a99edd272a9ab19dc7c58334aea866d4ac8",
+  "executable_sha256": "96d8028aa793999a5b9635b306e13216b25f2c2480362d4f57c32e88103b7cf6",
+  "jax_device": "cpu:0"
+}
