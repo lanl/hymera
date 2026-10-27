@@ -136,6 +136,11 @@ void SetupMHD(ParameterInput *pin, const KineticParams &prm, User *mhd_context,
   strcpy(mhd_context->input_folder, pin->GetOrAddString("MHD_Config", "input_folder", "../../inputs/mhd").c_str());
   strcpy(mhd_context->ic_binary_path, pin->GetOrAddString("MHD_Config", "ic_binary_path", "").c_str());
   mhd_context->ic_binary_mode = pin->GetOrAddInteger("MHD_Config", "ic_binary_load", 1) == 1 ? 'l' : 'c';
+  // Number of relaxation steps (100 tau_A each) when the equilibrium is relaxed
+  // (ic_binary_load = 0). Read only when present, so that the parameter dump of
+  // other runs is unchanged.
+  mhd_context->relax_steps = pin->DoesParameterExist("MHD_Config", "relax_steps")
+                                 ? pin->GetInteger("MHD_Config", "relax_steps") : 30;
 
   mhd_context->Ebc = 0;
   mhd_context->tempdump = 0;

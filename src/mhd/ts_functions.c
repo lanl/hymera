@@ -5124,8 +5124,8 @@ PetscErrorCode FormInitialSolution_psi(TS ts, Vec X, void * ptr) {
     //TSSetTime(dummyts, 0.0);
     PetscCall(TSSetTime(dummyts, user->itime));
     // TSSetDuration(dummyts,30,3000.0);
-    PetscCall(TSSetMaxTime(dummyts, 3000.0));
-    PetscCall(TSSetMaxSteps(dummyts, 30));
+    PetscCall(TSSetMaxTime(dummyts, 100.0 * user->relax_steps));
+    PetscCall(TSSetMaxSteps(dummyts, user->relax_steps));
     PetscCall(TSSetExactFinalTime(dummyts, TS_EXACTFINALTIME_STEPOVER));
     PetscCall(TSSetTimeStep(dummyts, 100.0));
     PetscCall(TSSetSolution(dummyts, X));

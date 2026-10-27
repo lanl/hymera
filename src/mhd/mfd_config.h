@@ -194,6 +194,7 @@ typedef struct {
   char input_folder [PETSC_MAX_PATH_LEN];
   char ic_binary_path [PETSC_MAX_PATH_LEN];
   char ic_binary_mode;
+  PetscInt relax_steps;       /* Steps of the equilibrium relaxation (100 tau_A each); 30 unless MHD_Config/relax_steps is set */
 
   double prev_current;        /* Stores the runaway current of the previous time step */
   double present_current;
