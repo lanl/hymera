@@ -106,3 +106,14 @@ add_executable(profile ${PROFILE_SRC_LIST})
 target_link_libraries(profile PRIVATE particles_core mhd_core infrastructure)
 add_executable(single_particle ${SINGLE_PARTICLE_SRC_LIST})
 target_link_libraries(single_particle PRIVATE particles_core infrastructure mhd_core)
+
+if(ENABLE_MFEM)
+  set(MFEM_HEAT_SRC_LIST
+    mfem/HeatSolver.cpp
+    mfem/MFEMDriver.cpp
+    mfem/mfem_heat.cpp
+  )
+  add_executable(mfem_heat ${MFEM_HEAT_SRC_LIST})
+  target_link_libraries(mfem_heat PRIVATE Parthenon::parthenon MFEM::mfem MPI::MPI_CXX)
+  target_compile_features(mfem_heat PRIVATE cxx_std_20)
+endif()

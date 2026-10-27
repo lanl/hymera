@@ -120,6 +120,12 @@ find_package(hflux CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_search_module(PETSC REQUIRED IMPORTED_TARGET PETSc)
 
+# MFEM (optional): enables the mfem_heat example executable
+option(ENABLE_MFEM "Build MFEM-based executables" ON)
+if(ENABLE_MFEM)
+  find_package(MFEM REQUIRED)
+endif()
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 
 # src

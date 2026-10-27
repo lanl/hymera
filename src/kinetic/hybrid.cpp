@@ -43,6 +43,13 @@ int main(int argc, char *argv[]) {
   const bool la_fast = hb && pman.pinput->GetOrAddString("Hybrid", "la_sampler", "reference") == "fast";
   const Real gmin_floor =
       dyn_gmin == 1 ? pman.pinput->GetOrAddReal("Hybrid", "gamma_min_floor", 1.02) : 1.02;
+  // ParticleSeed/stratified = 1: seed on flux-surface bands (GenerateParticleCurrentDensity).
+  // Read only when present, so that the parameter dump of other runs is unchanged.
+  const int stratified = pman.pinput->DoesParameterExist("ParticleSeed", "stratified")
+                             ? pman.pinput->GetInteger("ParticleSeed", "stratified") : 0;
+  const int seed_bands = stratified == 1
+                             ? pman.pinput->GetOrAddInteger("ParticleSeed", "bands", 200) : 0;
+  const int seed_rng_base = pman.pinput->GetOrAddInteger("ParticleSeed", "rng_seed", 1234);
   pman.app_input->ProcessPackages = [=](std::unique_ptr<ParameterInput> &pin) {
     Packages_t packages;
     auto pkg = Kinetic::Initialize(pin.get(), p_mhd_config);
@@ -51,6 +58,11 @@ int main(int argc, char *argv[]) {
       pkg->AddParam("gamma_min_floor", gmin_floor);
     }
     if (la_fast) pkg->AddParam("la_fast", 1);
+    pkg->AddParam("seed_stratified", stratified);
+    if (stratified == 1) {
+      pkg->AddParam("seed_bands", seed_bands);
+      pkg->AddParam("seed_rng_base", seed_rng_base);
+    }
     if (midplane == 1 || jre_map == 1) {
       const auto j = pkg->Param<DualView3>("Jre_mhd");
       pkg->AddParam("Jre_last", View3("Jre_last", j.extent(0), j.extent(1)));

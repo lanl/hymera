@@ -23,6 +23,13 @@ using namespace parthenon::package::prelude;
 #include "kinetic/CurrentDensity.hpp"
 #include "util/common.hpp"
 #include "kinetic/Log.hpp"
+#include <hFlux/Evaluator.hpp>
+
+#include <algorithm>
+#include <cmath>
+#include <numeric>
+#include <random>
+#include <vector>
 
 
 namespace {
@@ -86,6 +93,43 @@ struct SeedParams {
         Rc(pkg->Param<Real>("Rc")), Zc(pkg->Param<Real>("Zc")) {}
 };
 
+// Cells of a fine (R, Z) grid inside the separatrix (region 1), with |J_phi| at
+// the cell centre, from the host copy of the field. The seed density is
+// proportional to |J_phi| dR dZ, as in the rejection sampler.
+struct SeedCells {
+  std::vector<Real> R, Z, J;
+  Real dR = 0.0, dZ = 0.0, Jmax = 0.0;
+};
+
+template <class FieldH, class IndH>
+SeedCells PlasmaCells(const ConfigurationDomainGeometry &cdg, const FieldH &f_h, const IndH &ind,
+                      Real Rmin, Real Rmax, Real Zmin, Real Zmax, int nR, int nZ) {
+  SeedCells c;
+  c.dR = (Rmax - Rmin) / nR;
+  c.dZ = (Zmax - Zmin) / nZ;
+  const auto &l = cdg.indicator_locator;
+  for (int i = 0; i < nR; ++i)
+    for (int j = 0; j < nZ; ++j) {
+      const Real R = Rmin + (i + 0.5) * c.dR, Z = Zmin + (j + 0.5) * c.dZ;
+      int iR, jZ;
+      Real xiR, xiZ;
+      cdg.locate(R, Z, iR, jZ, xiR, xiZ);
+      if (iR < 0 || iR >= cdg.hermite_locator.nR || jZ < 0 || jZ >= cdg.hermite_locator.nZ)
+        continue;
+      if (R < l.R0 || R >= l.R0 + l.nR * l.dR || Z < l.Z0 || Z >= l.Z0 + l.nZ * l.dZ) continue;
+      l.locateCell(R, Z, iR, jZ);
+      if (ind(iR, jZ) != 1) continue;
+      Kinetic::EvalGCE ev;
+      f_h.eval(ev, R, Z, 0.0);
+      const Real J = std::abs(ev.J[1]);
+      c.R.push_back(R);
+      c.Z.push_back(Z);
+      c.J.push_back(J);
+      c.Jmax = std::max(c.Jmax, J);
+    }
+  return c;
+}
+
 } // namespace
 
 void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::ParameterInput *pin) {
@@ -109,11 +153,18 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   field_data.hermite_data.sync_host();
   field_data.hermite_data.sync_device();
 
-  Kinetic::EvalGCE ev_center;
-  f_h.eval(ev_center, Rc, Zc, 0.0);
-  Real Jc = ev_center.J[1];
-
-  Kinetic::Log::Debug("Block {}: toroidal current density on the magnetic axis {:g}", pmb->gid, Jc);
+  // Plasma cells of a fine grid: the envelope max |J_phi| inside the separatrix
+  // for the rejection sampler, and the cells of the stratified seed. Built once.
+  // (J on the axis was the envelope: where |J| exceeds it, every point was kept,
+  // so the seed followed min(|J|, |J_axis|) rather than |J|.)
+  static SeedCells seed_cells;
+  if (seed_cells.R.empty()) {
+    auto ind = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), cdg.indicator_view);
+    seed_cells = PlasmaCells(cdg, f_h, ind, Rmin, Rmax, Zmin, Zmax, 1000, 1000);
+    Kinetic::Log::Info("Seed: {} plasma cells, max |J_phi| {:g}", seed_cells.R.size(), seed_cells.Jmax);
+  }
+  const Real Jc = seed_cells.Jmax;
+  const int stratified = pkg->Param<int>("seed_stratified");
 
   // Pull out swarm object
   auto swarm = data->GetSwarmData()->Get("particles");
@@ -122,6 +173,65 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
   const BlockCells cells(pmb);
 
   auto newParticlesContext = swarm->AddEmptyParticles(N);
+
+  // ParticleSeed/stratified = 1: positions from one global systematic sample of
+  // |J_phi| dR dZ over the plasma cells ordered by psi, then by the poloidal angle,
+  // so every flux-surface band holds its share of the seed to within one particle.
+  // Mesh block g takes samples g, g + nb, g + 2 nb, ... (nb blocks in total), which
+  // spreads each band over all blocks. The list is the same on every rank.
+  Kokkos::View<Real *[2]> pos("seed_pos", stratified ? N : 0);
+  if (stratified) {
+    static std::vector<int> order;
+    static std::vector<Real> cdf;
+    const auto &c = seed_cells;
+    if (order.empty()) {
+      Evaluator pev{field_data.hermite_locator};
+      field_data.psi_data.sync_host();
+      auto psi_h = field_data.psi_data.view_host();
+      std::vector<Real> psi(c.R.size()), th(c.R.size());
+      for (size_t k = 0; k < c.R.size(); ++k) {
+        pev.evalPsi(psi[k], c.R[k], c.Z[k], psi_h);
+        th[k] = std::atan2(c.Z[k] - Zc, c.R[k] - Rc);
+      }
+      // Bands of psi (|psi| grows away from the axis) of equal seed share; within
+      // a band the poloidal angle orders the cells.
+      order.resize(c.R.size());
+      std::iota(order.begin(), order.end(), 0);
+      std::sort(order.begin(), order.end(), [&](int a, int b) { return std::abs(psi[a]) < std::abs(psi[b]); });
+      const int nband = pkg->Param<int>("seed_bands");
+      Real total = 0.0;
+      for (int k : order) total += c.J[k];
+      std::vector<int> band(c.R.size());
+      Real acc = 0.0;
+      for (int k : order) {
+        band[k] = std::min(nband - 1, static_cast<int>(nband * acc / total));
+        acc += c.J[k];
+      }
+      std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+        return band[a] != band[b] ? band[a] < band[b] : th[a] < th[b];
+      });
+      cdf.resize(order.size() + 1, 0.0);
+      for (size_t k = 0; k < order.size(); ++k) cdf[k + 1] = cdf[k] + c.J[order[k]] / total;
+    }
+    const int nb = pmb->pmy_mesh->nbtotal;
+    const long long Ntot = static_cast<long long>(N) * nb;
+    // One offset for the whole mesh (the same rng_seed on every rank), and a
+    // jitter within the cell per particle.
+    std::mt19937_64 gen(pkg->Param<int>("seed_rng_base"));
+    std::uniform_real_distribution<Real> U(0.0, 1.0);
+    const Real u0 = U(gen);
+    std::mt19937_64 jit(pkg->Param<int>("seed_rng_base") + 7919 * (pmb->gid + 1));
+    auto pos_h = Kokkos::create_mirror_view(pos);
+    for (int m = 0; m < N; ++m) {
+      const long long q = static_cast<long long>(m) * nb + pmb->gid;
+      const Real u = (q + u0) / Ntot;
+      const size_t k = std::upper_bound(cdf.begin(), cdf.end(), u) - cdf.begin() - 1;
+      const int cell = order[std::min(k, order.size() - 1)];
+      pos_h(m, 0) = c.R[cell] + (U(jit) - 0.5) * c.dR;
+      pos_h(m, 1) = c.Z[cell] + (U(jit) - 0.5) * c.dZ;
+    }
+    Kokkos::deep_copy(pos, pos_h);
+  }
 
   // Make a SwarmPack via types to get positions
   static auto desc_swarm =
@@ -170,6 +280,14 @@ void GenerateParticleCurrentDensity(parthenon::MeshBlock *pmb, parthenon::Parame
       // Generate within level according to curl
 
 
+      if (stratified) {
+        auto rng_gen = rng_pool.get_state();
+        X[0] = rng_gen.drand(pmin, pmax);
+        X[1] = rng_gen.drand(ximin, ximax);
+        rng_pool.free_state(rng_gen);
+        X[2] = pos(new_n, 0);
+        X[4] = pos(new_n, 1);
+      } else
       for (;;) {
         // Real theta = theta_dist(RNGs[thread_id]);
         auto rng_gen = rng_pool.get_state();
