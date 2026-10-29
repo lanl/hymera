@@ -1,5 +1,6 @@
 #include "Tasks.h"
 #include "ViewManipulation.h"
+#include "kinetic/FeedbackGain.hpp"
 
 void AttachFieldPredictor(TaskList* tl, TaskID& dep,
     Mesh* pm,
@@ -100,6 +101,12 @@ void AttachCurrentCollector(TaskList* tl, TaskID& dep,
   dep = tl->AddTask(dep, ScaleView,  Jre, eta_a3VaB0 / dtCD);
   dep = tl->AddTask(dep, ReduceView, Jre);
   dep = tl->AddTask(dep, AccumulateView, Jre_mhd, Jre);
+  // Hybrid/feedback_gain = 1: the loop gain of this interval's E correction.
+  if (pkg->AllParams().hasKey("Jre_resp"))
+    dep = tl->AddTask(dep, [pm]() {
+      Kinetic::FeedbackGain::Collect(pm);
+      return TaskStatus::complete;
+    });
   dep = tl->AddTask(dep, ComputeAdjustedElectricField, data, E_base, Jre, En);
   dep = tl->AddTask(dep, InterpolateHermiteE, data, FieldComponents::E);
   dep = tl->AddTask(dep, ZeroView, Jre);

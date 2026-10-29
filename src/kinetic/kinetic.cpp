@@ -492,6 +492,17 @@ void SetupDiagnostics(ParameterInput *pin, const KineticParams &prm,
     pkg->AddParam("push_timing", 1);
     PushTiming::enabled = true;
   }
+  // Simulation/push_scratch = 1: the Runge-Kutta work array of each particle in
+  // team scratch memory (a team kernel of push_team_size threads, default 128)
+  // instead of registers and local memory; the arithmetic is the same. Read only
+  // when present, so that the parameter dump of other runs is unchanged.
+  if (pin->DoesParameterExist("Simulation", "push_scratch") &&
+      pin->GetInteger("Simulation", "push_scratch") == 1) {
+    pkg->AddParam("push_scratch", 1);
+    pkg->AddParam("push_team_size",
+                  pin->DoesParameterExist("Simulation", "push_team_size")
+                      ? pin->GetInteger("Simulation", "push_team_size") : 128);
+  }
   if (auto *diag = DiagnosticsFile::Get())
     diag->DeclareSeries("conservation", {"t", "p_phi_mean", "mu_mean", "weight_total"},
                         {"s", "", "", ""});

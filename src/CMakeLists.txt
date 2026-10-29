@@ -38,6 +38,7 @@ add_library(infrastructure
   kinetic/Hooks.cpp
   kinetic/DiagnosticsFile.cpp
   kinetic/PushTiming.cpp
+  kinetic/FeedbackGain.cpp
   kinetic/AnalyticFieldGrid.cpp
   tasks/BackgroundFields.cpp
   tasks/ComputeElectricField.cpp

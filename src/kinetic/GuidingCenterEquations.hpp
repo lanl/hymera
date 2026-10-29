@@ -63,9 +63,12 @@ template <class Field, bool EF = true, bool SlabModel = true> struct GuidingCent
    * diffusion.
    */
 
+  // State and Deriv: value_type, or a row handle of the team-scratch work
+  // array (ScratchWork): anything indexable as X[i].
+  template <class State, class Deriv>
   KOKKOS_INLINE_FUNCTION
-  void operator()(const Real &t, const value_type &X,
-                        value_type &dXdt) const {
+  void operator()(const Real &t, const State &X,
+                        Deriv &&dXdt) const {
 
     const Real p =   X[0];
     const Real xi =  X[1];

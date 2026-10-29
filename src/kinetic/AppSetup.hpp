@@ -24,6 +24,7 @@
 #include "kinetic/kinetic.hpp"
 #include "kinetic/DiagnosticsFile.hpp"
 #include "kinetic/PushTiming.hpp"
+#include "kinetic/FeedbackGain.hpp"
 #include "mhd/mhd.h"
 
 namespace Kinetic {
@@ -90,6 +91,7 @@ inline void AttachDiagnostics(parthenon::ParthenonManager &pman) {
                                                 SimTime const &tm) {
     if (before_output) before_output(pm, pin, tm);
     PushTiming::Flush(tm.time);
+    FeedbackGain::Flush(tm.time);
     FlushDiagnostics();
   };
 

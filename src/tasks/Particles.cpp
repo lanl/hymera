@@ -14,6 +14,8 @@
 #include "kinetic/CurrentDensity.hpp"
 #include "kinetic/rk45.hpp"
 #include "kinetic/rk4.hpp"
+#include "kinetic/ScratchWork.hpp"
+#include "kinetic/FeedbackGain.hpp"
 
 // Number of scratch Dim5 slots each stepper's work array needs. DP45 uses
 // slots 0..9 (rk45.hpp); RK4 uses slots 0..4 (rk4.hpp). Sizing the per-thread
@@ -58,7 +60,14 @@ static void ParticleLoop(const std::shared_ptr<StateDescriptor> &pkg, const int 
 
 // The push of every alive particle over [t0, t0 + dt] in field f, checked by
 // ver after each step. Deposit = false skips the current deposit (no grid).
-template <int METHOD, bool Deposit, class Field, class Ver>
+//
+// Scratch = false (default): one thread per particle slot, with the Runge-Kutta
+// work array a per-thread Kokkos::Array (registers, spilling to local memory).
+// Scratch = true (Simulation/push_scratch = 1): a team kernel; each team pushes
+// push_team_size consecutive slots and holds their work arrays in Parthenon team
+// scratch (ScratchPad1D, level 0: shared memory on a GPU). The push body is the
+// same code in both, so the arithmetic is identical.
+template <int METHOD, bool Deposit, bool Scratch, class Field, class Ver>
 static TaskStatus PushParticlesImpl(Mesh *pm, Real t0, Real dt, const Field &f,
                                     const Ver &ver) {
 
@@ -116,7 +125,17 @@ static TaskStatus PushParticlesImpl(Mesh *pm, Real t0, Real dt, const Field &f,
   int EnableLargeAngleCollisions = pkg->Param<int>("EnableLargeAngleCollisions");
   int EnableSmallAngleCollisions = pkg->Param<int>("EnableSmallAngleCollisions");
 
-  auto push = KOKKOS_LAMBDA(const int idx) {
+  // Hybrid/feedback_gain = 1: also deposit the parallel-field response of the
+  // runaway current (FeedbackGain.hpp), with the same shape and time weights.
+  const bool resp_on = Deposit && pkg->AllParams().hasKey("Jre_resp");
+  Kokkos::View<Real **> resp;
+  if (resp_on) resp = pkg->Param<Kokkos::View<Real **>>("Jre_resp");
+
+  using RegisterWork = Kokkos::Array<Dim5, WorkSize<METHOD>::value>;
+  using Work = std::conditional_t<Scratch, Kinetic::ScratchWork<WorkSize<METHOD>::value>,
+                                  RegisterWork>;
+
+  auto push = KOKKOS_LAMBDA(const int idx, Work &work_d) {
         // block and particle indices
         auto [b, n] = pack_swarm_r.GetBlockParticleIndices(idx);
         const auto swarm_d = pack_swarm_r.GetContext(b);
@@ -132,12 +151,13 @@ static TaskStatus PushParticlesImpl(Mesh *pm, Real t0, Real dt, const Field &f,
           X[3] = pack_swarm_r(b, Kinetic::phi(), n);
           X[4] = pack_swarm_r(b, Kinetic::Z(), n);
           Real w = pack_swarm_r(b, Kinetic::weight(), n);
-          Kokkos::Array<Dim5, WorkSize<METHOD>::value> work_d;
           // Captured here, not first inside if constexpr (not allowed by nvcc
           // for extended lambdas).
           const auto &jre_c = jre;
           const auto &loc_c = cdg.indicator_locator;
           const Real p_RE_c = p_RE;
+          const bool resp_on_c = resp_on;
+          const auto &resp_c = resp;
 
           bool last_step = false;
 
@@ -170,6 +190,7 @@ static TaskStatus PushParticlesImpl(Mesh *pm, Real t0, Real dt, const Field &f,
             if constexpr (Deposit) {
               if (X[0] > p_RE_c) {
                 DepositCurrent(X, t, w, jre_c, dtSA, gce.field, loc_c);
+                if (resp_on_c) Kinetic::DepositResponse(X, w, resp_c, dtSA, loc_c);
               }
             }
             if (EnableSmallAngleCollisions == 1) {
@@ -198,7 +219,39 @@ static TaskStatus PushParticlesImpl(Mesh *pm, Real t0, Real dt, const Field &f,
   const bool timed = pkg->AllParams().hasKey("push_timing");
   if (timed) Kokkos::fence();
   Kokkos::Timer push_timer;
-  ParticleLoop(pkg, pack_swarm_r.GetMaxFlatIndex(), push);
+  const int max_index = pack_swarm_r.GetMaxFlatIndex();
+  if constexpr (Scratch) {
+    using SW = Kinetic::ScratchWork<WorkSize<METHOD>::value>;
+    const int T = pkg->Param<int>("push_team_size");
+    const int nchunks = (max_index + T) / T;
+    const std::size_t bytes = parthenon::ScratchPad1D<Real>::shmem_size(SW::Count(T));
+    // The team's threads share its T slots (TeamThreadRange), so the layout of
+    // the work arrays depends on T only, not on the team size. On a GPU the team
+    // is T threads, one per slot; on the host Kokkos picks it (the OpenMP team
+    // size is bounded by the thread count).
+    constexpr bool host = Kokkos::SpaceAccessibility<DevExecSpace,
+                                                     Kokkos::HostSpace>::accessible;
+    auto policy = host ? parthenon::team_policy(DevExecSpace(), nchunks, Kokkos::AUTO)
+                       : parthenon::team_policy(DevExecSpace(), nchunks, T);
+    policy.set_scratch_size(0, Kokkos::PerTeam(bytes));
+    Kokkos::parallel_for(
+        "PushParticlesScratch", policy,
+        KOKKOS_LAMBDA(parthenon::team_mbr_t member) {
+          parthenon::ScratchPad1D<Real> scratch(member.team_scratch(0), SW::Count(T));
+          const int first = member.league_rank() * T;
+          Kokkos::parallel_for(Kokkos::TeamThreadRange(member, T), [&](const int i) {
+            const int idx = first + i;
+            if (idx > max_index) return;
+            SW work{scratch.data() + i, T};
+            push(idx, work);
+          });
+        });
+  } else {
+    ParticleLoop(pkg, max_index, KOKKOS_LAMBDA(const int idx) {
+      RegisterWork work_d;
+      push(idx, work_d);
+    });
+  }
   if (timed) {
     Kokkos::fence();
     Kinetic::PushTiming::Add(push_timer.seconds(), pack_swarm_r.GetMaxFlatIndex() + 1);
@@ -220,14 +273,19 @@ template <int METHOD>
 static TaskStatus PushParticlesIn(Mesh *pm, Real t0, Real dt) {
   auto pkg = pm->packages.Get("Deck");
   const Real p_BC = pkg->Param<Real>("p_BC");
+  const bool scratch = pkg->AllParams().hasKey("push_scratch");
   if (pkg->AllParams().hasKey("analytic_field")) {
     const auto af = pkg->Param<Kinetic::AnalyticFieldEvaluator>("analytic_field");
-    return PushParticlesImpl<METHOD, false>(pm, t0, dt, af, Kinetic::OpenDomain{p_BC});
+    const Kinetic::OpenDomain ver{p_BC};
+    return scratch ? PushParticlesImpl<METHOD, false, true>(pm, t0, dt, af, ver)
+                   : PushParticlesImpl<METHOD, false, false>(pm, t0, dt, af, ver);
   }
   auto data = pkg->Param<Kinetic::FieldData_t>("FieldData");
   auto cdg = pkg->Param<ConfigurationDomainGeometry>("CDG");
   Kinetic::FieldEvaluator f{cdg.hermite_locator, data.hermite_data.view_device()};
-  return PushParticlesImpl<METHOD, true>(pm, t0, dt, f, ParticleVerificator{cdg, p_BC});
+  const ParticleVerificator ver{cdg, p_BC};
+  return scratch ? PushParticlesImpl<METHOD, true, true>(pm, t0, dt, f, ver)
+                 : PushParticlesImpl<METHOD, true, false>(pm, t0, dt, f, ver);
 }
 
 TaskStatus PushParticles(Mesh *pm, Real t0, Real dt) {

@@ -34,11 +34,12 @@
  * @param yerr On return, yerr is the estimate of the local error in each
  * component.
  */
-template <class System>
+// Work: 10 state slots k[0..9], each indexable as k[s][i]: a Kokkos::Array of
+// Dim5, or the team-scratch rows of ScratchWork. yout and yerr are slots of it.
+template <class System, class Out, class Err, class Work>
 KOKKOS_INLINE_FUNCTION void rk45_step(
     const System &f, const double t, const typename System::value_type &y, double h,
-    typename System::value_type &yout, typename System::value_type &yerr,
-    Kokkos::Array<typename System::value_type, 10> &k) {
+    Out &&yout, Err &&yerr, Work &k) {
   // Coefficients for Dormand–Prince 4(5):
   constexpr double c2 = 1.0 / 5.0, c3 = 3.0 / 10.0, c4 = 4.0 / 5.0,
                       c5 = 8.0 / 9.0, c6 = 1.0,
@@ -133,17 +134,18 @@ KOKKOS_INLINE_FUNCTION void rk45_step(
  * @param nmax   Max number of steps.
  */
 
-template <class System, class Verificator, typename T, bool VERBOSE = false>
+template <class System, class Verificator, typename T, bool VERBOSE = false, class Work>
 KOKKOS_INLINE_FUNCTION typename Verificator::ResultCode_t
 solve_rk45(const System &f,
              const Verificator &v, typename System::value_type &y, const double t0,
              const double tf, const T rtol, const T atol, double h, const double hmin, const int nmax,
-             Kokkos::Array<typename System::value_type, 10> &work) {
+             Work &work) {
   const size_t n = work[0].size();
 
   double t = t0;
-  auto &ytemp = work[8];
-  auto &yerr = work[9];
+  // A reference into a Kokkos::Array, or a row handle of ScratchWork.
+  decltype(auto) ytemp = work[8];
+  decltype(auto) yerr = work[9];
 
   // Helper lambdas to fetch tolerances
 
@@ -199,7 +201,8 @@ solve_rk45(const System &f,
     if (err <= 1.0) {
       // Accept the step
       t += h;
-      y = ytemp;
+      for (int i = 0; i < n; ++i)
+        y[i] = ytemp[i];
 
       st = v.verify(y);
       if (st != Verificator::Success) return st;
@@ -232,19 +235,18 @@ solve_rk45(const System &f,
 }
 
 
-template <class System, class Verificator, bool VERBOSE = false>
+template <class System, class Verificator, bool VERBOSE = false, class Work>
 KOKKOS_INLINE_FUNCTION typename Verificator::ResultCode_t solve_rk45_fixed(
     const System &f,
     const Verificator& v, typename System::value_type &y, const double t0, const double tf,
-    double h,
-    Kokkos::Array<typename System::value_type, 10> &work)
+    double h, Work &work)
 {
 
   const size_t n = y.size();
   double t = t0;
   int nmax = static_cast<int>(Kokkos::ceil((tf - t0) / h));
-  auto &ytemp = work[8];
-  auto &yerr = work[9];
+  decltype(auto) ytemp = work[8];
+  decltype(auto) yerr = work[9];
 
   for (int stepCount = 0; stepCount < nmax; ++stepCount) {
     auto st = v.verify(y);
@@ -254,7 +256,8 @@ KOKKOS_INLINE_FUNCTION typename Verificator::ResultCode_t solve_rk45_fixed(
       h = tf - t;
 
     rk45_step(f, t, y, h, ytemp, yerr, work);
-    y = ytemp;
+    for (int i = 0; i < n; ++i)
+      y[i] = ytemp[i];
 
     st = v.verify(y);
     if (st != Verificator::Success) return st;

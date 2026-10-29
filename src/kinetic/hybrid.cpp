@@ -13,6 +13,7 @@
 #include "kinetic.hpp"
 #include "AppSetup.hpp"
 #include "Log.hpp"
+#include "FeedbackGain.hpp"
 #include "tasks/Tasks.h"
 #include "mhd.h"
 
@@ -40,6 +41,11 @@ int main(int argc, char *argv[]) {
   const int jre_map = hb && pman.pinput->DoesParameterExist("Hybrid", "jre_map")
                           ? pman.pinput->GetInteger("Hybrid", "jre_map") : 0;
   const int dyn_gmin = hb ? pman.pinput->GetOrAddInteger("Hybrid", "update_gamma_min", 0) : 0;
+  //   feedback_gain = 1      write /timeseries/feedback, the loop gain of the in-step
+  //                          runaway-current correction of E (FeedbackGain.hpp)
+  // Read only when present, so that the parameter dump of other runs is unchanged.
+  const int feedback = hb && pman.pinput->DoesParameterExist("Hybrid", "feedback_gain")
+                           ? pman.pinput->GetInteger("Hybrid", "feedback_gain") : 0;
   const bool la_fast = hb && pman.pinput->GetOrAddString("Hybrid", "la_sampler", "reference") == "fast";
   const Real gmin_floor =
       dyn_gmin == 1 ? pman.pinput->GetOrAddReal("Hybrid", "gamma_min_floor", 1.02) : 1.02;
@@ -62,6 +68,11 @@ int main(int argc, char *argv[]) {
     if (stratified == 1) {
       pkg->AddParam("seed_bands", seed_bands);
       pkg->AddParam("seed_rng_base", seed_rng_base);
+    }
+    if (feedback == 1) {
+      const auto j = pkg->Param<DualView3>("Jre_mhd");
+      pkg->AddParam("Jre_resp", Kokkos::View<Real **>("Jre_resp", j.extent(0), j.extent(1)));
+      Kinetic::FeedbackGain::enabled = true;
     }
     if (midplane == 1 || jre_map == 1) {
       const auto j = pkg->Param<DualView3>("Jre_mhd");

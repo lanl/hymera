@@ -5,10 +5,12 @@
 #include <cstdio>
 #include "util/common.hpp"
 
-template <class System>
+// Work: 5 state slots k[0..4], each indexable as k[s][i]: a Kokkos::Array of
+// Dim5 (registers or local memory), or the team-scratch rows of ScratchWork.
+template <class System, class Work>
 KOKKOS_INLINE_FUNCTION void rk4_step(
     const System &f,
-    const double t, typename System::value_type &y, double h, Kokkos::Array<typename System::value_type, 5> &k) {
+    const double t, typename System::value_type &y, double h, Work &k) {
     const size_t n = y.size();
     // 1) k[0] = f(t, y)
     f(t, y, k[1]);
@@ -30,11 +32,10 @@ KOKKOS_INLINE_FUNCTION void rk4_step(
     }
 }
 
-template <class System, class Verificator, bool VERBOSE = false>
+template <class System, class Verificator, bool VERBOSE = false, class Work>
 KOKKOS_INLINE_FUNCTION typename Verificator::ResultCode_t solve_rk4_fixed(
     const System &f, const Verificator &v, typename System::value_type &y, const double t0,
-    const double tf, double h,
-    Kokkos::Array<typename System::value_type, 5> &work) {
+    const double tf, double h, Work &work) {
     const size_t n = y.size();
     double t = t0;
     int nstep = static_cast<int>(Kokkos::ceil((tf - t0) / h));
