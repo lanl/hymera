@@ -24,6 +24,17 @@ void AttachFieldPredictor(TaskList* tl, TaskID& dep,
   // SetupFieldGrid. Before, it took (E_end - V) / dt, about E_end / dt.
   dep = tl->AddTask(dep, ComputeBaseElectricField_in_place, data, En, eta_norm, FieldComponents::B);
 
+  // The predictor's MHD step takes the previous step's runaway current (Jre_seed,
+  // the time average the corrector passed to MHD), as the corrector takes this
+  // step's. With Jre_mhd = 0 here (the corrector zeroes it) the end-of-step fields,
+  // and so the slope Et the particles see, were those of a plasma without runaways:
+  // a spurious resistive diffusion of eta J_re, of order one at the grid scale.
+  // The first step is unchanged (Jre_seed = 0 on a fresh run).
+  dep = tl->AddTask(dep, [Jre_mhd, Jre_seed]() mutable {
+    Kokkos::deep_copy(Jre_mhd.view_device(), Jre_seed);
+    Jre_mhd.modify_device();
+    return TaskStatus::complete;
+  });
   dep = tl->AddTask(dep, AdvanceBackgroundFields, p_mhd_config, Jre_mhd);
 
   dep = tl->AddTask(dep, CommunicateBJV, data, p_mhd_config, FieldComponents::Bt);

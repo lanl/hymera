@@ -48,6 +48,8 @@ Every column is a 1-D float64 dataset with a `units` attribute.
 |-------|---------|---------|-------|
 | `/timeseries/conservation` | `t` [s], `p_phi_mean`, `mu_mean`, `weight_total` | after every large-angle sub-step, when `Simulation/EnableComputeConservedQuantities=1` | weight-averaged invariants of the alive particles |
 | `/timeseries/currents` | `t` [s], `I_re_particles`, `I_re_grid`, `I_ohmic` | before every output, in `hybrid` | runaway current as a particle sum and as the deposited-grid integral; Ohmic current from the Hermite field |
+| `/timeseries/push` | `t` [s], `push_s` [s], `launches`, `slots`, `ns_per_slot` [ns] | before every output, when `Simulation/push_timing=1` | push-kernel time since the previous output (slowest rank) |
+| `/timeseries/feedback` | `t` [s], `a_max`, `R` [a], `Z` [a], `intervals` | before every output, in `hybrid` with `Hybrid/feedback_gain=1` | largest loop gain of the in-step runaway-current correction of E over the cells and deposition intervals since the previous output, and where it was (`src/kinetic/FeedbackGain.hpp`). The lagged correction is stable for a < 2 and rings for a > 0.34. |
 | `/profiles/collision` | `p` [m_e c], `gamma`, `dtSA` [tau_c], `psi`, `CB`, `CF`, `CouLogee_ratio`, `probability` | once, at set-up | collision coefficients against momentum |
 | `/snapshots/c<cycle>_cd<iCD>_la<iLA>` | `p`, `xi`, `R`, `phi`, `Z`, `weight`, `status` of every alive particle; attributes `cycle`, `iCD`, `iLA`, `t_in_step_tau_c`, `n_particles` | every `Output/substep_snapshots`-th call of `MakeOutputs` | in-step state, see below |
 | `/meta` | attributes `problem_id`, `format` | at set-up | |
@@ -152,3 +154,16 @@ between the two settings by 0.01 standard errors.
 the MPI rank to as many cores as threads (`mpirun --bind-to none`, or
 `srun --cpus-per-task=N --cpu-bind=cores`); a rank pinned to one core runs all
 its threads on that core and shows no speed-up.
+
+## Particle push: work array in registers or team scratch
+
+`Simulation/push_scratch=1` (read only when present) keeps each particle's
+Runge-Kutta work array (rk4: 5 states, dopri5: 10) in Parthenon team scratch
+memory instead of a per-thread array in registers and local memory. The push
+then runs as a team kernel of `Simulation/push_team_size` threads (default 128),
+one particle slot per thread. The arithmetic is the same, so results are
+bit-identical to the register push wherever the random draws come in the same
+order: collisions off, or collisions on with one host thread. With collisions on
+more than one host thread (or on a GPU) the draw order differs, as for
+`parallel_push=1`.
+

@@ -44,6 +44,9 @@ int main(int argc, char *argv[]) {
   //   feedback_gain = 1      write /timeseries/feedback, the loop gain of the in-step
   //                          runaway-current correction of E (FeedbackGain.hpp)
   // Read only when present, so that the parameter dump of other runs is unchanged.
+  //   p_BC_factor = f        gamma_BC - 1 = f E_c / max |E_par| (default 0.1)
+  const bool bc_factor = hb && pman.pinput->DoesParameterExist("Hybrid", "p_BC_factor");
+  const Real p_bc_factor = bc_factor ? pman.pinput->GetReal("Hybrid", "p_BC_factor") : 0.1;
   const int feedback = hb && pman.pinput->DoesParameterExist("Hybrid", "feedback_gain")
                            ? pman.pinput->GetInteger("Hybrid", "feedback_gain") : 0;
   const bool la_fast = hb && pman.pinput->GetOrAddString("Hybrid", "la_sampler", "reference") == "fast";
@@ -69,6 +72,7 @@ int main(int argc, char *argv[]) {
       pkg->AddParam("seed_bands", seed_bands);
       pkg->AddParam("seed_rng_base", seed_rng_base);
     }
+    if (bc_factor) pkg->AddParam("p_BC_factor", p_bc_factor);
     if (feedback == 1) {
       const auto j = pkg->Param<DualView3>("Jre_mhd");
       pkg->AddParam("Jre_resp", Kokkos::View<Real **>("Jre_resp", j.extent(0), j.extent(1)));

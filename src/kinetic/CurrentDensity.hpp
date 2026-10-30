@@ -59,6 +59,9 @@ void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityVie
   Kinetic::EvalB B;
   field.eval(B, R, Z, t);
 
+  // Quadratic-spline shape over the cell and its 8 neighbours. Each weight goes to
+  // its own cell (i + ii, j + jj); before, all nine went to (i, j), which made the
+  // deposit nearest-cell (the weights sum to 1).
   for (int ii = -1; ii < 2; ++ii) {
       if(i + ii >= 0 and i + ii < jre.extent(0)) {
           Real wr = S2(Kokkos::abs(xiR - static_cast<Real>(ii)));
@@ -68,7 +71,7 @@ void DepositCurrent(const Dim5& X, const Real t, const Real w, CurrentDensityVie
                   Real weighted_contribution = contribution * wr * wz;
                   for (int kk = 0; kk < 3; ++kk) {
                       Real wcB = weighted_contribution * B.B[kk] / B.Bmag;
-                      Kokkos::atomic_add(&(jre(i,j,kk)), wcB);
+                      Kokkos::atomic_add(&(jre(i + ii, j + jj, kk)), wcB);
                   }
               }
           }
